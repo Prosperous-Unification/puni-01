@@ -4,7 +4,12 @@
   "tags": ["scope:app", "type:app"],
   "targets": {
     "test": {
-      "inputs": ["default", "{workspaceRoot}/**/project.json", "{workspaceRoot}/nx.json"],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/**/project.json",
+        "{workspaceRoot}/nx.json"
+      ],
       "options": {
         "command": "bun test tests --timeout=20000",
         "cwd": "."

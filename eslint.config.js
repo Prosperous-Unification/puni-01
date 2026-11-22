@@ -4,52 +4,85 @@ import nx from '@nx/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import jsdoc from 'eslint-plugin-jsdoc';
 import tseslint from 'typescript-eslint';
+import { builtinModules } from 'node:module';
 
 /**
  * File kinds and the one direction between them (command → feature → rule → resource → port),
- * declared by suffix. A library file with no suffix and no wiring name is domain: pure code that
- * imports no other kind and no runtime. Tests, the testing library and the app are free of the
- * kind blocks; every file is barred from another library's files and from dynamic imports.
- * Rules, features, resources and domain read no clock; tests do not use `.toThrow`.
+ * declared by suffix. Wiring names (`contract`, `failures`, `group`, `index`, `module`,
+ * `module.check`) count only at a library's `src/` root; any other library file with no suffix is
+ * domain: pure code that imports no other kind and no runtime. Tests and the testing library are
+ * free of the kind blocks; no other file imports a test, and every file is barred from another
+ * library's files, from dynamic imports and from `process.exit`. Rules, features, resources and
+ * domain read no clock; tests do not use `.toThrow`.
  */
 const kinds = ['command', 'feature', 'rule', 'resource', 'repository', 'port'];
-const wiringNames = ['contract', 'module', 'module.check', 'failures', 'group', 'index'];
 const tests = ['**/*.test.ts', '**/*.test-host.ts'];
 const testingLibrary = 'libs/puni/shared/testing/**';
 const exempt = [...tests, testingLibrary];
 
+/** Each kind and the kinds its files may not import. */
 const forbiddenKinds = {
   command: ['feature', 'rule', 'resource', 'repository', 'port'],
-  feature: ['command', 'repository', 'port'],
-  rule: ['command', 'feature', 'repository', 'port'],
+  feature: ['command', 'feature', 'resource', 'repository', 'port'],
+  rule: ['command', 'feature', 'resource', 'repository', 'port'],
   resource: ['command', 'feature', 'rule', 'repository'],
   repository: ['command', 'feature', 'rule', 'resource'],
   port: ['command', 'feature', 'rule', 'resource', 'repository'],
   domain: kinds,
 };
 
+/** Each wiring name at a library's `src/` root and the kinds its file may not import. */
+const forbiddenByWiring = {
+  contract: kinds,
+  failures: kinds,
+  group: ['feature', 'rule', 'resource', 'repository', 'port'],
+  index: ['feature', 'rule', 'resource', 'repository'],
+  module: ['repository', 'port'],
+  'module.check': ['repository', 'port'],
+};
+
+/** A specifier naming a file of one of `names`, with or without an extension. */
+function kindSpecifier(names) {
+  return `\\.(${names.join('|')})(\\.[cm]?[jt]s)?$`;
+}
+
 const intoLibraryFiles = {
   group: ['**/src/**', '**/src'],
   message: 'import another library through its @puni/* alias, never its files',
 };
+const testFiles = {
+  regex: '\\.test(-host)?(\\.[cm]?[jt]s)?$',
+  message: 'only tests import tests and test hosts',
+};
+const runtimeModules = builtinModules
+  .filter((name) => name !== 'path' && !name.includes(':'))
+  .map((name) => name.replace(/[/]/gu, '\\/'));
 const runtime = {
-  group: ['node:*', '!node:path', 'bun', 'bun:*'],
-  message: 'only .repository.ts files and the app reach the runtime; node:path is allowed',
+  regex: `^((node:)?(${runtimeModules.join('|')})(\\/.*)?|bun(:.*)?)$`,
+  message: 'only .repository.ts files and the app reach the runtime; path is allowed',
 };
 const hostLibraries = {
   group: ['@puni/shared-adapters', '@puni/shared-testing'],
   message: 'adapters are supplied by the app composition, testing helpers only to tests',
 };
+const groupLibraries = {
+  regex: '^@puni/(?!shared-)',
+  message: 'a library imports only shared libraries; groups are composed by the app',
+};
+const testingLibraryImport = {
+  group: ['@puni/shared-testing'],
+  message: 'testing helpers are only for tests',
+};
 const ports = {
   group: ['@puni/shared-ports'],
-  message: 'ports are seen only by .resource.ts, .repository.ts, .port.ts, contract.ts and tests',
+  message:
+    'ports are seen only by .resource.ts, .repository.ts, .port.ts, a shared contract.ts and tests',
 };
 
-function kindImports(kind) {
-  const names = forbiddenKinds[kind];
+function forbidKinds(owner, names) {
   return {
-    group: names.map((name) => `*.${name}`),
-    message: `a ${kind} file may not import ${names.map((name) => `.${name}.ts`).join(', ')}`,
+    regex: kindSpecifier(names),
+    message: `${owner} may not import ${names.map((name) => `.${name}`).join(', ')} files`,
   };
 }
 
@@ -57,47 +90,32 @@ function restrictImports(...patterns) {
   return { 'no-restricted-imports': ['error', { patterns }] };
 }
 
+const runtimeMessage = 'only .repository.ts files and the app reach the runtime';
 const runtimeGlobals = {
   'no-restricted-globals': [
     'error',
-    ...['Bun', 'process', 'fetch'].map((name) => ({
-      name,
-      message: 'only .repository.ts files and the app reach the runtime',
-    })),
+    ...['Bun', 'process', 'fetch', 'require'].map((name) => ({ name, message: runtimeMessage })),
   ],
 };
 
+const processExit = {
+  object: 'process',
+  property: 'exit',
+  message: 'set process.exitCode and return; nothing calls process.exit',
+};
+const globalRuntime = ['process', 'Bun', 'fetch', 'require'].map((property) => ({
+  object: 'globalThis',
+  property,
+  message: runtimeMessage,
+}));
+const metaRequire = {
+  selector: "MemberExpression[object.type='MetaProperty'][property.name='require']",
+  message: runtimeMessage,
+};
 const dynamicImport = {
   selector: 'ImportExpression',
   message: 'only apps/puni/cli/src/entrypoint.ts imports dynamically',
 };
-const reExportedKinds = ['resource', 'feature', 'rule', 'repository'].flatMap((kind) =>
-  ['ExportNamedDeclaration', 'ExportAllDeclaration'].map((node) => ({
-    selector: `${node}[source.value=/\\.${kind}$/]`,
-    message: `a library index exports modules, contracts, commands and domain, not .${kind}.ts files`,
-  })),
-);
-
-function kindBlock(kind) {
-  const reachesRuntime = kind === 'repository';
-  const seesPorts = ['resource', 'repository', 'port'].includes(kind);
-  return {
-    files: [`libs/**/src/**/*.${kind}.ts`],
-    ignores: exempt,
-    rules: {
-      ...restrictImports(
-        intoLibraryFiles,
-        hostLibraries,
-        kindImports(kind),
-        ...(reachesRuntime ? [] : [runtime]),
-        ...(seesPorts ? [] : [ports]),
-      ),
-      ...(reachesRuntime ? {} : runtimeGlobals),
-    },
-  };
-}
-
-const wiringFiles = (names) => names.map((name) => `libs/**/src/**/${name}.ts`);
 
 /**
  * Library boundaries by Nx tag, written on the importing side. A role library depends only on
@@ -154,6 +172,84 @@ const toThrow = {
     "use node:assert/strict throws or rejects: under Bun 1.4.4 `expect(() => new Error('x')).toThrow()` passes although nothing is thrown",
 };
 
+/** The imports every non-test library file is refused, with its own kind list; ports optional. */
+function libraryImports(kindPattern, seesPorts, reachesRuntime = false) {
+  return [
+    intoLibraryFiles,
+    testFiles,
+    hostLibraries,
+    groupLibraries,
+    kindPattern,
+    ...(reachesRuntime ? [] : [runtime]),
+    ...(seesPorts ? [] : [ports]),
+  ];
+}
+
+/** The runtime and clock rules of a library file of `kind`. */
+function libraryRuntime(kind) {
+  const reachesRuntime = kind === 'repository';
+  const readsNoClock = ['feature', 'rule', 'resource', 'domain'].includes(kind);
+  return {
+    ...(reachesRuntime ? {} : runtimeGlobals),
+    'no-restricted-properties': [
+      'error',
+      processExit,
+      ...(reachesRuntime ? [] : globalRuntime),
+      ...(readsNoClock ? clock.properties : []),
+    ],
+    'no-restricted-syntax': [
+      'error',
+      dynamicImport,
+      ...(reachesRuntime ? [] : [metaRequire]),
+      ...(readsNoClock ? [clock.newDate] : []),
+    ],
+  };
+}
+
+const wiringRoots = (name) => [`libs/*/*/*/src/${name}.ts`];
+
+/** The block of every library file of `kind`; domain is any file of no kind and no wiring name. */
+function libraryBlock(kind) {
+  const seesPorts = ['resource', 'repository', 'port'].includes(kind);
+  const files = kind === 'domain' ? ['libs/**/src/**/*.ts'] : [`libs/**/src/**/*.${kind}.ts`];
+  const ignores =
+    kind === 'domain'
+      ? [
+          ...kinds.map((name) => `**/*.${name}.ts`),
+          ...Object.keys(forbiddenByWiring).flatMap(wiringRoots),
+          ...exempt,
+        ]
+      : exempt;
+  return {
+    files,
+    ignores,
+    rules: {
+      ...restrictImports(
+        ...libraryImports(
+          forbidKinds(`a ${kind} file`, forbiddenKinds[kind]),
+          seesPorts,
+          kind === 'repository',
+        ),
+      ),
+      ...libraryRuntime(kind),
+    },
+  };
+}
+
+/** The block of the wiring file `name` at each library's `src/` root. */
+function wiringBlock(name) {
+  return {
+    files: wiringRoots(name),
+    ignores: [...exempt, ...(name === 'index' ? ['libs/puni/shared/adapters/src/index.ts'] : [])],
+    rules: {
+      ...restrictImports(
+        ...libraryImports(forbidKinds(`${name}.ts`, forbiddenByWiring[name]), false),
+      ),
+      ...libraryRuntime('wiring'),
+    },
+  };
+}
+
 const bannedNames = ['data', 'result', 'obj', 'tmp', 'item', 'handle'];
 
 export default tseslint.config(
@@ -193,7 +289,8 @@ export default tseslint.config(
     files: ['**/*.ts'],
     plugins: { '@nx': nx },
     rules: {
-      ...restrictImports(intoLibraryFiles),
+      ...restrictImports(intoLibraryFiles, testFiles),
+      'no-restricted-properties': ['error', processExit],
       'no-restricted-syntax': ['error', dynamicImport],
       ...moduleBoundaries({ testing: false }),
     },
@@ -206,9 +303,15 @@ export default tseslint.config(
   {
     files: tests,
     rules: {
+      ...restrictImports(intoLibraryFiles),
       'no-restricted-syntax': ['error', dynamicImport, toThrow],
       ...moduleBoundaries({ testing: true }),
     },
+  },
+  {
+    files: ['apps/**/*.ts'],
+    ignores: tests,
+    rules: { ...restrictImports(intoLibraryFiles, testFiles, testingLibraryImport) },
   },
   { files: ['apps/puni/cli/src/entrypoint.ts'], rules: { 'no-restricted-syntax': 'off' } },
   {
@@ -220,44 +323,15 @@ export default tseslint.config(
       '@typescript-eslint/no-invalid-void-type': 'off',
     },
   },
-  ...kinds.map(kindBlock),
+  ...Object.keys(forbiddenKinds).map(libraryBlock),
+  ...Object.keys(forbiddenByWiring).map(wiringBlock),
   {
-    files: ['libs/**/src/**/*.ts'],
-    ignores: [...kinds.map((kind) => `**/*.${kind}.ts`), ...wiringFiles(wiringNames), ...exempt],
+    files: ['libs/puni/shared/*/src/contract.ts'],
     rules: {
-      ...restrictImports(intoLibraryFiles, hostLibraries, runtime, ports, kindImports('domain')),
-      ...runtimeGlobals,
+      ...restrictImports(
+        ...libraryImports(forbidKinds('contract.ts', forbiddenByWiring.contract), true),
+      ),
     },
-  },
-  {
-    files: wiringFiles(['contract']),
-    ignores: exempt,
-    rules: { ...restrictImports(intoLibraryFiles, hostLibraries, runtime), ...runtimeGlobals },
-  },
-  {
-    files: wiringFiles(wiringNames.filter((name) => name !== 'contract')),
-    ignores: exempt,
-    rules: {
-      ...restrictImports(intoLibraryFiles, hostLibraries, runtime, ports),
-      ...runtimeGlobals,
-    },
-  },
-  {
-    files: ['libs/**/src/**/*.ts'],
-    ignores: [
-      ...['command', 'repository', 'port'].map((kind) => `**/*.${kind}.ts`),
-      ...wiringFiles(wiringNames),
-      ...exempt,
-    ],
-    rules: {
-      'no-restricted-properties': ['error', ...clock.properties],
-      'no-restricted-syntax': ['error', dynamicImport, clock.newDate],
-    },
-  },
-  {
-    files: ['libs/**/src/index.ts'],
-    ignores: ['libs/puni/shared/adapters/src/index.ts'],
-    rules: { 'no-restricted-syntax': ['error', dynamicImport, ...reExportedKinds] },
   },
   prettier,
 );
