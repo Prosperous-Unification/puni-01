@@ -47,7 +47,8 @@ export type CheckoutEntries =
  * One checkout, the single way code sees a repository's files. Paths are repository-relative
  * POSIX paths; one that is absolute or leaves the root is refused with `CheckoutPathRefused`. A
  * visible file is one git shows (tracked, or untracked and not ignored) that is a regular file in
- * the working tree.
+ * the working tree. A checkout asks git once, on its first listing, so it shows the files as
+ * they were then; open a new one to see later changes.
  */
 export interface CheckoutFiles {
   /** The text of the file at `path`. */

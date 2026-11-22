@@ -104,6 +104,18 @@ describe('checkoutFiles over a memory file system', () => {
     expect(host.nodes.get('/r/wiki/index/index.md')).toBe('generated');
   });
 
+  test('a checkout asks git once; a new checkout sees later files', () => {
+    const { host, container } = openHost(tree);
+    const checkoutFiles = container.resolve('checkoutFiles');
+    const files = checkoutFiles.open('/r');
+    const before = files.listVisible({ kind: 'repository' });
+    host.nodes.set('/r/later.md', 'later');
+    expect(files.listVisible({ kind: 'repository' })).toEqual(before);
+    expect(checkoutFiles.open('/r').listVisible({ kind: 'repository' })).toMatchObject({
+      files: expect.arrayContaining(['later.md']) as unknown,
+    });
+  });
+
   test('a git failure makes the projects unlistable, a repository.projects defect', () => {
     const { container } = openHost(tree, { gitFailure: 'git exploded' });
     const files = container.resolve('checkoutFiles').open('/r');

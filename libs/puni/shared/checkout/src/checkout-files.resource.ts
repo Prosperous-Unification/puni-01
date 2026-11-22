@@ -1,6 +1,7 @@
 import { join, posix } from 'node:path';
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, CheckoutFilesResource, FileSystem, Git } from './contract';
+import type { GitListing } from '@puni/shared-ports';
 import { CheckoutPathRefused } from './failures';
 import { ownsPath } from './ownership';
 import { indexDirectory } from './render-index';
@@ -28,6 +29,8 @@ function normaliseGenerated(path: string, allowDirectory: boolean): string {
 }
 
 function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutFiles {
+  let listing: GitListing | undefined;
+  const listGit = (): GitListing => (listing ??= git.listVisibleFiles(root));
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
     fileSystem.stat(absolute(path), 'no-follow');
@@ -45,7 +48,7 @@ function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutF
     exists: (path) => fileSystem.stat(absolute(path), 'follow') !== 'absent',
     readLinkTarget: (path) => fileSystem.readLink(absolute(path)),
     listVisible(scope) {
-      const listing = git.listVisibleFiles(root);
+      const listing = listGit();
       if ('failure' in listing) return listing;
       return {
         files: listing.files
@@ -54,7 +57,7 @@ function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutF
       };
     },
     listVisibleEntries() {
-      const listing = git.listVisibleFiles(root);
+      const listing = listGit();
       if ('failure' in listing) return listing;
       return {
         entries: [...listing.files].sort(compareBytes).flatMap((path) => {
