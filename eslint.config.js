@@ -12,5 +12,14 @@ export default tseslint.config(
     },
   },
   { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
+  {
+    // `builder.verifyGraphAtCompileTime() satisfies void;` is di-bag's compile-time graph check:
+    // the statement exists only for its type, which these two rules read as a mistake.
+    files: ['**/module.check.ts', '**/composition.check.ts'],
+    rules: {
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-invalid-void-type': 'off',
+    },
+  },
   prettier,
 );

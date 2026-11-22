@@ -21,9 +21,15 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "paths": {
-      "@puni/burokrat": ["./libs/puni/burokrat/src/index.ts"],
-      "@puni/dash": ["./libs/puni/dash/src/index.ts"],
-      "@puni/navigator": ["./libs/puni/navigator/src/index.ts"]
+      "@puni/shared-command": ["./libs/puni/shared/command/src/index.ts"],
+      "@puni/shared-failures": ["./libs/puni/shared/failures/src/index.ts"],
+      "@puni/shared-ports": ["./libs/puni/shared/ports/src/index.ts"],
+      "@puni/shared-adapters": ["./libs/puni/shared/adapters/src/index.ts"],
+      "@puni/shared-checkout": ["./libs/puni/shared/checkout/src/index.ts"],
+      "@puni/shared-records": ["./libs/puni/shared/records/src/index.ts"],
+      "@puni/shared-testing": ["./libs/puni/shared/testing/src/index.ts"],
+      "@puni/burokrat-check": ["./libs/puni/burokrat/check/src/index.ts"],
+      "@puni/burokrat-wiki": ["./libs/puni/burokrat/wiki/src/index.ts"]
     }
   }
 }

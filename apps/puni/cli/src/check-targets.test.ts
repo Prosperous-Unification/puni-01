@@ -76,6 +76,14 @@ describe('puni-bur-check targets', () => {
     ]);
   });
 
+  test('Nx infers project edges from imports, so no project declares implicit dependencies', () => {
+    expect(field(nx, 'pluginsConfig', '@nx/js', 'analyzeSourceFiles')).toBe(true);
+    const declaring = listProjectFiles().filter(
+      (path) => field(readJson(path), 'implicitDependencies') !== undefined,
+    );
+    expect(declaring).toEqual([]);
+  });
+
   test('only the root project overrides the target inputs', () => {
     const overriding = listProjectFiles().filter(
       (path) => field(readJson(path), 'targets', 'puni-bur-check', 'inputs') !== undefined,
@@ -101,13 +109,13 @@ describe('puni-bur-check targets', () => {
     expect(libraries.length).toBeGreaterThan(0);
     for (const path of [
       'apps/puni/cli/src/entrypoint.ts',
-      'apps/puni/cli/src/cli.ts',
+      'apps/puni/cli/src/main.ts',
       'apps/puni/cli/package.json',
       ...libraries,
-      'libs/puni/burokrat/src/check/scope.ts',
+      'libs/puni/shared/checkout/src/ownership.ts',
       'puni.json',
       '.gitignore',
-      'libs/puni/dash/.gitignore',
+      'libs/puni/burokrat/check/.gitignore',
       '.bun-version',
     ]) {
       expect([path, matchesInput(checkInputs, path)]).toEqual([path, true]);

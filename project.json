@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/nx/schemas/project-schema.json",
   "name": "workspace",
+  "tags": ["scope:app", "type:app"],
   "targets": {
     "puni-bur-check": {
       "inputs": ["{workspaceRoot}/**/*"]

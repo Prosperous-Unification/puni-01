@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat-wiki",
+  "projectType": "library",
+  "tags": ["scope:burokrat", "type:group"],
+  "metadata": {
+    "readWhen": "changing how the generated wiki index is written",
+    "readFirst": "src/wiki-index.feature.ts"
+  },
+  "sourceRoot": "libs/puni/burokrat/wiki/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/burokrat/wiki"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/burokrat/wiki/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/burokrat/wiki/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}

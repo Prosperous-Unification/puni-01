@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-records",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:shared"],
+  "metadata": {
+    "readWhen": "changing the records schema or how record files are listed and read",
+    "readFirst": "src/records-schema.ts"
+  },
+  "sourceRoot": "libs/puni/shared/records/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/shared/records"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/shared/records/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/shared/records/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}

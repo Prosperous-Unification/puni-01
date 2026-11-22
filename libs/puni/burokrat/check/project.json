@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat-check",
+  "projectType": "library",
+  "tags": ["scope:burokrat", "type:group"],
+  "metadata": {
+    "readWhen": "adding or changing a repository rule, or how a check is scoped, judged and printed",
+    "readFirst": "src/rule-set.rule.ts"
+  },
+  "sourceRoot": "libs/puni/burokrat/check/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/burokrat/check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/burokrat/check/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/burokrat/check/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}

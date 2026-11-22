@@ -4,10 +4,16 @@
 
 ## Read when
 
-- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/cli-parser.ts)
-- adding or changing a command that executes or operates something: [puni-dash](../../libs/puni/dash/src/index.ts)
-- adding or changing a command that plans work or decides what to do next: [puni-navigator](../../libs/puni/navigator/src/index.ts)
-- adding or changing a repository rule, the check that enforces it, or how the wiki index is generated: [puni-burokrat](../../libs/puni/burokrat/src/index.ts)
+- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/root-parser.ts)
+- adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
+- changing how a command line is parsed, how help is printed, or what a command handler receives and returns: [puni-shared-command](../../libs/puni/shared/command/src/command.ts)
+- changing how a repository is located, its files listed, its projects scoped or its wiki index sourced: [puni-shared-checkout](../../libs/puni/shared/checkout/src/contract.ts)
+- changing how failures are modelled, turned into findings, or reported with a reference and exit code 3: [puni-shared-failures](../../libs/puni/shared/failures/src/report-failure.ts)
+- changing how the file system, git or child processes are reached on this machine: [puni-shared-adapters](../../libs/puni/shared/adapters/src/index.ts)
+- changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
+- changing the records schema or how record files are listed and read: [puni-shared-records](../../libs/puni/shared/records/src/records-schema.ts)
+- changing what the code may ask of the file system, git or child processes: [puni-shared-ports](../../libs/puni/shared/ports/src/index.ts)
+- writing a test that needs a memory host or a real repository pair: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)
 
 ## Commands
 

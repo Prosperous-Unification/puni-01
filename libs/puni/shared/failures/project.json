@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-failures",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:shared"],
+  "metadata": {
+    "readWhen": "changing how failures are modelled, turned into findings, or reported with a reference and exit code 3",
+    "readFirst": "src/report-failure.ts"
+  },
+  "sourceRoot": "libs/puni/shared/failures/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/shared/failures"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/shared/failures/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/shared/failures/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}
