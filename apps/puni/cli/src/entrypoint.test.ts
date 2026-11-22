@@ -90,6 +90,8 @@ describe('entrypoint', () => {
       mkdirSync(join(root, 'nav/plans'), { recursive: true });
       writeRecord(first, '2031-04-05', `superseded-by: ${second}`);
       writeRecord(second, '2031-04-06', `supersedes: ${first}`);
+      const init = Bun.spawnSync(['git', 'init', '-q'], { cwd: root });
+      if (init.exitCode !== 0) throw new Error(`git init failed in ${root}`);
     });
 
     afterEach(() => {

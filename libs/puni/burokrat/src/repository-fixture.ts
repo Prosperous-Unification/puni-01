@@ -113,7 +113,8 @@ export function writeRecord(
 
 /**
  * A fresh temporary records repository that passes every records rule: `puni.json`, `AGENTS.md`,
- * the `CLAUDE.md` symlink, and two valid records, the second superseding the first.
+ * the `CLAUDE.md` symlink, and two valid records, the second superseding the first, in a fresh
+ * git repository with nothing staged.
  */
 export function makeRecordsRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-records-'));
@@ -132,6 +133,7 @@ export function makeRecordsRepository(): string {
   );
   mkdirSync(join(root, 'dash/anything/deep'), { recursive: true });
   writeRepositoryFile(root, 'dash/anything/deep/notes.txt', 'free form');
+  runGit(root, ['init', '-q']);
   return root;
 }
 

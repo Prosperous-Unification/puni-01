@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   describeRecord,
   makeRecordsRepository,
+  runGit,
   supersededRecord,
   supersedingRecord,
   writeRecord,
@@ -67,10 +68,55 @@ describe('the fixture records repository passes every records rule', () => {
     expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
   });
 
-  test('an unstaged record is judged from the working tree', () => {
+  test('an untracked, un-ignored record with bad front matter is still a finding', () => {
     writeRepositoryFile(root, 'nav/research/2031-04-07-notes.md', 'no front matter\n');
     expect(judge(judgeRecordFrontMatter).map((finding) => finding.path)).toEqual([
       'nav/research/2031-04-07-notes.md',
+    ]);
+  });
+});
+
+describe('files git ignores', () => {
+  test('an ignored .idea/workspace.xml produces no finding', () => {
+    writeRepositoryFile(root, '.gitignore', '.idea/\n');
+    writeRepositoryFile(root, '.idea/workspace.xml', '<project/>');
+    expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
+  });
+
+  test('the same file without the ignore rule is a records.layout finding', () => {
+    writeRepositoryFile(root, '.idea/workspace.xml', '<project/>');
+    expect(judge(judgeRecordsLayout).map((finding) => finding.path)).toEqual(['.idea']);
+  });
+
+  test('an ignored record is invisible to every records rule', () => {
+    writeRepositoryFile(root, '.gitignore', 'nav/plans/*-scratch.md\n');
+    writeRepositoryFile(root, 'nav/plans/2031-04-08-scratch.md', 'no front matter\n');
+    expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
+  });
+
+  test('a tracked record deleted from the working tree is skipped', () => {
+    runGit(root, ['add', '-A']);
+    rmSync(join(root, supersedingRecord));
+    expect(judge(judgeRecordsLayout)).toEqual([]);
+    expect(judge(judgeRecordFrontMatter)).toEqual([]);
+    expect(judge(judgeRecordNames)).toEqual([]);
+  });
+
+  test.each([
+    ['records.layout', judgeRecordsLayout],
+    ['records.name', judgeRecordNames],
+    ['records.front-matter', judgeRecordFrontMatter],
+    ['records.supersession', judgeSupersession],
+  ] as const)('git failing is a %s finding, not a pass', (rule, judgeRule) => {
+    rmSync(join(root, '.git'), { recursive: true });
+    mkdirSync(join(root, '.git'));
+    expect(judge(judgeRule)).toEqual([
+      {
+        rule,
+        path: '.',
+        message:
+          'git ls-files exited 128: fatal: not a git repository (or any of the parent directories): .git',
+      },
     ]);
   });
 });

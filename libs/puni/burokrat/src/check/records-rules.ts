@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, type Stats } from 'node:fs';
 import { join, posix } from 'node:path';
 import { countWords } from '../budgets';
 import { type FrontMatterField, parseFrontMatter } from '../front-matter';
@@ -16,6 +16,7 @@ import {
 } from '../records-schema';
 import { compareBytes } from '../repository';
 import type { Finding, RepositoryReading } from './finding';
+import { type GitListing, listGitFiles } from './git-files';
 
 /** A file in a kind directory, by repository path, with the kind its directory holds. */
 interface RecordFile {
@@ -23,20 +24,53 @@ interface RecordFile {
   readonly kind: RecordKind;
 }
 
-function isDirectory(root: string, path: string): boolean {
-  return lstatSync(join(root, path)).isDirectory();
+function lstatOrAbsent(root: string, path: string): Stats | undefined {
+  try {
+    return lstatSync(join(root, path));
+  } catch (cause) {
+    if (cause instanceof Error && 'code' in cause && cause.code === 'ENOENT') return undefined;
+    throw cause;
+  }
 }
 
-/** Every regular file directly inside an existing kind directory, sorted by path. */
-function listRecordFiles(root: string): RecordFile[] {
-  return recordKinds.flatMap((kind) => {
-    const directory = recordDirectories[kind];
-    if (!existsSync(join(root, directory)) || !isDirectory(root, directory)) return [];
-    return readdirSync(join(root, directory), { withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => ({ path: posix.join(directory, entry.name), kind }))
-      .sort((left, right) => compareBytes(left.path, right.path));
+/**
+ * The files the records rules judge: what `git ls-files --cached --others --exclude-standard`
+ * lists (tracked, plus untracked files git does not ignore), less tracked files deleted from the
+ * working tree, sorted by path. A git that cannot run or fails is a `failure`.
+ */
+function listVisibleFiles(root: string): GitListing {
+  const listing = listGitFiles(root, ['--cached', '--others', '--exclude-standard']);
+  if ('failure' in listing) return listing;
+  return {
+    files: listing.files
+      .filter((path) => lstatOrAbsent(root, path) !== undefined)
+      .sort(compareBytes),
+  };
+}
+
+/** Every regular file directly inside a kind directory, among `files`. */
+function listRecordFiles(root: string, files: readonly string[]): RecordFile[] {
+  return files.flatMap((path) => {
+    const kind = recordKinds.find(
+      (candidate) => posix.dirname(path) === recordDirectories[candidate],
+    );
+    if (kind === undefined || lstatOrAbsent(root, path)?.isFile() !== true) return [];
+    return [{ path, kind }];
   });
+}
+
+/**
+ * Runs `judge` over the record files git shows, or reports the git failure as one `rule`
+ * finding at the repository root.
+ */
+function judgeRecordFiles(
+  root: string,
+  rule: string,
+  judge: (files: readonly string[]) => Finding[],
+): Finding[] {
+  const visible = listVisibleFiles(root);
+  if ('failure' in visible) return [{ rule, path: '.', message: visible.failure }];
+  return judge(visible.files);
 }
 
 /** Whether `text` is `YYYY-MM-DD` naming a day that exists in the Gregorian calendar. */
@@ -58,57 +92,59 @@ for (const directory of Object.values(recordDirectories)) {
 }
 
 /**
- * The records layout: only the names in {@link recordsTopLevel} at the top level (`.git` aside),
- * only kind directories in `nav/` and `bur/`, and only regular files in a kind directory.
- * `dash/` is not inspected.
+ * The records layout, over the files git shows: only the names in {@link recordsTopLevel} at
+ * the top level, only kind directories in `nav/` and `bur/`, and only regular files directly in a
+ * kind directory. `dash/` is not inspected. Ignored files and empty directories are invisible.
  */
 export function judgeRecordsLayout({ root }: RepositoryReading): Finding[] {
   const rule = 'records.layout';
-  const findings: Finding[] = [];
-  const allowedTop = Object.keys(recordsTopLevel).join(', ');
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.name === '.git') continue;
-    const expected = recordsTopLevel[entry.name];
-    if (expected === undefined) {
-      const message = `is not part of the records layout; the top level holds only ${allowedTop}`;
-      findings.push({ rule, path: entry.name, message });
-    } else if ((expected === 'directory') !== entry.isDirectory()) {
-      findings.push({ rule, path: entry.name, message: `must be a ${expected}` });
-    }
-  }
-  for (const [group, names] of groupDirectories) {
-    if (!existsSync(join(root, group)) || !isDirectory(root, group)) continue;
-    for (const entry of readdirSync(join(root, group), { withFileTypes: true })) {
-      const path = posix.join(group, entry.name);
-      if (!names.includes(entry.name) || !entry.isDirectory()) {
-        const message = `is not a kind directory; ${group}/ holds only the directories ${names.join(', ')}`;
-        findings.push({ rule, path, message });
+  return judgeRecordFiles(root, rule, (files) => {
+    const found = new Map<string, string>();
+    const allowedTop = Object.keys(recordsTopLevel).join(', ');
+    for (const path of files) {
+      const [top = '', inner = '', ...rest] = path.split('/');
+      const expected = recordsTopLevel[top];
+      if (expected === undefined) {
+        found.set(top, `is not part of the records layout; the top level holds only ${allowedTop}`);
         continue;
       }
-      for (const inner of readdirSync(join(root, path), { withFileTypes: true })) {
-        if (inner.isFile()) continue;
-        const message = 'is not a regular file; a kind directory holds only record files';
-        findings.push({ rule, path: posix.join(path, inner.name), message });
+      if ((expected === 'directory') !== path.includes('/')) {
+        found.set(top, `must be a ${expected}`);
+        continue;
       }
+      const names = groupDirectories.get(top);
+      if (names === undefined) continue;
+      if (rest.length === 0 || !names.includes(inner)) {
+        const message = `is not a kind directory; ${top}/ holds only the directories ${names.join(', ')}`;
+        found.set(`${top}/${inner}`, message);
+        continue;
+      }
+      const message = 'is not a regular file; a kind directory holds only record files';
+      if (rest.length > 1) found.set(`${top}/${inner}/${rest[0] ?? ''}`, message);
+      else if (lstatOrAbsent(root, path)?.isFile() !== true) found.set(path, message);
     }
-  }
-  return findings;
+    return [...found]
+      .sort(([left], [right]) => compareBytes(left, right))
+      .map(([path, message]) => ({ rule, path, message }));
+  });
 }
 
 /** Every record file is named `YYYY-MM-DD-<slug>.md` with a real calendar date. */
 export function judgeRecordNames({ root }: RepositoryReading): Finding[] {
-  return listRecordFiles(root).flatMap(({ path }) => {
-    const name = recordNamePattern.exec(posix.basename(path));
-    if (name?.[1] !== undefined && isCalendarDate(name[1])) return [];
-    return [
-      {
-        rule: 'records.name',
-        path,
-        message:
-          'must be named YYYY-MM-DD-<slug>.md: a real calendar date, then lower-case letters and digits joined by single hyphens',
-      },
-    ];
-  });
+  return judgeRecordFiles(root, 'records.name', (files) =>
+    listRecordFiles(root, files).flatMap(({ path }) => {
+      const name = recordNamePattern.exec(posix.basename(path));
+      if (name?.[1] !== undefined && isCalendarDate(name[1])) return [];
+      return [
+        {
+          rule: 'records.name',
+          path,
+          message:
+            'must be named YYYY-MM-DD-<slug>.md: a real calendar date, then lower-case letters and digits joined by single hyphens',
+        },
+      ];
+    }),
+  );
 }
 
 type RecordKey = keyof typeof requiredRecordKeys | keyof typeof optionalRecordKeys;
@@ -171,40 +207,42 @@ function describeSchema(): string {
  */
 export function judgeRecordFrontMatter({ root }: RepositoryReading): Finding[] {
   const rule = 'records.front-matter';
-  return listRecordFiles(root).flatMap((file) => {
-    const frontMatter = parseFrontMatter(readFileSync(join(root, file.path), 'utf8'));
-    const finding = (message: string): Finding => ({ rule, path: file.path, message });
-    if ('problem' in frontMatter) {
-      return [
-        frontMatter.problem === 'absent'
-          ? finding(
-              `does not open with front matter: a --- line, one "key: value" per line, then a --- line; ${describeSchema()}`,
-            )
-          : finding(
-              `has a malformed front matter line ${JSON.stringify(frontMatter.line)}; each line is "key: value"`,
-            ),
-      ];
-    }
-    const findings: Finding[] = [];
-    const seen = new Set<string>();
-    for (const { key, value } of frontMatter.fields) {
-      if (seen.has(key)) findings.push(finding(`repeats the key ${key}; each key appears once`));
-      seen.add(key);
-      if (!isRecordKey(key)) {
-        const allowed = Object.keys(recordKeyForms).join(', ');
-        findings.push(finding(`has the unknown key ${key}; the keys are ${allowed}`));
-        continue;
+  return judgeRecordFiles(root, rule, (files) =>
+    listRecordFiles(root, files).flatMap((file) => {
+      const frontMatter = parseFrontMatter(readFileSync(join(root, file.path), 'utf8'));
+      const finding = (message: string): Finding => ({ rule, path: file.path, message });
+      if ('problem' in frontMatter) {
+        return [
+          frontMatter.problem === 'absent'
+            ? finding(
+                `does not open with front matter: a --- line, one "key: value" per line, then a --- line; ${describeSchema()}`,
+              )
+            : finding(
+                `has a malformed front matter line ${JSON.stringify(frontMatter.line)}; each line is "key: value"`,
+              ),
+        ];
       }
-      const problem = judgeRecordValue(file, key, value);
-      if (problem !== undefined) {
-        findings.push(finding(`${key} ${problem}; expected ${recordKeyForms[key]}`));
+      const findings: Finding[] = [];
+      const seen = new Set<string>();
+      for (const { key, value } of frontMatter.fields) {
+        if (seen.has(key)) findings.push(finding(`repeats the key ${key}; each key appears once`));
+        seen.add(key);
+        if (!isRecordKey(key)) {
+          const allowed = Object.keys(recordKeyForms).join(', ');
+          findings.push(finding(`has the unknown key ${key}; the keys are ${allowed}`));
+          continue;
+        }
+        const problem = judgeRecordValue(file, key, value);
+        if (problem !== undefined) {
+          findings.push(finding(`${key} ${problem}; expected ${recordKeyForms[key]}`));
+        }
       }
-    }
-    for (const [key, form] of Object.entries(requiredRecordKeys)) {
-      if (!seen.has(key)) findings.push(finding(`has no ${key}; expected ${form}`));
-    }
-    return findings;
-  });
+      for (const [key, form] of Object.entries(requiredRecordKeys)) {
+        if (!seen.has(key)) findings.push(finding(`has no ${key}; expected ${form}`));
+      }
+      return findings;
+    }),
+  );
 }
 
 function readFields(root: string, path: string): readonly FrontMatterField[] | undefined {
@@ -220,22 +258,24 @@ const opposite = { supersedes: 'superseded-by', 'superseded-by': 'supersedes' } 
  */
 export function judgeSupersession({ root }: RepositoryReading): Finding[] {
   const rule = 'records.supersession';
-  const records = listRecordFiles(root).map((file) => file.path);
-  return records.flatMap((path) => {
-    const fields = readFields(root, path) ?? [];
-    return fields.flatMap(({ key, value }): Finding[] => {
-      if (key !== 'supersedes' && key !== 'superseded-by') return [];
-      const target = posix.normalize(value);
-      const finding = (message: string): Finding[] => [{ rule, path, message }];
-      if (target === path) return finding(`${key} names the record itself`);
-      if (!records.includes(target)) {
-        return finding(`${key} ${target} is not a record in a kind directory`);
-      }
-      const answer = opposite[key];
-      const answered = (readFields(root, target) ?? []).some(
-        (field) => field.key === answer && posix.normalize(field.value) === path,
-      );
-      return answered ? [] : finding(`${key} ${target}, which does not say ${answer}: ${path}`);
+  return judgeRecordFiles(root, rule, (files) => {
+    const records = listRecordFiles(root, files).map((file) => file.path);
+    return records.flatMap((path) => {
+      const fields = readFields(root, path) ?? [];
+      return fields.flatMap(({ key, value }): Finding[] => {
+        if (key !== 'supersedes' && key !== 'superseded-by') return [];
+        const target = posix.normalize(value);
+        const finding = (message: string): Finding[] => [{ rule, path, message }];
+        if (target === path) return finding(`${key} names the record itself`);
+        if (!records.includes(target)) {
+          return finding(`${key} ${target} is not a record in a kind directory`);
+        }
+        const answer = opposite[key];
+        const answered = (readFields(root, target) ?? []).some(
+          (field) => field.key === answer && posix.normalize(field.value) === path,
+        );
+        return answered ? [] : finding(`${key} ${target}, which does not say ${answer}: ${path}`);
+      });
     });
   });
 }
