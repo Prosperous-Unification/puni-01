@@ -1,8 +1,10 @@
 import type { CommandBrief } from '../wiki/wiki-index';
 
-/** What a rule judges: the repository root and the commands of the composed CLI. */
+/** What a rule judges: the repository, its paired repository and the composed CLI's commands. */
 export interface RepositoryReading {
   readonly root: string;
+  /** The paired repository, `owner/name`, as `puni.json` declares it. */
+  readonly counterpart: string;
   readonly commands: readonly CommandBrief[];
 }
 

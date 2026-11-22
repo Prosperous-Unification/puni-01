@@ -84,7 +84,10 @@ describe('entrypoint', () => {
 
     beforeEach(() => {
       root = mkdtempSync(join(tmpdir(), 'puni-entrypoint-records-'));
-      writeFileSync(join(root, 'puni.json'), JSON.stringify({ 'puni-repo-kind': 'records' }));
+      writeFileSync(
+        join(root, 'puni.json'),
+        JSON.stringify({ 'puni-repo-kind': 'records', 'puni-repo-counterpart': 'acme/demo' }),
+      );
       writeFileSync(join(root, 'AGENTS.md'), '# records\n');
       symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
       mkdirSync(join(root, 'nav/plans'), { recursive: true });

@@ -9,6 +9,8 @@ import {
   supersedingRecord,
   writeRecord,
   writeRepositoryFile,
+  fixtureCounterparts,
+  formatFixtureConfig,
 } from '../repository-fixture';
 import {
   optionalRecordKeys,
@@ -40,7 +42,7 @@ afterEach(() => {
 });
 
 function judge(rule: Rule): Finding[] {
-  return rule({ root, commands: [] });
+  return rule({ root, counterpart: fixtureCounterparts.records, commands: [] });
 }
 
 const record = 'bur/adr/2031-04-07-a-decision.md';
@@ -126,7 +128,7 @@ describe('records.layout', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
       else if (name !== 'CLAUDE.md')
-        writeRepositoryFile(root, name, '{"puni-repo-kind":"records"}');
+        writeRepositoryFile(root, name, formatFixtureConfig('records'));
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });

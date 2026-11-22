@@ -21,16 +21,35 @@ export class RepositoryDefect extends Error {
 /** The kinds of repository `puni` governs; `puni.json` declares one. */
 export const repositoryKinds = ['code', 'records'] as const;
 
-/** The one key `puni.json` holds. */
+/** The `puni.json` key that declares the repository kind. */
 export const repositoryKindKey = 'puni-repo-kind';
+
+/**
+ * The `puni.json` key that names the paired repository as `owner/name`: a `code` repository
+ * names its records repository, a `records` repository the code repository it serves.
+ */
+export const repositoryCounterpartKey = 'puni-repo-counterpart';
+
+const counterpartPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 
 /** A declared repository kind: `code` holds a system, `records` its past and future. */
 export type RepositoryKind = (typeof repositoryKinds)[number];
 
-/** A governed repository: the directory holding `puni.json`, and the kind it declares. */
-export interface Repository {
-  readonly root: string;
+/** What `puni.json` declares. */
+export interface RepositoryConfig {
   readonly kind: RepositoryKind;
+  /** The paired repository, `owner/name`. */
+  readonly counterpart: string;
+}
+
+/** A governed repository: the directory holding `puni.json`, and what that file declares. */
+export interface Repository extends RepositoryConfig {
+  readonly root: string;
+}
+
+/** The name part of an `owner/name` counterpart, which is also its directory beside this one. */
+export function nameCounterpart(counterpart: string): string {
+  return counterpart.slice(counterpart.indexOf('/') + 1);
 }
 
 function isRepositoryKind(value: unknown): value is RepositoryKind {
@@ -38,12 +57,13 @@ function isRepositoryKind(value: unknown): value is RepositoryKind {
 }
 
 /**
- * Reads `<root>/puni.json`, which holds exactly `{ "puni-repo-kind": <kind> }`.
+ * Reads `<root>/puni.json`, which holds exactly `puni-repo-kind` and `puni-repo-counterpart`.
  *
- * @throws RepositoryDefect (`repository.kind`) naming the file when it is not valid JSON, not an
- *   object, has a key other than `puni-repo-kind`, or lacks a valid one.
+ * @throws RepositoryDefect naming the file: `repository.kind` when it is not valid JSON, not an
+ *   object, has another key, or lacks a valid kind; `repository.counterpart` when the
+ *   counterpart is missing or not `owner/name`.
  */
-export function readRepositoryKind(root: string): RepositoryKind {
+export function readRepositoryConfig(root: string): RepositoryConfig {
   const file = join(root, 'puni.json');
   const refuse = (problem: string): RepositoryDefect =>
     new RepositoryDefect('repository.kind', 'puni.json', `${file} ${problem}`);
@@ -57,30 +77,40 @@ export function readRepositoryKind(root: string): RepositoryKind {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw refuse('is not a JSON object');
   }
-  const unknown = Object.keys(parsed).filter((key) => key !== repositoryKindKey);
+  const known: readonly string[] = [repositoryKindKey, repositoryCounterpartKey];
+  const unknown = Object.keys(parsed).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
-    throw refuse(`has unknown keys ${unknown.join(', ')}; it holds only "${repositoryKindKey}"`);
+    throw refuse(`has unknown keys ${unknown.join(', ')}; it holds only ${known.join(' and ')}`);
   }
-  const kind: unknown = Object.entries(parsed).find(([key]) => key === repositoryKindKey)?.[1];
+  const entries = Object.entries(parsed);
+  const kind: unknown = entries.find(([key]) => key === repositoryKindKey)?.[1];
   if (!isRepositoryKind(kind)) {
     throw refuse(
       `has ${repositoryKindKey} ${kind === undefined ? 'missing' : JSON.stringify(kind)}; expected one of ${repositoryKinds.join(', ')}`,
     );
   }
-  return kind;
+  const counterpart: unknown = entries.find(([key]) => key === repositoryCounterpartKey)?.[1];
+  if (typeof counterpart !== 'string' || !counterpartPattern.test(counterpart)) {
+    throw new RepositoryDefect(
+      'repository.counterpart',
+      'puni.json',
+      `${file} has ${repositoryCounterpartKey} ${counterpart === undefined ? 'missing' : JSON.stringify(counterpart)}; expected the paired repository as owner/name`,
+    );
+  }
+  return { kind, counterpart };
 }
 
 /**
  * The repository governing `cwd`: the nearest directory at or above it holding `puni.json`.
  *
  * @throws RepositoryDefect (`repository.root`) when no such directory exists up to the
- *   filesystem root, or as {@link readRepositoryKind} does.
+ *   filesystem root, or as {@link readRepositoryConfig} does.
  */
 export function findRepository(cwd: string): Repository {
   let directory = resolve(cwd);
   for (;;) {
     if (existsSync(join(directory, 'puni.json'))) {
-      return { root: directory, kind: readRepositoryKind(directory) };
+      return { root: directory, ...readRepositoryConfig(directory) };
     }
     const parent = dirname(directory);
     if (parent === directory) {

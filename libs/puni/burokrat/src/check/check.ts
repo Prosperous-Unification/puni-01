@@ -26,11 +26,11 @@ export function runCheck(context: CheckContext): 0 | 1 {
   let lines: string[];
   let scope: string;
   try {
-    const { root, kind } = findRepository(context.cwd);
+    const { root, kind, counterpart } = findRepository(context.cwd);
     const rules = ruleSets[kind];
     scope = `${kind}, ${String(rules.length)} rules`;
     lines = rules
-      .flatMap((rule) => rule({ root, commands: context.commands }))
+      .flatMap((rule) => rule({ root, counterpart, commands: context.commands }))
       .map(formatFinding)
       .sort(compareBytes);
   } catch (cause) {

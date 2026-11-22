@@ -8,6 +8,7 @@ import {
   runGit,
   writeProject,
   writeRepositoryFile,
+  fixtureCounterparts,
 } from '../repository-fixture';
 import { indexFile } from '../wiki/wiki-index';
 import { runCheck } from './check';
@@ -41,7 +42,7 @@ afterEach(() => {
 });
 
 function judge(rule: Rule): Finding[] {
-  return rule({ root, commands: fixtureCommands });
+  return rule({ root, counterpart: fixtureCounterparts.code, commands: fixtureCommands });
 }
 
 function words(count: number): string {
@@ -173,14 +174,6 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
       message:
         'git ls-files exited 128: fatal: not a git repository (or any of the parent directories): .git',
     },
-  ],
-  [
-    'package.json without a name',
-    confineRecordsName,
-    () => {
-      writeRepositoryFile(root, 'package.json', '{}');
-    },
-    { rule: 'history.records', path: 'package.json', message: 'package.json has no name' },
   ],
   [
     'a broken link',
@@ -364,7 +357,11 @@ describe('runCheck', () => {
   });
 
   test('an invalid puni.json is a repository.kind finding', () => {
-    writeRepositoryFile(root, 'puni.json', JSON.stringify({ 'puni-repo-kind': 'library' }));
+    writeRepositoryFile(
+      root,
+      'puni.json',
+      JSON.stringify({ 'puni-repo-kind': 'library', 'puni-repo-counterpart': 'acme/demo-records' }),
+    );
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
