@@ -36,8 +36,16 @@ function includesSource(include: unknown): boolean {
   return include.some((entry) => typeof entry === 'string' && /^(\.\/)?src(\/|$)/u.test(entry));
 }
 
-/** The breaches of the project whose `project.json` is at `path` and names `name`. */
-function judgeProject(files: CheckoutFiles, path: string, project: Record<string, unknown>) {
+/**
+ * The breaches of the project whose `project.json` is at `path`. A target that declares no
+ * command runs the one `defaults` (the `targetDefaults` of `nx.json`) gives it.
+ */
+function judgeProject(
+  files: CheckoutFiles,
+  path: string,
+  project: Record<string, unknown>,
+  defaults: Record<string, unknown>,
+) {
   const name = String(project['name']);
   const directory = posix.dirname(path);
   const targets = isRecord(project['targets']) ? project['targets'] : {};
@@ -59,7 +67,9 @@ function judgeProject(files: CheckoutFiles, path: string, project: Record<string
     });
   }
   for (const [target, declared] of Object.entries(targets)) {
-    for (const command of listTargetCommands(declared)) {
+    const own = listTargetCommands(declared);
+    const commands = own.length > 0 ? own : listTargetCommands(defaults[target]);
+    for (const command of commands) {
       if (command.includes('bun test') && !command.includes('--timeout')) {
         breaches.push({
           path,
@@ -75,7 +85,8 @@ function judgeProject(files: CheckoutFiles, path: string, project: Record<string
 /**
  * Every project the scope owns but the root (which holds only the workspace checks) declares
  * `test`, `lint` and `typecheck` targets, and `build` when it is an application; its
- * `tsconfig.json` includes `src`; and every `bun test` it runs carries `--timeout`. A
+ * `tsconfig.json` includes `src`; and every `bun test` it runs, its own or the `nx.json` target
+ * default, carries `--timeout`. A
  * `project.json` that names no project is not a project.
  */
 export const requireProjectTargets: Rule = {
@@ -85,6 +96,8 @@ export const requireProjectTargets: Rule = {
   judge({ files, scope }) {
     const listing = files.listVisible(scope);
     if ('failure' in listing) return breachListing(listing.failure);
+    const targetDefaults = readObject(files, 'nx.json')?.['targetDefaults'];
+    const defaults = isRecord(targetDefaults) ? targetDefaults : {};
     return listing.files
       .filter((path) => posix.basename(path) === 'project.json' && path !== 'project.json')
       .filter((path) => !path.split('/').includes('node_modules'))
@@ -92,7 +105,7 @@ export const requireProjectTargets: Rule = {
         const project = readObject(files, path);
         const name = project?.['name'];
         if (project === undefined || typeof name !== 'string' || name === '') return [];
-        return judgeProject(files, path, project);
+        return judgeProject(files, path, project, defaults);
       });
   },
 };

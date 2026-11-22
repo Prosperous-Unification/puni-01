@@ -3,9 +3,11 @@ pre-commit:
   commands:
     format:
       run: bunx prettier --check {staged_files}
-      glob: '*.{ts,js,json,md,yml,yaml}'
+      glob: '*.{ts,js,cjs,json,md,yml,yaml}'
       exclude:
         - CLAUDE.md
     lint:
       run: bunx eslint {staged_files}
-      glob: '*.{ts,js}'
+      glob: '*.{ts,js,cjs}'
+    secrets:
+      run: bun apps/puni/cli/src/entrypoint.ts burokrat check --staged

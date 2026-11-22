@@ -65,13 +65,6 @@ describe('entrypoint', () => {
     });
   });
 
-  test('burokrat check passes against this repository', () => {
-    const run = runPuni(['burokrat', 'check']);
-    expect(run.stderr).toBe('');
-    expect(run.stdout).toMatch(/^ok: system-state, \d+ rules, no findings\.\n$/u);
-    expect(run.code).toBe(0);
-  });
-
   describe('against a temporary project: demo (system-state) beside demo-records', () => {
     let parent = '';
     let state = '';

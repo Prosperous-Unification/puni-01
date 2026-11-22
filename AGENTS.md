@@ -5,7 +5,7 @@ repository it governs.
 
 ## Working here
 
-- The gate is `bun run gate`. Bun and Nx only.
+- The gate is `bun run gate`; `bun run fix` repairs what a tool can. Bun and Nx only.
 - Unsure where something lives? `wiki/index/index.md` maps a task to the
   file to read first.
 - Every commit, commit message and pull request here is public: no

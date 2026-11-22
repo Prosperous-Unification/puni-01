@@ -14,8 +14,9 @@
     "typecheck": "nx run-many -t typecheck",
     "format": "nx format:write --all",
     "format:check": "nx format:check --all",
-    "gate": "bun run puni burokrat check && nx format:check --all && nx run-many -t lint typecheck test build",
-    "gate:affected": "nx format:check && nx affected -t puni-bur-check lint typecheck test build"
+    "gate": "nx sync:check && nx format:check --all && bun run puni burokrat check && nx run-many -t lint typecheck test build",
+    "gate:affected": "nx sync:check && nx format:check && nx affected -t puni-bur-check puni-bur-links lint typecheck test build",
+    "fix": "nx sync && nx format:write --all"
   },
   "dependencies": {
     "@optique/core": "1.4.0",

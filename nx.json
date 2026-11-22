@@ -2,7 +2,7 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
-    "production": ["default", "!{projectRoot}/**/*.test.ts"],
+    "production": ["default", "!{projectRoot}/**/*.test.ts", "!{projectRoot}/**/*.test-host.ts"],
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/eslint.config.js",
@@ -27,8 +27,11 @@
     },
     "test": {
       "cache": true,
+      "executor": "nx:run-commands",
       "inputs": ["default", "^production"],
       "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "{projectRoot}",
         "env": {
           "CLAUDECODE": "0",
           "AGENT": "0"
@@ -37,11 +40,19 @@
     },
     "lint": {
       "cache": true,
-      "inputs": ["default", "^production"]
+      "executor": "nx:run-commands",
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "bunx eslint {projectRoot}/src"
+      }
     },
     "typecheck": {
       "cache": true,
-      "inputs": ["default", "^production"]
+      "executor": "nx:run-commands",
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "bunx tsc --noEmit -p {projectRoot}/tsconfig.json"
+      }
     },
     "puni-bur-check": {
       "cache": true,
@@ -51,6 +62,9 @@
       },
       "inputs": ["default", "puniBurCheck"]
     }
+  },
+  "sync": {
+    "globalGenerators": ["@puni/nx-sync:wiki-index"]
   },
   "plugins": [],
   "pluginsConfig": {

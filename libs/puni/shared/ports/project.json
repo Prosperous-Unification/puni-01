@@ -10,24 +10,12 @@
   "sourceRoot": "libs/puni/shared/ports/src",
   "targets": {
     "test": {
-      "executor": "nx:run-commands",
       "options": {
-        "command": "bun test src --timeout=20000 --pass-with-no-tests",
-        "cwd": "libs/puni/shared/ports"
+        "command": "bun test src --timeout=20000 --pass-with-no-tests"
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bunx eslint libs/puni/shared/ports/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bunx tsc --noEmit -p libs/puni/shared/ports/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "typecheck": {},
     "puni-bur-check": {}
   }
 }

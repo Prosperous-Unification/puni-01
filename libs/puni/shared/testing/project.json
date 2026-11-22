@@ -9,25 +9,9 @@
   },
   "sourceRoot": "libs/puni/shared/testing/src",
   "targets": {
-    "test": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bun test src --timeout=20000",
-        "cwd": "libs/puni/shared/testing"
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bunx eslint libs/puni/shared/testing/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bunx tsc --noEmit -p libs/puni/shared/testing/tsconfig.json"
-      }
-    },
+    "test": {},
+    "lint": {},
+    "typecheck": {},
     "puni-bur-check": {}
   }
 }

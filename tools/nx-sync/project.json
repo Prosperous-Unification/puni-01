@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-nx-sync",
+  "projectType": "library",
+  "tags": ["scope:app", "type:app"],
+  "sourceRoot": "tools/nx-sync/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

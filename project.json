@@ -3,8 +3,39 @@
   "name": "workspace",
   "tags": ["scope:app", "type:app"],
   "targets": {
+    "test": {
+      "inputs": ["default", "{workspaceRoot}/**/project.json", "{workspaceRoot}/nx.json"],
+      "options": {
+        "command": "bun test tests --timeout=20000",
+        "cwd": "."
+      }
+    },
+    "lint": {
+      "options": {
+        "command": "bunx eslint tests"
+      }
+    },
+    "typecheck": {
+      "options": {
+        "command": "bunx tsc --noEmit -p tests/tsconfig.json"
+      }
+    },
     "puni-bur-check": {
-      "inputs": ["{workspaceRoot}/**/*"]
+      "inputs": [
+        "default",
+        "puniBurCheck",
+        "{workspaceRoot}/**/project.json",
+        "{workspaceRoot}/nx.json"
+      ]
+    },
+    "puni-bur-links": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "inputs": ["{workspaceRoot}/**/*"],
+      "options": {
+        "command": "bun apps/puni/cli/src/entrypoint.ts burokrat check --cross-project-links"
+      }
     }
-  }
+  },
+  "implicitDependencies": ["*"]
 }

@@ -348,6 +348,24 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
+    'a target running the nx.json default bun test without --timeout',
+    requireProjectTargets,
+    () => {
+      const path = join(root, 'apps/one/project.json');
+      const project = JSON.parse(readFileSync(path, 'utf8')) as { targets: { test?: unknown } };
+      project.targets.test = {};
+      writeFileSync(path, JSON.stringify(project));
+      const defaults = { test: { options: { command: 'bun test src' } } };
+      writeRepositoryFile(root, 'nx.json', JSON.stringify({ targetDefaults: defaults }));
+    },
+    {
+      rule: 'project.targets',
+      path: 'apps/one/project.json',
+      message: 'target test runs bun test without --timeout',
+      remedy: 'add --timeout=20000 to the bun test command of target test',
+    },
+  ],
+  [
     'a tsconfig.json not including src',
     requireProjectTargets,
     () => {

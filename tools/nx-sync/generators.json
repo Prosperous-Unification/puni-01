@@ -1,0 +1,9 @@
+{
+  "generators": {
+    "wiki-index": {
+      "factory": "./src/wiki-index.cjs",
+      "schema": "./schema.json",
+      "description": "Keeps wiki/index as puni burokrat wiki index generates it."
+    }
+  }
+}
