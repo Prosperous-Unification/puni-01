@@ -5,6 +5,7 @@
 ## Read when
 
 - adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/root-parser.ts)
+- adding a command or a command group: [Adding a command](../adding-a-command.md)
 - adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
 - changing how a command line is parsed, how help is printed, or what a command handler receives and returns: [puni-shared-command](../../libs/puni/shared/command/src/command.ts)
 - changing how a plan is filed in the records repository: [puni-navigator-plan](../../libs/puni/navigator/plan/src/plan-filing.feature.ts)
@@ -15,6 +16,7 @@
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
 - changing the records schema or how record files are listed, read and filed: [puni-shared-records](../../libs/puni/shared/records/src/records-schema.ts)
 - changing what the code may ask of the file system, git, child processes or the clock: [puni-shared-ports](../../libs/puni/shared/ports/src/index.ts)
+- deciding where new code goes, or which kind a file is: [Architecture](../architecture.md)
 - writing a test that needs a memory host or a real repository pair: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)
 
 ## Commands
