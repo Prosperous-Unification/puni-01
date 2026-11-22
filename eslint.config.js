@@ -1,5 +1,8 @@
+import comments from '@eslint-community/eslint-plugin-eslint-comments';
 import js from '@eslint/js';
+import nx from '@nx/eslint-plugin';
 import prettier from 'eslint-config-prettier';
+import jsdoc from 'eslint-plugin-jsdoc';
 import tseslint from 'typescript-eslint';
 
 /**
@@ -7,6 +10,7 @@ import tseslint from 'typescript-eslint';
  * declared by suffix. A library file with no suffix and no wiring name is domain: pure code that
  * imports no other kind and no runtime. Tests, the testing library and the app are free of the
  * kind blocks; every file is barred from another library's files and from dynamic imports.
+ * Rules, features, resources and domain read no clock; tests do not use `.toThrow`.
  */
 const kinds = ['command', 'feature', 'rule', 'resource', 'repository', 'port'];
 const wiringNames = ['contract', 'module', 'module.check', 'failures', 'group', 'index'];
@@ -95,8 +99,66 @@ function kindBlock(kind) {
 
 const wiringFiles = (names) => names.map((name) => `libs/**/src/**/${name}.ts`);
 
+/**
+ * Library boundaries by Nx tag, written on the importing side. A role library depends only on
+ * shared libraries; a group or shared library imports no adapters and no app, and only a test
+ * imports `type:testing`; the app composes everything. Those last are `onlyDependOnLibsWithTags` lists, which judge direct
+ * imports: `notDependOnLibsWithTags` walks the whole project graph, where a library's own tests
+ * already reach the adapters through the testing library. The rule reads the Nx project graph
+ * and passes silently without one, so it is proven through `nx run <project>:lint`.
+ */
+function moduleBoundaries({ testing }) {
+  const testingTags = testing ? ['type:testing'] : [];
+  return {
+    '@nx/enforce-module-boundaries': [
+      'error',
+      {
+        depConstraints: [
+          ...['scope:navigator', 'scope:dash', 'scope:burokrat', 'scope:shared'].map((tag) => ({
+            sourceTag: tag,
+            onlyDependOnLibsWithTags: ['scope:shared'],
+          })),
+          {
+            sourceTag: 'type:group',
+            onlyDependOnLibsWithTags: ['type:group', 'type:shared', ...testingTags],
+          },
+          { sourceTag: 'type:shared', onlyDependOnLibsWithTags: ['type:shared', ...testingTags] },
+          { sourceTag: 'scope:app', onlyDependOnLibsWithTags: ['*'] },
+        ],
+      },
+    ],
+  };
+}
+
+const clock = {
+  properties: [
+    ['Date', 'now'],
+    ['performance', 'now'],
+    ['Bun', 'nanoseconds'],
+  ].map(([object, property]) => ({
+    object,
+    property,
+    message:
+      'rules, features, resources and domain take time as input; only the edge reads a clock',
+  })),
+  newDate: {
+    selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+    message:
+      'rules, features, resources and domain take time as input; only the edge reads a clock',
+  },
+};
+
+const toThrow = {
+  selector: 'CallExpression[callee.property.name=/^toThrow/]',
+  message:
+    "use node:assert/strict throws or rejects: under Bun 1.4.4 `expect(() => new Error('x')).toThrow()` passes although nothing is thrown",
+};
+
+const bannedNames = ['data', 'result', 'obj', 'tmp', 'item', 'handle'];
+
 export default tseslint.config(
-  { ignores: ['dist/', '.nx/', 'node_modules/'] },
+  { ignores: ['dist/', '.nx/', 'node_modules/', '.worktrees/'] },
+  { linterOptions: { reportUnusedDisableDirectives: 'error' } },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
@@ -104,12 +166,46 @@ export default tseslint.config(
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
-  { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
+  { files: ['**/*.js', '**/*.cjs'], ...tseslint.configs.disableTypeChecked },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', module: 'writable', process: 'readonly' },
+    },
+  },
+  {
+    plugins: { '@eslint-community/eslint-comments': comments, jsdoc },
+    rules: {
+      '@eslint-community/eslint-comments/require-description': 'error',
+      'id-denylist': ['error', ...bannedNames],
+      'jsdoc/check-param-names': 'error',
+      'jsdoc/check-tag-names': 'error',
+      'jsdoc/empty-tags': 'error',
+      'jsdoc/require-param-description': 'error',
+      'jsdoc/require-returns-description': 'error',
+    },
+  },
+  { files: ['**/*.ts'], rules: { 'jsdoc/no-types': 'error' } },
   {
     files: ['**/*.ts'],
+    plugins: { '@nx': nx },
     rules: {
       ...restrictImports(intoLibraryFiles),
       'no-restricted-syntax': ['error', dynamicImport],
+      ...moduleBoundaries({ testing: false }),
+    },
+  },
+  {
+    files: ['**/*.ts'],
+    ignores: tests,
+    rules: { 'max-lines': ['error', { max: 400, skipComments: true, skipBlankLines: true }] },
+  },
+  {
+    files: tests,
+    rules: {
+      'no-restricted-syntax': ['error', dynamicImport, toThrow],
+      ...moduleBoundaries({ testing: true }),
     },
   },
   { files: ['apps/puni/cli/src/entrypoint.ts'], rules: { 'no-restricted-syntax': 'off' } },
@@ -142,6 +238,18 @@ export default tseslint.config(
     rules: {
       ...restrictImports(intoLibraryFiles, hostLibraries, runtime, ports),
       ...runtimeGlobals,
+    },
+  },
+  {
+    files: ['libs/**/src/**/*.ts'],
+    ignores: [
+      ...['command', 'repository', 'port'].map((kind) => `**/*.${kind}.ts`),
+      ...wiringFiles(wiringNames),
+      ...exempt,
+    ],
+    rules: {
+      'no-restricted-properties': ['error', ...clock.properties],
+      'no-restricted-syntax': ['error', dynamicImport, clock.newDate],
     },
   },
   {

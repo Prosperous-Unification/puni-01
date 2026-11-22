@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,9 +31,7 @@ describe('createNodeFileSystem', () => {
 
   test('a stat failure other than a missing path throws', () => {
     writeFileSync(join(root, 'a.md'), 'a');
-    expect(() => createNodeFileSystem().stat(join(root, 'a.md', 'below'), 'no-follow')).toThrow(
-      /ENOTDIR/u,
-    );
+    throws(() => createNodeFileSystem().stat(join(root, 'a.md', 'below'), 'no-follow'), /ENOTDIR/u);
   });
 
   test('lists, writes, removes and makes directories', () => {

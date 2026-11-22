@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { createRepositoryCheck } from './repository-check.feature';
@@ -84,6 +85,6 @@ describe('the repository check turns defect kinds into findings', () => {
 
   test('anything that is not a defect kind propagates', () => {
     const host = openMemoryHost({ '/r/puni.json': registry, '/r/AGENTS.md': { directory: true } });
-    expect(() => createCheck(host).check({}, '/r')).toThrow(/ENOENT/u);
+    throws(() => createCheck(host).check({}, '/r'), /ENOENT/u);
   });
 });

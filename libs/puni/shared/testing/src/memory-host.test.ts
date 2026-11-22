@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { createMemoryFileSystem, memoryHost } from './memory-host';
 
 describe('createMemoryFileSystem', () => {
@@ -20,7 +21,7 @@ describe('createMemoryFileSystem', () => {
 
   test('reads through a symlink, and a missing file throws ENOENT', () => {
     expect(fileSystem.readText('/r/link')).toBe('a');
-    expect(() => fileSystem.readText('/r/dangling')).toThrow(/ENOENT/u);
+    throws(() => fileSystem.readText('/r/dangling'), /ENOENT/u);
   });
 
   test('lists a directory by name and kind', () => {

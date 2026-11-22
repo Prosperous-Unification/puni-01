@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { memoryHost } from '@puni/shared-testing';
 import { createPuniContainer } from './composition';
 import { type CommandContainer, runPuni } from './main';
@@ -88,6 +89,9 @@ describe('the puni container', () => {
         }),
       }),
     );
-    expect(() => runIn(container, '/work', ['burokrat', 'check'])).toThrow(failure);
+    throws(
+      () => runIn(container, '/work', ['burokrat', 'check']),
+      (caught) => caught === failure,
+    );
   });
 });
