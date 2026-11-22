@@ -1,8 +1,10 @@
-import { command, type InferValue, map, message, optional } from '@optique/core';
+import { command, type InferValue, map, message, optional, or } from '@optique/core';
+import { checkParser } from './check/check';
 import type { HelpRequest } from './help-request';
 import { wikiParser } from './wiki/wiki';
 
 export type { HelpRequest } from './help-request';
+export { type CheckContext, runCheck } from './check/check';
 export { type CommandBrief, runWikiIndex, type WikiIndexContext } from './wiki/wiki-index';
 
 const helpRequest: HelpRequest = { kind: 'help', path: [] };
@@ -17,8 +19,15 @@ const helpRequest: HelpRequest = { kind: 'help', path: [] };
  * of an `or` whose empty branch is not taken, printing a usage line that hides the bare form.
  */
 export const burokratParser = map(
-  optional(command('wiki', wikiParser, { brief: message`Generate and judge the wiki index.` })),
-  (wiki) => wiki ?? helpRequest,
+  optional(
+    or(
+      command('check', checkParser, {
+        brief: message`Judge the repository against its rules.`,
+      }),
+      command('wiki', wikiParser, { brief: message`Generate the wiki index.` }),
+    ),
+  ),
+  (leaf) => leaf ?? helpRequest,
 );
 
 /** A parsed Burokrat request, discriminated by `kind`. */

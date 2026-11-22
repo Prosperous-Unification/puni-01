@@ -2,7 +2,18 @@
 
 # Wiki index
 
-## Catalogue
+## Read when
 
-- [commands.md](commands.md): every `puni` command with its brief; 5 entries.
-- [modules.md](modules.md): every Nx project under `apps/` and `libs/` with its description; 4 entries.
+- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli)
+- adding or changing a command that executes or operates something: [puni-dash](../../libs/puni/dash)
+- adding or changing a command that plans work or decides what to do next: [puni-navigator](../../libs/puni/navigator)
+- adding or changing a repository rule, the check that enforces it, or how the wiki index is generated: [puni-burokrat](../../libs/puni/burokrat)
+
+## Commands
+
+- `puni burokrat`: Judge: decide whether it was done right.
+- `puni burokrat check`: Judge the repository against its rules.
+- `puni burokrat wiki`: Generate the wiki index.
+- `puni burokrat wiki index`: Write the generated wiki index.
+- `puni dash`: Execute and operate: do it.
+- `puni navigator`: Plan: decide what to do.

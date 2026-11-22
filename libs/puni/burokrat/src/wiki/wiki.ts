@@ -11,7 +11,7 @@ const helpRequest: HelpRequest = { kind: 'help', path: ['wiki'] };
 export const wikiParser = map(
   optional(
     command('index', wikiIndexParser, {
-      brief: message`Write the generated wiki index; with --check, only judge it.`,
+      brief: message`Write the generated wiki index.`,
     }),
   ),
   (leaf) => leaf ?? helpRequest,

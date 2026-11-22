@@ -50,16 +50,19 @@ describe('readInvocation', () => {
     });
   });
 
-  test.each(['b wiki index --check', 'bur wiki index --check'])('%s selects wiki index', (line) => {
+  test.each([
+    ['b wiki index', 'wiki index'],
+    ['bur check', 'check'],
+  ] as const)('%s selects %s', (line, kind) => {
     expect(readInvocation(line.split(' '), () => undefined)).toEqual({
       kind: 'command',
-      command: { group: 'burokrat', request: { kind: 'wiki index', check: true } },
+      command: { group: 'burokrat', request: { kind } },
     });
   });
 
   test('b wiki --help prints the wiki help listing index', () => {
     const help = readPrinted(['b', 'wiki', '--help']);
-    expect(help).toContain('Generate and judge the wiki index.\nUsage: puni burokrat');
+    expect(help).toContain('Generate the wiki index.\nUsage: puni burokrat');
     expect(readListedNames(help)).toEqual(['index']);
   });
 
@@ -69,10 +72,10 @@ describe('readInvocation', () => {
     );
   });
 
-  test('b --help shows that a bare burokrat is valid and lists wiki', () => {
+  test('b --help shows that a bare burokrat is valid and lists check and wiki', () => {
     const help = readPrinted(['b', '--help']);
-    expect(help).toContain('Usage: puni burokrat [wiki [index [--check]]]\n');
-    expect(readListedNames(help)).toEqual(['wiki']);
+    expect(help).toContain('Usage: puni burokrat [(check | wiki [index])]\n');
+    expect(readListedNames(help)).toEqual(['check', 'wiki']);
   });
 
   test.each(['--help', 'help', ''])(
@@ -106,6 +109,7 @@ describe('readInvocation', () => {
     ['--bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['d --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
+    ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
     [
       'completion',
       'Missing shell name for completion. Generate shell completion script or provide completions.',
@@ -126,11 +130,9 @@ describe('listCommands', () => {
       { path: 'puni navigator', brief: 'Plan: decide what to do.' },
       { path: 'puni dash', brief: 'Execute and operate: do it.' },
       { path: 'puni burokrat', brief: 'Judge: decide whether it was done right.' },
-      { path: 'puni burokrat wiki', brief: 'Generate and judge the wiki index.' },
-      {
-        path: 'puni burokrat wiki index',
-        brief: 'Write the generated wiki index; with --check, only judge it.',
-      },
+      { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
+      { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
+      { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
     ]);
   });
 });

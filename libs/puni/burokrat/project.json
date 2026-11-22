@@ -3,7 +3,7 @@
   "name": "puni-burokrat",
   "projectType": "library",
   "metadata": {
-    "description": "Burokrat commands: judge whether work was done right, including the generated wiki index."
+    "readWhen": "adding or changing a repository rule, the check that enforces it, or how the wiki index is generated"
   },
   "sourceRoot": "libs/puni/burokrat/src",
   "targets": {

@@ -15,19 +15,21 @@ describe('burokratParser', () => {
   });
 
   test.each([
-    [['wiki', 'index'], false],
-    [['wiki', 'index', '--check'], true],
-  ])('%j parses to wiki index with check %p', (args, check) => {
-    expect(parse(burokratParser, args)).toEqual({
-      success: true,
-      value: { kind: 'wiki index', check },
-    });
+    ['wiki index', { kind: 'wiki index' }],
+    ['check', { kind: 'check' }],
+  ] as const)('%s parses to its leaf', (line, value) => {
+    expect(parse(burokratParser, line.split(' '))).toEqual({ success: true, value });
   });
 
-  test.each(['stray', '--bogus', 'wiki stray', 'wiki --bogus', 'wiki index --bogus'])(
-    '%s is refused',
-    (line) => {
-      expect(parse(burokratParser, line.split(' ')).success).toBe(false);
-    },
-  );
+  test.each([
+    'stray',
+    '--bogus',
+    'wiki stray',
+    'wiki --bogus',
+    'wiki index --check',
+    'check --bogus',
+    'check stray',
+  ])('%s is refused', (line) => {
+    expect(parse(burokratParser, line.split(' ')).success).toBe(false);
+  });
 });

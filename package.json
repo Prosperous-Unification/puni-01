@@ -11,7 +11,7 @@
     "typecheck": "nx run-many -t typecheck",
     "format": "nx format:write --all",
     "format:check": "nx format:check --all",
-    "gate": "bun run puni burokrat wiki index --check && nx format:check --all && nx run-many -t lint typecheck test build"
+    "gate": "bun run puni burokrat check && nx format:check --all && nx run-many -t lint typecheck test build"
   },
   "dependencies": {
     "@optique/core": "1.4.0",

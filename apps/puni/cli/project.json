@@ -3,7 +3,7 @@
   "name": "puni-cli",
   "projectType": "application",
   "metadata": {
-    "description": "The `puni` CLI: composes the Navigator, Dash and Burokrat command groups."
+    "readWhen": "adding a command group, or changing how commands are parsed, printed or mapped to exit codes"
   },
   "sourceRoot": "apps/puni/cli/src",
   "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],

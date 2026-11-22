@@ -2,7 +2,9 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "name": "puni-navigator",
   "projectType": "library",
-  "metadata": { "description": "Navigator commands: decide what to do." },
+  "metadata": {
+    "readWhen": "adding or changing a command that plans work or decides what to do next"
+  },
   "sourceRoot": "libs/puni/navigator/src",
   "targets": {
     "test": {
