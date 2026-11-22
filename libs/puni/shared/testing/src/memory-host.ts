@@ -1,5 +1,7 @@
 import { dirname, posix } from 'node:path';
 import type {
+  AttachedOutcome,
+  Clock,
   DirectoryEntry,
   FileSystem,
   Git,
@@ -27,7 +29,19 @@ export interface MemoryHostOptions {
   readonly staged?: MemoryStaged;
   /** The outcome of each argument vector, keyed by its words joined with spaces. */
   readonly processes?: Readonly<Record<string, ProcessOutcome>>;
+  /**
+   * The exit code of each argument vector run attached, keyed by its words joined with spaces;
+   * any other vector is unstarted.
+   */
+  readonly attached?: Readonly<Record<string, number>>;
+  /** The abbreviated `HEAD` commit of each repository by its absolute root; any other has none. */
+  readonly heads?: Readonly<Record<string, string>>;
+  /** The instant the clock always reads; {@link fixedInstant} when not given. */
+  readonly now?: Date;
 }
+
+/** The instant a memory host's clock reads unless told otherwise. */
+export const fixedInstant = new Date('2031-04-05T23:30:00Z');
 
 /** A failure of the memory file system, carrying the `code` the runtime's own error would. */
 class MemoryFileError extends Error {
@@ -121,8 +135,13 @@ export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
   staged: MemoryStaged = {},
+  heads: Readonly<Record<string, string>> = {},
 ): Git {
   return {
+    readHeadCommit(root): GitText {
+      const head = heads[root];
+      return head === undefined ? { failure: `${root} has no commit` } : { text: head };
+    },
     listStagedFiles(root): GitListing {
       if (failure !== undefined) return { failure };
       const files = Object.keys(staged)
@@ -149,35 +168,48 @@ export function createMemoryGit(
   };
 }
 
-/** A process runner that answers from `processes`, and leaves any other command unstarted. */
+/**
+ * A process runner that answers from `processes` and, run attached, from `attached`, leaving any
+ * other command unstarted. Every attached argument vector is appended to `attachedRuns` as given.
+ */
 export function createMemoryProcessRunner(
   processes: Readonly<Record<string, ProcessOutcome>> = {},
-): ProcessRunner {
+  attached: Readonly<Record<string, number>> = {},
+): ProcessRunner & { readonly attachedRuns: (readonly string[])[] } {
+  const unstarted = (argv: readonly string[]) =>
+    ({ kind: 'unstarted', reason: `${argv.join(' ')} is not in the memory host` }) as const;
+  const attachedRuns: (readonly string[])[] = [];
   return {
-    run(argv) {
-      const outcome = processes[argv.join(' ')];
-      return (
-        outcome ?? { kind: 'unstarted', reason: `${argv.join(' ')} is not in the memory host` }
-      );
+    attachedRuns,
+    run: (argv) => processes[argv.join(' ')] ?? unstarted(argv),
+    runAttached(argv): AttachedOutcome {
+      attachedRuns.push([...argv]);
+      const exitCode = attached[argv.join(' ')];
+      return exitCode === undefined ? unstarted(argv) : { kind: 'exited', exitCode };
     },
   };
 }
 
 /**
  * The host services a module needs, all in memory over `tree`: providers for `fileSystem`,
- * `git` and `processRunner`, to pass to `withServices`. `fileSystem` is shared, so writes are
- * visible to git and to the test through {@link MemoryHost.nodes}.
+ * `git`, `processRunner` and a fixed `clock`, to pass to `withServices`. `fileSystem` is shared,
+ * so writes are visible to git and to the test through {@link MemoryHost.nodes}; every attached
+ * run is in {@link MemoryHost.attachedRuns}.
  */
 export function memoryHost(tree: MemoryTree, options: MemoryHostOptions = {}) {
   const fileSystem = createMemoryFileSystem(tree);
-  const git = createMemoryGit(fileSystem, options.gitFailure, options.staged);
-  const processRunner = createMemoryProcessRunner(options.processes);
+  const git = createMemoryGit(fileSystem, options.gitFailure, options.staged, options.heads);
+  const processRunner = createMemoryProcessRunner(options.processes, options.attached);
+  const now = options.now ?? fixedInstant;
+  const clock: Clock = { now: () => new Date(now) };
   return {
     nodes: fileSystem.nodes,
+    attachedRuns: processRunner.attachedRuns,
     services: {
       fileSystem: (): FileSystem => fileSystem,
       git: (): Git => git,
       processRunner: (): ProcessRunner => processRunner,
+      clock: (): Clock => clock,
     },
   };
 }

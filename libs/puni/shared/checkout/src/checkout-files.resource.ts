@@ -1,9 +1,16 @@
 import { join, posix } from 'node:path';
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, CheckoutFilesResource, FileSystem, Git, GitListing } from './contract';
-import { CheckoutPathRefused, CheckoutUnlistable, StagedTextUnreadable } from './failures';
+import {
+  CheckoutPathRefused,
+  CheckoutUnlistable,
+  HeadCommitUnreadable,
+  StagedTextUnreadable,
+} from './failures';
 import { ownsPath } from './ownership';
 import { leavesRoot } from './paths';
+import { recordDirectories } from './record-directories';
+import type { RepositoryType } from './registry';
 import { indexDirectory } from './render-index';
 import { readOrRefuse } from './unreadable';
 
@@ -20,11 +27,40 @@ function normalise(path: string): string {
   return normal;
 }
 
-/** `path` normalised, refused unless it lies inside the generated index directory. */
-function normaliseGenerated(path: string, allowDirectory: boolean): string {
+/** Where a checkout writes: the files and the directories it may change, and how to say so. */
+interface WriteArea {
+  readonly description: string;
+  holdsFile(normal: string): boolean;
+  holdsDirectory(normal: string): boolean;
+}
+
+const kindDirectories: readonly string[] = Object.values(recordDirectories);
+
+/**
+ * The write area of a checkout of each type: a system-state checkout writes only the generated
+ * index, anywhere below `wiki/index/`; a records checkout writes only record files, directly
+ * inside a kind directory, and empties no directory.
+ */
+const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
+  'system-state': {
+    description: `inside ${indexDirectory}/`,
+    holdsFile: (normal) => normal.startsWith(`${indexDirectory}/`),
+    holdsDirectory: (normal) =>
+      normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
+  },
+  'system-records': {
+    description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
+    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
+    holdsDirectory: () => false,
+  },
+};
+
+/** `path` normalised, refused unless the write area of a `type` checkout holds it. */
+function normaliseWritten(path: string, type: RepositoryType, directory: boolean): string {
   const normal = normalise(path);
-  if (!(normal.startsWith(`${indexDirectory}/`) || (allowDirectory && normal === indexDirectory))) {
-    refuse(path, `is outside ${indexDirectory}/, the only place a checkout writes`);
+  const area = writeAreas[type];
+  if (!(directory ? area.holdsDirectory(normal) : area.holdsFile(normal))) {
+    refuse(path, `is not ${area.description}, the only place a ${type} checkout writes`);
   }
   return normal;
 }
@@ -45,7 +81,12 @@ function listOnce(list: () => GitListing): () => string[] {
   return () => (listed ??= requireListed(list()));
 }
 
-function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutFiles {
+function openCheckout(
+  root: string,
+  type: RepositoryType,
+  fileSystem: FileSystem,
+  git: Git,
+): CheckoutFiles {
   const listGit = listOnce(() => git.listVisibleFiles(root));
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
@@ -59,6 +100,7 @@ function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutF
     }
   };
   return {
+    root,
     readText(path) {
       const file = absolute(path);
       return readOrRefuse(path, () => fileSystem.readText(file));
@@ -73,23 +115,32 @@ function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutF
         const kind = describe(path);
         return kind === 'absent' ? [] : [{ path, kind }];
       }),
+    readHeadCommit() {
+      const head = git.readHeadCommit(root);
+      if ('failure' in head) {
+        throw new HeadCommitUnreadable({
+          details: { rule: 'repository.git', path: '.', root, reason: head.failure },
+        });
+      }
+      return head.text;
+    },
     write(path, text) {
-      const normal = normaliseGenerated(path, false);
+      const normal = normaliseWritten(path, type, false);
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
     remove(path) {
-      fileSystem.remove(join(root, normaliseGenerated(path, false)));
+      fileSystem.remove(join(root, normaliseWritten(path, type, false)));
     },
     removeEmptyDirectories(directory) {
-      removeEmptyBelow(normaliseGenerated(directory, true));
+      removeEmptyBelow(normaliseWritten(directory, type, true));
     },
   };
 }
 
 /** The staged view of the checkout at `root`: what the git index holds, read-only. */
 function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFiles {
-  const working = openCheckout(root, fileSystem, git);
+  const working = openCheckout(root, 'system-state', fileSystem, git);
   const listStaged = listOnce(() => git.listStagedFiles(root));
   const readOnly = (path: string): never => refuse(path, 'a staged view writes nothing');
   return {
@@ -118,7 +169,7 @@ export function createCheckoutFiles({
   git: Git;
 }): CheckoutFilesResource {
   return {
-    open: (root) => openCheckout(root, fileSystem, git),
+    open: (root, type) => openCheckout(root, type, fileSystem, git),
     openStaged: (root) => openStaged(root, fileSystem, git),
   };
 }

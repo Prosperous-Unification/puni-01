@@ -1,23 +1,6 @@
-/** Each record kind and the directory, relative to the records repository root, that holds it. */
-export const recordDirectories = {
-  plan: 'nav/plans',
-  research: 'nav/research',
-  adr: 'bur/adr',
-  assessment: 'bur/assessments',
-  archive: 'bur/archive',
-} as const;
+import { recordDirectories, recordKinds } from '@puni/shared-checkout';
 
-/** A record kind, the `kind` front-matter value. */
-export type RecordKind = keyof typeof recordDirectories;
-
-/** The record kinds, in schema order. */
-export const recordKinds: readonly RecordKind[] = [
-  'plan',
-  'research',
-  'adr',
-  'assessment',
-  'archive',
-];
+export { type RecordKind, recordDirectories, recordKinds } from '@puni/shared-checkout';
 
 /**
  * The top level of a records repository: each allowed name and whether it is a directory.

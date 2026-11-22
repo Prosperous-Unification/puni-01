@@ -1,6 +1,6 @@
 import { parse } from '@optique/core';
 import { describe, expect, test } from 'bun:test';
-import { burokratParser, emptyGroupParser } from './root-parser';
+import { burokratParser, dashParser, navigatorParser } from './root-parser';
 
 describe('burokratParser', () => {
   test('a bare group asks for the group help', () => {
@@ -65,16 +65,61 @@ describe('burokratParser', () => {
   });
 });
 
-describe('emptyGroupParser', () => {
-  test('a bare group parses to an empty request', () => {
-    expect(parse(emptyGroupParser, [])).toEqual({ success: true, value: {} });
+describe('navigatorParser', () => {
+  test.each([
+    ['', { kind: 'help', path: [] }],
+    ['plan', { kind: 'help', path: ['plan'] }],
+    [
+      'plan add --title T --topics a,b --summary S',
+      { kind: 'plan add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+    ],
+    [
+      'plan add --summary S --body-file b.md --topics a --title T',
+      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+    ],
+  ] as const)('%j parses to %j', (line, value) => {
+    expect(parse(navigatorParser, line.split(' ').filter(Boolean))).toEqual({
+      success: true,
+      value,
+    });
   });
 
-  test('a stray token is refused', () => {
-    expect(parse(emptyGroupParser, ['stray']).success).toBe(false);
+  test.each([
+    'stray',
+    'plan stray',
+    'plan add',
+    'plan add --title T --topics a',
+    'plan add --title T --topics a --summary S --bogus',
+  ])('%s is refused', (line) => {
+    expect(parse(navigatorParser, line.split(' ')).success).toBe(false);
+  });
+});
+
+describe('dashParser', () => {
+  test.each([
+    ['', { kind: 'help', path: [] }],
+    ['ops', { kind: 'help', path: ['ops'] }],
+    ['ops ssh n1', { kind: 'ops ssh', node: 'n1', command: [] }],
+    ['ops ssh n1 -- hostname', { kind: 'ops ssh', node: 'n1', command: ['hostname'] }],
+    [
+      'ops ssh n1 sh -c true -- x',
+      { kind: 'ops ssh', node: 'n1', command: ['sh', '-c', 'true', '--', 'x'] },
+    ],
+    ['ops ssh n1 -- -v --help', { kind: 'ops ssh', node: 'n1', command: ['-v', '--help'] }],
+    [
+      'ops k3s get pods -n kube-system -o wide',
+      { kind: 'ops k3s', args: ['get', 'pods', '-n', 'kube-system', '-o', 'wide'] },
+    ],
+    ['ops k3s get --help', { kind: 'ops k3s', args: ['get', '--help'] }],
+    ['ops k3s -- -n x get', { kind: 'ops k3s', args: ['-n', 'x', 'get'] }],
+  ] as const)('%j parses to %j', (line, value) => {
+    expect(parse(dashParser, line.split(' ').filter(Boolean))).toEqual({ success: true, value });
   });
 
-  test('an unknown flag is refused', () => {
-    expect(parse(emptyGroupParser, ['--bogus']).success).toBe(false);
-  });
+  test.each(['stray', 'ops stray', 'ops ssh', 'ops ssh -x', 'ops k3s', 'ops k3s -n x get'])(
+    '%s is refused',
+    (line) => {
+      expect(parse(dashParser, line.split(' ')).success).toBe(false);
+    },
+  );
 });

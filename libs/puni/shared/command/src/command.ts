@@ -8,9 +8,11 @@ export interface Io {
 
 /**
  * The exit code of a command: 0 success, 1 a judgement failed or the repository is defective, 2
- * the command line named something the repository does not have.
+ * the command line named something the repository does not have. A pass-through command, once it
+ * has started the command it passes through, returns that command's own exit code, 0 to 255,
+ * unchanged; so the type is every exit code a process can have.
  */
-export type CommandExitCode = 0 | 1 | 2;
+export type CommandExitCode = number;
 
 /** The exit code of an unexpected failure, which is reported and never a command's own. */
 export const unexpectedFailureExitCode = 3;

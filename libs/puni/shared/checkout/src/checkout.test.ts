@@ -5,6 +5,7 @@ import {
   CheckoutPathRefused,
   CheckoutUnlistable,
   FileUnreadable,
+  HeadCommitUnreadable,
   RegistryInvalid,
   StagedTextUnreadable,
 } from './failures';
@@ -100,7 +101,7 @@ describe('checkoutFiles over a memory file system', () => {
 
   test('a project scope lists only the regular files it owns, sorted', () => {
     const { container } = openHost(tree);
-    const files = container.resolve('checkoutFiles').open('/r');
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
     const projects = container.resolve('checkoutProjectScope').list(files);
     const two = projects.find((project) => project.name === 'two');
     if (two === undefined) throw new Error('two is not a project');
@@ -110,13 +111,13 @@ describe('checkoutFiles over a memory file system', () => {
   });
 
   test.each(['../outside.md', '/etc/hostname', 'a/../../x'])('the path %s is refused', (path) => {
-    const files = openHost(tree).container.resolve('checkoutFiles').open('/r');
+    const files = openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(caught(() => files.readText(path))).toBeInstanceOf(CheckoutPathRefused);
   });
 
   test('a write outside wiki/index/ is refused and nothing is written', () => {
     const { host, container } = openHost(tree);
-    const files = container.resolve('checkoutFiles').open('/r');
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(
       caught(() => {
         files.write('README.md', 'overwritten');
@@ -127,14 +128,76 @@ describe('checkoutFiles over a memory file system', () => {
     expect(host.nodes.get('/r/wiki/index/index.md')).toBe('generated');
   });
 
+  test.each([
+    ['nav/plans/2031-04-05-a.md', true],
+    ['bur/archive/2031-04-05-a.md', true],
+    ['nav/plans/deep/2031-04-05-a.md', false],
+    ['nav/plans', false],
+    ['nav/other/a.md', false],
+    ['dash/ops/nodes.json', false],
+    ['wiki/index/index.md', false],
+    ['AGENTS.md', false],
+  ] as const)('a records checkout writes %s: %p', (path, allowed) => {
+    const { host, container } = openHost({ '/r/AGENTS.md': 'a' });
+    const files = container.resolve('checkoutFiles').open('/r', 'system-records');
+    const write = () => {
+      files.write(path, 'written');
+    };
+    if (allowed) {
+      write();
+      expect(host.nodes.get(`/r/${path}`)).toBe('written');
+      return;
+    }
+    expect(caught(write)).toMatchObject({
+      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/archive), the only place a system-records checkout writes`,
+    });
+    expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
+  });
+
+  test('a records checkout empties no directory, and a state checkout writes no record', () => {
+    const { container } = openHost(tree);
+    const records = container.resolve('checkoutFiles').open('/r', 'system-records');
+    expect(
+      caught(() => {
+        records.removeEmptyDirectories('nav/plans');
+      }),
+    ).toBeInstanceOf(CheckoutPathRefused);
+    const state = container.resolve('checkoutFiles').open('/r', 'system-state');
+    expect(
+      caught(() => {
+        state.write('nav/plans/2031-04-05-a.md', 'x');
+      }),
+    ).toMatchObject({
+      message:
+        'nav/plans/2031-04-05-a.md: is not inside wiki/index/, the only place a system-state checkout writes',
+    });
+  });
+
+  test('the HEAD commit is read from git; none is the repository.git defect', () => {
+    const { container } = openHost(tree, { heads: { '/r': 'abc1234' } });
+    const checkoutFiles = container.resolve('checkoutFiles');
+    expect(checkoutFiles.open('/r', 'system-state').readHeadCommit()).toBe('abc1234');
+    expect(checkoutFiles.open('/r', 'system-state').root).toBe('/r');
+    const failure = caught(() =>
+      openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state').readHeadCommit(),
+    );
+    expect(failure).toBeInstanceOf(HeadCommitUnreadable);
+    expect(failure).toMatchObject({
+      message: 'the HEAD commit of /r cannot be read: /r has no commit',
+      details: { rule: 'repository.git', path: '.' },
+    });
+  });
+
   test('a checkout asks git once; a new checkout sees later files', () => {
     const { host, container } = openHost(tree);
     const checkoutFiles = container.resolve('checkoutFiles');
-    const files = checkoutFiles.open('/r');
+    const files = checkoutFiles.open('/r', 'system-state');
     const before = files.listVisible({ kind: 'repository' });
     host.nodes.set('/r/later.md', 'later');
     expect(files.listVisible({ kind: 'repository' })).toEqual(before);
-    expect(checkoutFiles.open('/r').listVisible({ kind: 'repository' })).toContain('later.md');
+    expect(checkoutFiles.open('/r', 'system-state').listVisible({ kind: 'repository' })).toContain(
+      'later.md',
+    );
   });
 
   test.each([
@@ -143,7 +206,7 @@ describe('checkoutFiles over a memory file system', () => {
     ['the project listing', (files: Files, projects: Projects) => projects.list(files)],
   ] as const)('a git failure makes %s throw the one repository.git defect', (_name, list) => {
     const { container } = openHost(tree, { gitFailure: 'git exploded' });
-    const files = container.resolve('checkoutFiles').open('/r');
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
     const failure = caught(() => list(files, container.resolve('checkoutProjectScope')));
     expect(failure).toBeInstanceOf(CheckoutUnlistable);
     expect(failure).toMatchObject({
@@ -155,14 +218,14 @@ describe('checkoutFiles over a memory file system', () => {
   test('a file that cannot be read is FileUnreadable naming its repository path', () => {
     const files = openHost({ '/r/docs': { directory: true } })
       .container.resolve('checkoutFiles')
-      .open('/r');
+      .open('/r', 'system-state');
     const failure = caught(() => files.readText('docs'));
     expect(failure).toBeInstanceOf(FileUnreadable);
     expect(failure).toMatchObject({ message: 'cannot read docs: EISDIR: /r/docs' });
   });
 
   test('a path below a file is absent, and exists never throws', () => {
-    const files = openHost(tree).container.resolve('checkoutFiles').open('/r');
+    const files = openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(files.describe('README.md/below')).toBe('absent');
     expect(files.exists('README.md/below')).toBe(false);
     expect(files.exists('CLAUDE.md')).toBe(true);

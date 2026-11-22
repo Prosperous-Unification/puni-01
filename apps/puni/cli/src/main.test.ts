@@ -35,8 +35,8 @@ function collect(run: (stdout: (text: string) => void) => unknown): string {
 function runIn(
   cwd: string,
   args: readonly string[],
-): { code: 0 | 1 | 2; printed: string; errors: string } {
-  let code: 0 | 1 | 2 = 0;
+): { code: number; printed: string; errors: string } {
+  let code = 0;
   let errors = '';
   const printed = collect((stdout) => {
     code = runPuni(
@@ -78,14 +78,17 @@ describe('runPuni', () => {
     },
   );
 
-  test.each(['', 'wiki'])('a bare burokrat %s prints its help and exits 0', (line) => {
-    const path = line.split(' ').filter(Boolean);
-    expect(runIn('.', ['burokrat', ...path])).toEqual({
-      code: 0,
-      printed: collect((stdout) => readInvocation(['burokrat', ...path, '--help'], stdout)),
-      errors: '',
-    });
-  });
+  test.each(['burokrat', 'burokrat wiki', 'dash ops', 'navigator plan'])(
+    'a bare %s prints its help and exits 0',
+    (line) => {
+      const path = line.split(' ');
+      expect(runIn('.', path)).toEqual({
+        code: 0,
+        printed: collect((stdout) => readInvocation([...path, '--help'], stdout)),
+        errors: '',
+      });
+    },
+  );
 
   test('wiki index writes the live command tree into the one index file', () => {
     const root = makeRepository();
@@ -163,7 +166,10 @@ describe('runProcess', () => {
           }),
           disposeService: () => Promise.reject(closeFailure),
         }),
-        burokratWikiIndexCommand: () => ({ run: () => 0 as const }),
+        burokratWikiIndexCommand: () => ({ run: () => 0 }),
+        navigatorPlanAddCommand: () => ({ run: () => 0 }),
+        dashOpsSshCommand: () => ({ run: () => 0 }),
+        dashOpsK3sCommand: () => ({ run: () => 0 }),
       })
       .buildContainer();
     const argv = process.argv;

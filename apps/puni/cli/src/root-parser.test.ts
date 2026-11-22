@@ -55,7 +55,7 @@ describe('readInvocation', () => {
     const invocation: unknown = readInvocation([spelling], () => undefined);
     expect(invocation).toEqual({
       kind: 'command',
-      command: { group, request: group === 'burokrat' ? { kind: 'help', path: [] } : {} },
+      command: { group, request: { kind: 'help', path: [] } },
     });
   });
 
@@ -97,6 +97,31 @@ describe('readInvocation', () => {
       kind: 'command',
       command: { group: 'burokrat', request },
     });
+  });
+
+  test.each([
+    ['d ops ssh n1 -- hostname', 'dash', { kind: 'ops ssh', node: 'n1', command: ['hostname'] }],
+    ['d ops k3s get nodes', 'dash', { kind: 'ops k3s', args: ['get', 'nodes'] }],
+    [
+      'n plan add --title T --topics a --summary S',
+      'navigator',
+      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: undefined },
+    ],
+  ] as const)('%s selects %s %j', (line, group, request) => {
+    const invocation: unknown = readInvocation(line.split(' '), () => undefined);
+    expect(invocation).toEqual({
+      kind: 'command',
+      command: { group, request },
+    });
+  });
+
+  test.each([
+    ['d ops', ['ssh', 'k3s']],
+    ['n plan', ['add']],
+    ['d', ['ops']],
+    ['n', ['plan']],
+  ])('%s --help lists %j', (line, names) => {
+    expect(readListedNames(readPrinted([...line.split(' '), '--help']))).toEqual(names);
   });
 
   test('b wiki --help prints the wiki help listing index', () => {
@@ -152,6 +177,8 @@ describe('readInvocation', () => {
     ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
     ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
     ['b check --project', '`--project` requires `NAME`.'],
+    ['d ops k3s', 'Expected a `KUBECTL_ARG`, but too few arguments.'],
+    ['d ops ssh', 'Expected a `NODE`, but too few arguments.'],
     [
       'completion',
       'Missing shell name for completion. Generate shell completion script or provide completions.',
@@ -170,7 +197,18 @@ describe('listCommands', () => {
   test('walks the parser tree: every group and leaf by canonical path, with its brief', () => {
     expect(listCommands(puniProgram)).toEqual([
       { path: 'puni navigator', brief: 'Plan: decide what to do.' },
+      { path: 'puni navigator plan', brief: 'File plans in the records repository.' },
+      { path: 'puni navigator plan add', brief: 'File a plan in the records repository.' },
       { path: 'puni dash', brief: 'Execute and operate: do it.' },
+      { path: 'puni dash ops', brief: 'Reach the nodes of the inventory.' },
+      {
+        path: 'puni dash ops ssh',
+        brief: 'Open a shell on a node, or run a command there.',
+      },
+      {
+        path: 'puni dash ops k3s',
+        brief: 'Run kubectl on the node that runs the k3s server.',
+      },
       { path: 'puni burokrat', brief: 'Judge: decide whether it was done right.' },
       { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
       { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },

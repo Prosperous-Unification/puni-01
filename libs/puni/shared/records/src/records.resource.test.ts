@@ -15,7 +15,7 @@ function open(tree: MemoryTree, options: Parameters<typeof memoryHost>[1] = {}) 
       .buildContainer(),
   );
   return {
-    files: container.resolve('checkoutFiles').open('/r'),
+    files: container.resolve('checkoutFiles').open('/r', 'system-records'),
     records: container.resolve('recordsCatalog'),
   };
 }

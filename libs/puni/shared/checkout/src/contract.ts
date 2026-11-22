@@ -47,6 +47,8 @@ export interface CheckoutEntry {
  * `CheckoutUnlistable` (the `repository.git` defect) when git cannot list the checkout.
  */
 export interface CheckoutFiles {
+  /** The absolute directory the checkout's paths are relative to. */
+  readonly root: string;
   /**
    * The text of the file at `path`.
    *
@@ -59,26 +61,40 @@ export interface CheckoutFiles {
   exists(path: string): boolean;
   /** The target text of the symlink at `path`. */
   readLinkTarget(path: string): string;
+  /**
+   * The abbreviated hash of the commit the checkout's `HEAD` names.
+   *
+   * @throws HeadCommitUnreadable (the `repository.git` defect) when git gives none, as in a
+   *   repository with no commit.
+   */
+  readHeadCommit(): string;
   /** The visible files `scope` owns. */
   listVisible(scope: CheckScope): readonly string[];
   /** Every path git shows that exists in the working tree, of whatever kind. */
   listVisibleEntries(): readonly CheckoutEntry[];
-  /** Writes `text` at `path` inside `wiki/index/`, creating its directories. */
+  /**
+   * Writes `text` at `path` in the checkout's write area, creating its directories, replacing a
+   * file there. A system-state checkout writes only inside `wiki/index/`; a records checkout only
+   * directly inside a kind directory. Any other path is refused with `CheckoutPathRefused`.
+   */
   write(path: string, text: string): void;
-  /** Removes the file at `path` inside `wiki/index/`. */
+  /** Removes the file at `path` in the checkout's write area. */
   remove(path: string): void;
-  /** Removes every empty directory below `directory`, which is `wiki/index` or inside it. */
+  /**
+   * Removes every empty directory below `directory`, which is `wiki/index` or inside it; a
+   * records checkout empties none.
+   */
   removeEmptyDirectories(directory: string): void;
 }
 
 /** Opens checkouts. */
 export interface CheckoutFilesResource {
-  /** The checkout whose root is the absolute directory `root`. */
-  open(root: string): CheckoutFiles;
+  /** The checkout of a repository of `type` whose root is the absolute directory `root`. */
+  open(root: string, type: RepositoryType): CheckoutFiles;
   /**
-   * The staged view of that checkout: its visible files are those the git index adds, copies,
-   * modifies or renames, read as the index holds them; describing and existence still look at
-   * the working tree, and every write is refused.
+   * The staged view of a checkout: its visible files are those the git index adds, copies,
+   * modifies or renames, read as the index holds them; describing, existence and the `HEAD`
+   * commit still look at the working tree, and every write is refused.
    *
    * @throws StagedTextUnreadable when git cannot give the staged text of a file.
    */

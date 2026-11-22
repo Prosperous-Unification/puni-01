@@ -36,7 +36,7 @@ afterAll(async () => {
 });
 
 function openFiles() {
-  return host.container.resolve('checkoutFiles').open(root);
+  return host.container.resolve('checkoutFiles').open(root, 'system-state');
 }
 
 function listProjects() {
@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 interface Run {
-  readonly code: 0 | 1 | 2;
+  readonly code: number;
   readonly findings: readonly string[];
   readonly summary: string;
   readonly errors: string;

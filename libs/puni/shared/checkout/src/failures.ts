@@ -44,6 +44,20 @@ export const CheckoutUnlistable = defineException({
   message: ({ reason }: { rule: 'repository.git'; path: '.'; reason: string }) => reason,
 });
 
+/** Git gives no `HEAD` commit for a checkout, as in a repository with no commit; `reason` is git's. */
+export const HeadCommitUnreadable = defineException({
+  tag: 'puni/shared-checkout/HeadCommitUnreadable',
+  message: ({
+    root,
+    reason,
+  }: {
+    rule: 'repository.git';
+    path: '.';
+    root: string;
+    reason: string;
+  }) => `the HEAD commit of ${root} cannot be read: ${reason}`,
+});
+
 /** Two `project.json` files name the same project. */
 export const ProjectNameShared = defineException({
   tag: 'puni/shared-checkout/ProjectNameShared',
@@ -86,6 +100,10 @@ export const checkoutDefects = [
     CheckoutUnlistable,
     () =>
       'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
+  ),
+  remedyDefect(
+    HeadCommitUnreadable,
+    ({ root }) => `commit in ${root} so that HEAD names a commit, then rerun`,
   ),
   remedyDefect(
     ProjectNameShared,

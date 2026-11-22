@@ -11,9 +11,13 @@ const exportedKeys = [
   'checkoutProjectScope',
   'checkoutRegistry',
   'checkoutWikiIndex',
+  'clock',
   'commandCatalog',
+  'dashOpsK3sCommand',
+  'dashOpsSshCommand',
   'fileSystem',
   'git',
+  'navigatorPlanAddCommand',
   'processRunner',
   'recordsCatalog',
 ] as const;
@@ -55,7 +59,7 @@ describe('the puni container', () => {
     const host = memoryHost({ '/work/notes.md': 'no registry here' });
     const container = track(
       track(createPuniContainer()).createIndependentContainer(
-        ['fileSystem', 'git', 'processRunner'],
+        ['fileSystem', 'git', 'processRunner', 'clock'],
         host.services,
       ),
     );

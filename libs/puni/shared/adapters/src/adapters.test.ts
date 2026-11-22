@@ -75,7 +75,10 @@ describe('createBunGit', () => {
 
   test('a git that cannot start is a failure', () => {
     const unstarted = createBunGit({
-      processRunner: { run: () => ({ kind: 'unstarted', reason: 'no git' }) },
+      processRunner: {
+        run: () => ({ kind: 'unstarted', reason: 'no git' }),
+        runAttached: () => ({ kind: 'unstarted', reason: 'no git' }),
+      },
     });
     expect(unstarted.listVisibleFiles(root)).toEqual({ failure: 'git could not run: no git' });
   });

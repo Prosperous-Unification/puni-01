@@ -39,11 +39,11 @@ afterAll(async () => {
 });
 
 function readIndexSources(repository: string): IndexSources {
-  const files = container.resolve('checkoutFiles').open(repository);
+  const files = container.resolve('checkoutFiles').open(repository, 'system-state');
   return container.resolve('checkoutWikiIndex').readSources(files);
 }
 
-function runIndex(cwd = root, print = false): { code: 0 | 1 | 2; stdout: string; stderr: string } {
+function runIndex(cwd = root, print = false): { code: number; stdout: string; stderr: string } {
   let stdout = '';
   let stderr = '';
   const code = container.resolve('burokratWikiIndexCommand').run(

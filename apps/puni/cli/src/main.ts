@@ -7,10 +7,12 @@ import {
 } from '@puni/shared-command';
 import type { CheckExports } from '@puni/burokrat-check';
 import type { WikiExports } from '@puni/burokrat-wiki';
+import type { OpsExports } from '@puni/dash-ops';
+import type { PlanExports } from '@puni/navigator-plan';
 import { createPuniContainer } from './composition';
 import { handlerKeys, type Leaf, puniProgram, selectLeaf } from './root-parser';
 
-type CommandExports = CheckExports & WikiExports;
+type CommandExports = PlanExports & OpsExports & CheckExports & WikiExports;
 
 /** What `runPuni` needs of a container: the command services by their keys. */
 export interface CommandContainer {
@@ -27,8 +29,9 @@ export type CommandSelection = Leaf['kind'] | 'printed' | 'refused';
 /**
  * Runs one `puni` command line against `container` and returns its exit code: 0 on success, 1
  * when a judgement failed or the repository's inputs are defective, 2 when the command line is
- * refused or names something the repository does not have. A bare group or sub-group prints its
- * own help. `select` hears what the line selected before anything runs. Anything unexpected
+ * refused or names something the repository does not have; a pass-through command returns its
+ * remote command's own exit code once it started it. A bare group or sub-group prints its own
+ * help. `select` hears what the line selected before anything runs. Anything unexpected
  * propagates.
  */
 export function runPuni(
@@ -60,6 +63,12 @@ export function runPuni(
         io.stdout(text);
       });
       return 0;
+    case 'navigator plan add':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash ops ssh':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash ops k3s':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat check':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat wiki index':
