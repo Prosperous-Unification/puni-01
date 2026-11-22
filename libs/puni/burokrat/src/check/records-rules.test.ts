@@ -23,6 +23,7 @@ import {
 } from '../records-schema';
 import { runCheck } from './check';
 import type { Finding, Rule } from './finding';
+import { repositoryScope } from './scope';
 import {
   judgeRecordFrontMatter,
   judgeRecordNames,
@@ -42,7 +43,12 @@ afterEach(() => {
 });
 
 function judge(rule: Rule): Finding[] {
-  return rule({ root, counterpart: fixtureCounterparts.records, commands: [] });
+  return rule({
+    root,
+    counterpart: fixtureCounterparts.records,
+    commands: [],
+    scope: repositoryScope,
+  });
 }
 
 const record = 'bur/adr/2031-04-07-a-decision.md';
@@ -58,16 +64,19 @@ function frontMatterFinding(message: string): Finding[] {
 }
 
 describe('the fixture records repository passes every records rule', () => {
-  test.each(recordsRules.map((rule) => [rule.name, rule] as const))('%s', (_name, rule) => {
-    expect(judge(rule)).toEqual([]);
-  });
+  test.each(recordsRules.map((rule) => [rule.judge.name, rule.judge] as const))(
+    '%s',
+    (_name, rule) => {
+      expect(judge(rule)).toEqual([]);
+    },
+  );
 
   test('a record in every kind directory passes', () => {
     for (const kind of recordKinds) {
       const path = `${recordDirectories[kind]}/2031-04-07-one-${kind}.md`;
       writeRecord(root, path, describeRecord(path));
     }
-    expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
+    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
   });
 
   test('an untracked, un-ignored record with bad front matter is still a finding', () => {
@@ -82,7 +91,7 @@ describe('files git ignores', () => {
   test('an ignored .idea/workspace.xml produces no finding', () => {
     writeRepositoryFile(root, '.gitignore', '.idea/\n');
     writeRepositoryFile(root, '.idea/workspace.xml', '<project/>');
-    expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
+    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
   });
 
   test('the same file without the ignore rule is a records.layout finding', () => {
@@ -93,7 +102,7 @@ describe('files git ignores', () => {
   test('an ignored record is invisible to every records rule', () => {
     writeRepositoryFile(root, '.gitignore', 'nav/plans/*-scratch.md\n');
     writeRepositoryFile(root, 'nav/plans/2031-04-08-scratch.md', 'no front matter\n');
-    expect(recordsRules.flatMap((rule) => judge(rule))).toEqual([]);
+    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
   });
 
   test('a tracked record deleted from the working tree is skipped', () => {
@@ -329,15 +338,21 @@ describe('records.supersession', () => {
 });
 
 describe('runCheck on a records repository', () => {
-  function runIn(cwd: string): { code: 0 | 1; printed: string } {
+  function runIn(cwd: string): { code: 0 | 1 | 2; printed: string } {
     let printed = '';
-    const code = runCheck({
-      cwd,
-      commands: [],
-      stdout: (text) => {
-        printed += text;
+    const code = runCheck(
+      {},
+      {
+        cwd,
+        stderr: (text) => {
+          throw new Error(`unexpected stderr: ${text}`);
+        },
+        commands: [],
+        stdout: (text) => {
+          printed += text;
+        },
       },
-    });
+    );
     return { code, printed };
   }
 

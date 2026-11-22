@@ -70,12 +70,14 @@ export function formatFixtureConfig(kind: RepositoryKind): string {
 }
 
 /**
- * A fresh temporary repository named `demo` that passes every rule: entry files, one project,
- * a generated index, and every file staged in a real git repository.
+ * A fresh temporary repository named `demo` that passes every rule: entry files, the root
+ * project `workspace`, one project `one`, a generated index, and every file staged in a real git
+ * repository.
  */
 export function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-burokrat-'));
   writeRepositoryFile(root, 'puni.json', formatFixtureConfig('code'));
+  writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',

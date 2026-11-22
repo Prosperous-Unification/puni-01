@@ -16,7 +16,8 @@ describe('burokratParser', () => {
 
   test.each([
     ['wiki index', { kind: 'wiki index' }],
-    ['check', { kind: 'check' }],
+    ['check', { kind: 'check', project: undefined }],
+    ['check --project puni-dash', { kind: 'check', project: 'puni-dash' }],
   ] as const)('%s parses to its leaf', (line, value) => {
     expect(parse(burokratParser, line.split(' '))).toEqual({ success: true, value });
   });
@@ -29,6 +30,7 @@ describe('burokratParser', () => {
     'wiki index --check',
     'check --bogus',
     'check stray',
+    'check --project',
   ])('%s is refused', (line) => {
     expect(parse(burokratParser, line.split(' ')).success).toBe(false);
   });

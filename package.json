@@ -2,6 +2,9 @@
   "name": "puni-01",
   "version": "0.0.0",
   "private": true,
+  "nx": {
+    "includedScripts": []
+  },
   "type": "module",
   "scripts": {
     "puni": "bun apps/puni/cli/src/entrypoint.ts",
@@ -12,7 +15,7 @@
     "format": "nx format:write --all",
     "format:check": "nx format:check --all",
     "gate": "bun run puni burokrat check && nx format:check --all && nx run-many -t lint typecheck test build",
-    "gate:affected": "bun run puni burokrat check && nx format:check && nx affected -t lint typecheck test build"
+    "gate:affected": "nx format:check && nx affected -t puni-bur-check lint typecheck test build"
   },
   "dependencies": {
     "@optique/core": "1.4.0",

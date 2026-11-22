@@ -9,6 +9,14 @@
       "{workspaceRoot}/.prettierrc.json",
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/bun.lock"
+    ],
+    "puniBurCheck": [
+      "{workspaceRoot}/apps/puni/cli/package.json",
+      "{workspaceRoot}/apps/puni/cli/src/**/*",
+      "{workspaceRoot}/libs/puni/*/src/**/*",
+      "{workspaceRoot}/puni.json",
+      "{workspaceRoot}/**/.gitignore",
+      "{workspaceRoot}/.bun-version"
     ]
   },
   "targetDefaults": {
@@ -34,6 +42,14 @@
     "typecheck": {
       "cache": true,
       "inputs": ["default", "^production"]
+    },
+    "puni-bur-check": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun apps/puni/cli/src/entrypoint.ts burokrat check --project {projectName}"
+      },
+      "inputs": ["default", "puniBurCheck"]
     }
   },
   "plugins": [],

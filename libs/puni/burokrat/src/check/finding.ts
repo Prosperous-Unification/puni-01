@@ -1,11 +1,16 @@
 import type { CommandBrief } from '../wiki/wiki-index';
+import type { CheckScope } from './scope';
 
-/** What a rule judges: the repository, its paired repository and the composed CLI's commands. */
+/**
+ * What a rule judges: the repository, its paired repository, the composed CLI's commands, and
+ * the scope of the run. A project-level rule judges only what its scope owns.
+ */
 export interface RepositoryReading {
   readonly root: string;
   /** The paired repository, `owner/name`, as `puni.json` declares it. */
   readonly counterpart: string;
   readonly commands: readonly CommandBrief[];
+  readonly scope: CheckScope;
 }
 
 /** One broken rule at one repository path. */
@@ -19,6 +24,16 @@ export interface Finding {
 
 /** A rule: a small function from a repository reading to its findings, empty when it holds. */
 export type Rule = (repository: RepositoryReading) => Finding[];
+
+/**
+ * A rule and the level it judges at. A `repository` rule runs only for the whole repository and
+ * the root project; a `project` rule runs in every scope and judges only what the scope owns, so
+ * each finding comes from exactly one project.
+ */
+export interface LeveledRule {
+  readonly level: 'repository' | 'project';
+  readonly judge: Rule;
+}
 
 /** The printed form of a finding: `<rule-id> <path>: <message>`. */
 export function formatFinding(finding: Finding): string {

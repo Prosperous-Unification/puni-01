@@ -189,6 +189,13 @@ function readPage(path: string, text: string): Reading {
   return { entry: { name: title, path, readWhen } };
 }
 
+/** The defects of one indexed `project.json`, at `path` relative to `root`. */
+export function readProjectDefects(root: string, path: string): SourceDefect[] {
+  return readProject(root, path).flatMap((reading) =>
+    'defect' in reading ? [reading.defect] : [],
+  );
+}
+
 /**
  * Reads every Nx project (`project.json` under `apps/` and `libs/`) and every authored page
  * (Markdown under `wiki/` outside `wiki/index/`). Never throws for a defect in them; each one is

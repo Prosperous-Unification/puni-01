@@ -27,6 +27,7 @@
       "options": {
         "command": "bun build apps/puni/cli/src/entrypoint.ts --target bun --outfile dist/apps/puni/cli/puni.js"
       }
-    }
+    },
+    "puni-bur-check": {}
   }
 }

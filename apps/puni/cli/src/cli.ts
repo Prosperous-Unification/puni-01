@@ -11,9 +11,10 @@ export interface CommandContext {
 
 /**
  * Runs one parsed `puni` command and returns its exit code: 0 on success, 1 when a judgement
- * failed or the repository's inputs are defective. A bare group or sub-group prints its own help.
+ * failed or the repository's inputs are defective, 2 when the command line names something the
+ * repository does not have. A bare group or sub-group prints its own help.
  */
-export function runCommand(command: PuniCommand, context: CommandContext): 0 | 1 {
+export function runCommand(command: PuniCommand, context: CommandContext): 0 | 1 | 2 {
   switch (command.group) {
     case 'navigator':
     case 'dash':
@@ -24,13 +25,13 @@ export function runCommand(command: PuniCommand, context: CommandContext): 0 | 1
   }
 }
 
-function runBurokrat(request: BurokratRequest, context: CommandContext): 0 | 1 {
+function runBurokrat(request: BurokratRequest, context: CommandContext): 0 | 1 | 2 {
   switch (request.kind) {
     case 'help':
       printHelp(['burokrat', ...request.path], context.stdout);
       return 0;
     case 'check':
-      return runCheck({ ...context, commands: listCommands() });
+      return runCheck(request, { ...context, commands: listCommands() });
     case 'wiki index':
       return runWikiIndex({ ...context, commands: listCommands() });
   }

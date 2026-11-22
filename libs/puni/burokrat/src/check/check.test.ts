@@ -21,6 +21,7 @@ import {
   readmeWords,
 } from './entry-rules';
 import type { Finding, Rule } from './finding';
+import { repositoryScope } from './scope';
 import { confineRecordsName, forbidDates } from './history-rules';
 import {
   limitIndexWords,
@@ -42,7 +43,12 @@ afterEach(() => {
 });
 
 function judge(rule: Rule): Finding[] {
-  return rule({ root, counterpart: fixtureCounterparts.code, commands: fixtureCommands });
+  return rule({
+    root,
+    counterpart: fixtureCounterparts.code,
+    commands: fixtureCommands,
+    scope: repositoryScope,
+  });
 }
 
 function words(count: number): string {
@@ -52,9 +58,12 @@ function words(count: number): string {
 const recordsName = ['demo', 'records'].join('-');
 
 describe('every rule holds on the fixture repository', () => {
-  test.each(codeRules.map((rule) => [rule.name, rule] as const))('%s', (_name, rule) => {
-    expect(judge(rule)).toEqual([]);
-  });
+  test.each(codeRules.map((rule) => [rule.judge.name, rule.judge] as const))(
+    '%s',
+    (_name, rule) => {
+      expect(judge(rule)).toEqual([]);
+    },
+  );
 });
 
 const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
@@ -292,8 +301,17 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
-  test('an untracked file naming the records repository is not judged', () => {
+  test('an untracked file naming the records repository is judged as if it were staged', () => {
     writeRepositoryFile(root, 'notes.txt', `see ${recordsName}\n`);
+    const untracked = judge(confineRecordsName);
+    runGit(root, ['add', 'notes.txt']);
+    expect(untracked).toHaveLength(1);
+    expect(judge(confineRecordsName)).toEqual(untracked);
+  });
+
+  test('an ignored file naming the records repository is not judged', () => {
+    writeRepositoryFile(root, '.gitignore', 'scratch/\n');
+    writeRepositoryFile(root, 'scratch/notes.txt', `see ${recordsName}\n`);
     expect(judge(confineRecordsName)).toEqual([]);
   });
 
@@ -314,15 +332,21 @@ describe('rule boundaries', () => {
 });
 
 describe('runCheck', () => {
-  function runIn(cwd: string): { code: 0 | 1; printed: string } {
+  function runIn(cwd: string): { code: 0 | 1 | 2; printed: string } {
     let printed = '';
-    const code = runCheck({
-      cwd,
-      commands: fixtureCommands,
-      stdout: (text) => {
-        printed += text;
+    const code = runCheck(
+      {},
+      {
+        cwd,
+        stderr: (text) => {
+          throw new Error(`unexpected stderr: ${text}`);
+        },
+        commands: fixtureCommands,
+        stdout: (text) => {
+          printed += text;
+        },
       },
-    });
+    );
     return { code, printed };
   }
 
