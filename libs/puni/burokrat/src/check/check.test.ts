@@ -364,11 +364,11 @@ describe('runCheck', () => {
   });
 
   test('an invalid puni.json is a repository.kind finding', () => {
-    writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'library' }));
+    writeRepositoryFile(root, 'puni.json', JSON.stringify({ 'puni-repo-kind': 'library' }));
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
-      `repository.kind puni.json: ${join(root, 'puni.json')} has kind "library"; expected one of code, records\nfail: no repository, 1 finding.\n`,
+      `repository.kind puni.json: ${join(root, 'puni.json')} has puni-repo-kind "library"; expected one of code, records\nfail: no repository, 1 finding.\n`,
     );
   });
 });

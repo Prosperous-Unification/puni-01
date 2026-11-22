@@ -36,7 +36,7 @@ const repositories: string[] = [];
 function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-cli-'));
   repositories.push(root);
-  writeFileSync(join(root, 'puni.json'), JSON.stringify({ kind: 'code' }));
+  writeFileSync(join(root, 'puni.json'), JSON.stringify({ 'puni-repo-kind': 'code' }));
   mkdirSync(join(root, 'apps/one/src'), { recursive: true });
   writeFileSync(join(root, 'apps/one/src/main.ts'), 'export {};\n');
   mkdirSync(join(root, 'libs'));

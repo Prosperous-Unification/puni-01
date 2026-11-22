@@ -197,7 +197,7 @@ describe('runWikiIndex', () => {
   });
 
   test('a records repository is refused with one error line and exit 1', () => {
-    writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'records' }));
+    writeRepositoryFile(root, 'puni.json', JSON.stringify({ 'puni-repo-kind': 'records' }));
     const before = readFileSync(join(root, indexFile), 'utf8');
     expect(runIndex()).toEqual({
       code: 1,

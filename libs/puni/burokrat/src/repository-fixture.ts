@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { recordDirectories, recordKinds } from './records-schema';
+import { repositoryKindKey } from './repository';
 import { indexFile, readIndexSources, renderIndex, type CommandBrief } from './wiki/wiki-index';
 
 /** The command tree fixture repositories are indexed with. */
@@ -63,7 +64,7 @@ export function runGit(root: string, args: readonly string[]): void {
  */
 export function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-burokrat-'));
-  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'code' }));
+  writeRepositoryFile(root, 'puni.json', JSON.stringify({ [repositoryKindKey]: 'code' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',
@@ -118,7 +119,7 @@ export function writeRecord(
  */
 export function makeRecordsRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-records-'));
-  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'records' }));
+  writeRepositoryFile(root, 'puni.json', JSON.stringify({ [repositoryKindKey]: 'records' }));
   writeRepositoryFile(root, 'AGENTS.md', '# demo records\n\nSee [the plans](nav/plans).\n');
   symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
   writeRecord(

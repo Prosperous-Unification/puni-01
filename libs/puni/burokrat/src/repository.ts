@@ -21,6 +21,9 @@ export class RepositoryDefect extends Error {
 /** The kinds of repository `puni` governs; `puni.json` declares one. */
 export const repositoryKinds = ['code', 'records'] as const;
 
+/** The one key `puni.json` holds. */
+export const repositoryKindKey = 'puni-repo-kind';
+
 /** A declared repository kind: `code` holds a system, `records` its past and future. */
 export type RepositoryKind = (typeof repositoryKinds)[number];
 
@@ -35,10 +38,10 @@ function isRepositoryKind(value: unknown): value is RepositoryKind {
 }
 
 /**
- * Reads `<root>/puni.json`, which holds exactly `{ "kind": <kind> }`.
+ * Reads `<root>/puni.json`, which holds exactly `{ "puni-repo-kind": <kind> }`.
  *
  * @throws RepositoryDefect (`repository.kind`) naming the file when it is not valid JSON, not an
- *   object, has a key other than `kind`, or lacks a valid `kind`.
+ *   object, has a key other than `puni-repo-kind`, or lacks a valid one.
  */
 export function readRepositoryKind(root: string): RepositoryKind {
   const file = join(root, 'puni.json');
@@ -54,14 +57,14 @@ export function readRepositoryKind(root: string): RepositoryKind {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw refuse('is not a JSON object');
   }
-  const unknown = Object.keys(parsed).filter((key) => key !== 'kind');
+  const unknown = Object.keys(parsed).filter((key) => key !== repositoryKindKey);
   if (unknown.length > 0) {
-    throw refuse(`has unknown keys ${unknown.join(', ')}; it holds only "kind"`);
+    throw refuse(`has unknown keys ${unknown.join(', ')}; it holds only "${repositoryKindKey}"`);
   }
-  const kind = 'kind' in parsed ? parsed.kind : undefined;
+  const kind: unknown = Object.entries(parsed).find(([key]) => key === repositoryKindKey)?.[1];
   if (!isRepositoryKind(kind)) {
     throw refuse(
-      `has kind ${kind === undefined ? 'missing' : JSON.stringify(kind)}; expected one of ${repositoryKinds.join(', ')}`,
+      `has ${repositoryKindKey} ${kind === undefined ? 'missing' : JSON.stringify(kind)}; expected one of ${repositoryKinds.join(', ')}`,
     );
   }
   return kind;

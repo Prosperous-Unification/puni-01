@@ -125,7 +125,8 @@ describe('records.layout', () => {
   test('every allowed top-level name passes', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
-      else if (name !== 'CLAUDE.md') writeRepositoryFile(root, name, '{"kind":"records"}');
+      else if (name !== 'CLAUDE.md')
+        writeRepositoryFile(root, name, '{"puni-repo-kind":"records"}');
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });
