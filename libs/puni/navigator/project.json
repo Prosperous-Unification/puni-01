@@ -3,7 +3,8 @@
   "name": "puni-navigator",
   "projectType": "library",
   "metadata": {
-    "readWhen": "adding or changing a command that plans work or decides what to do next"
+    "readWhen": "adding or changing a command that plans work or decides what to do next",
+    "readFirst": "src/index.ts"
   },
   "sourceRoot": "libs/puni/navigator/src",
   "targets": {

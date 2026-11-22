@@ -20,7 +20,12 @@ import {
 } from './entry-rules';
 import type { Finding, Rule } from './finding';
 import { confineRecordsName, forbidDates } from './history-rules';
-import { limitIndexWords, matchGeneratedIndex, requireReadWhen } from './index-rules';
+import {
+  limitIndexWords,
+  matchGeneratedIndex,
+  requireReadFirst,
+  requireReadWhen,
+} from './index-rules';
 import { resolveLinks } from './link-rules';
 import { rules } from './rules';
 
@@ -220,12 +225,12 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     'an index that cannot be generated',
     matchGeneratedIndex,
     () => {
-      writeProject(root, 'libs/two', 'two');
+      writeProject(root, 'libs/two', 'two', {});
     },
     {
       rule: 'index.current',
       path: 'wiki/index',
-      message: 'cannot be generated: 1 index.read-when findings',
+      message: 'cannot be generated: 2 index.read-when or index.read-first findings',
     },
   ],
   [
@@ -240,12 +245,27 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     'a project without readWhen',
     requireReadWhen,
     () => {
-      writeProject(root, 'libs/two', 'two');
+      writeProject(root, 'libs/two', 'two', { readFirst: 'src/index.ts' });
     },
     {
       rule: 'index.read-when',
       path: 'libs/two/project.json',
       message: 'project two has no metadata.readWhen',
+    },
+  ],
+  [
+    'a project whose readFirst names a missing file',
+    requireReadFirst,
+    () => {
+      writeProject(root, 'libs/two', 'two', {
+        readWhen: 'adding to two',
+        readFirst: 'src/gone.ts',
+      });
+    },
+    {
+      rule: 'index.read-first',
+      path: 'libs/two/project.json',
+      message: 'project two metadata.readFirst names a missing file',
     },
   ],
   [

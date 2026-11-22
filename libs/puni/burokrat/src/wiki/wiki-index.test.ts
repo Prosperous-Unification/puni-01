@@ -56,8 +56,8 @@ describe('findRepositoryRoot', () => {
 
 describe('renderIndex', () => {
   test('one file: projects and pages merged under Read when, then the commands', () => {
-    writeProject(root, 'libs/two', 'two', 'adding to two');
-    writeProject(root, 'libs/node_modules/stray', 'stray');
+    writeProject(root, 'libs/two', 'two', { readWhen: 'adding to two', readFirst: 'src/index.ts' });
+    writeProject(root, 'libs/node_modules/stray', 'stray', {});
     writeRepositoryFile(
       root,
       'wiki/ops/deploy.md',
@@ -75,8 +75,8 @@ describe('renderIndex', () => {
             '',
             '## Read when',
             '',
-            '- adding to two: [two](../../libs/two)',
-            '- changing the one app: [one](../../apps/one)',
+            '- adding to two: [two](../../libs/two/src/index.ts)',
+            '- changing the one app: [one](../../apps/one/src/index.ts)',
             '- deploying: [Deploy](../ops/deploy.md)',
             '',
             '## Commands',
@@ -122,8 +122,28 @@ describe('readIndexSources', () => {
     ['adding\nto two', 'project two metadata.readWhen must be one line'],
     [`adding ${'w '.repeat(20)}`, 'project two metadata.readWhen has 21 words; at most 20'],
   ])('a project with readWhen %j is a defect: %s', (readWhen, message) => {
-    writeProject(root, 'libs/two', 'two', readWhen);
-    expect(readIndexSources(root).defects).toEqual([{ path: 'libs/two/project.json', message }]);
+    writeProject(root, 'libs/two', 'two', { readWhen, readFirst: 'src/index.ts' });
+    expect(readIndexSources(root).defects).toEqual([
+      { topic: 'read-when', path: 'libs/two/project.json', message },
+    ]);
+  });
+
+  test.each([
+    [undefined, 'is missing'],
+    ['src/missing.ts', 'names a missing file'],
+    ['src', 'must name a regular file'],
+    ['.', 'must stay inside the project'],
+    ['../one/src/index.ts', 'must stay inside the project'],
+    ['/etc/hostname', 'must be a relative POSIX path'],
+  ])('a project with readFirst %j is a defect: %s', (readFirst, problem) => {
+    writeProject(root, 'libs/two', 'two', { readWhen: 'adding to two', readFirst });
+    expect(readIndexSources(root).defects).toEqual([
+      {
+        topic: 'read-first',
+        path: 'libs/two/project.json',
+        message: `project two metadata.readFirst ${problem}`,
+      },
+    ]);
   });
 
   test.each([
@@ -138,13 +158,15 @@ describe('readIndexSources', () => {
     ['---\ntitle: Deploy\n', 'does not begin with front matter'],
   ])('page %j is a defect: %s', (page, message) => {
     writeRepositoryFile(root, 'wiki/deploy.md', page);
-    expect(readIndexSources(root).defects).toEqual([{ path: 'wiki/deploy.md', message }]);
+    expect(readIndexSources(root).defects).toEqual([
+      { topic: 'read-when', path: 'wiki/deploy.md', message },
+    ]);
   });
 
   test('a missing libs/ is a defect', () => {
     rmSync(join(root, 'libs'), { recursive: true });
     expect(readIndexSources(root).defects).toEqual([
-      { path: 'libs', message: 'directory is missing' },
+      { topic: 'read-when', path: 'libs', message: 'directory is missing' },
     ]);
   });
 });
@@ -153,7 +175,6 @@ describe('runWikiIndex', () => {
   test('from a nested directory it removes files it did not generate', () => {
     writeRepositoryFile(root, 'wiki/index/modules.md', 'old partition');
     writeRepositoryFile(root, 'wiki/index/extra/notes.md', 'hand-written');
-    mkdirSync(join(root, 'apps/one/src'));
     expect(runIndex(join(root, 'apps/one/src'))).toEqual({
       code: 0,
       stdout: 'removed: wiki/index/extra/notes.md\nremoved: wiki/index/modules.md\n',
@@ -169,14 +190,14 @@ describe('runWikiIndex', () => {
   });
 
   test('defective inputs print one error line, exit 1 and write nothing', () => {
-    writeProject(root, 'libs/two', 'two');
+    writeProject(root, 'libs/two', 'two', {});
     writeRepositoryFile(root, 'wiki/deploy.md', '# Deploy\n');
     const before = readFileSync(join(root, indexFile), 'utf8');
     expect(runIndex()).toEqual({
       code: 1,
       stdout: '',
       stderr:
-        'error: libs/two/project.json: project two has no metadata.readWhen; wiki/deploy.md: does not begin with front matter\n',
+        'error: libs/two/project.json: project two has no metadata.readWhen; libs/two/project.json: project two metadata.readFirst is missing; wiki/deploy.md: does not begin with front matter\n',
     });
     expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
   });

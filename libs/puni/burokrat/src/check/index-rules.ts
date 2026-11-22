@@ -17,7 +17,7 @@ export function matchGeneratedIndex({ root, commands }: RepositoryReading): Find
       {
         rule,
         path: 'wiki/index',
-        message: `cannot be generated: ${count} index.read-when findings`,
+        message: `cannot be generated: ${count} index.read-when or index.read-first findings`,
       },
     ];
   }
@@ -41,9 +41,17 @@ export function limitIndexWords({ root }: RepositoryReading): Finding[] {
 
 /** Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`. */
 export function requireReadWhen({ root }: RepositoryReading): Finding[] {
-  return readIndexSources(root).defects.map((defect) => ({
-    rule: 'index.read-when',
-    path: defect.path,
-    message: defect.message,
-  }));
+  return readIndexSources(root)
+    .defects.filter((defect) => defect.topic === 'read-when')
+    .map((defect) => ({ rule: 'index.read-when', path: defect.path, message: defect.message }));
+}
+
+/**
+ * Every project's `metadata.readFirst` is a relative path inside the project naming an existing
+ * regular file: the file its index line links to.
+ */
+export function requireReadFirst({ root }: RepositoryReading): Finding[] {
+  return readIndexSources(root)
+    .defects.filter((defect) => defect.topic === 'read-first')
+    .map((defect) => ({ rule: 'index.read-first', path: defect.path, message: defect.message }));
 }

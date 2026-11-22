@@ -18,6 +18,5 @@ try {
 } catch (failure) {
   if (!(failure instanceof UsageRefusal)) throw failure;
   process.stderr.write(`error: ${failure.message}\n`);
-  // Proof: exiting 1 here made `nope refuses with exit 2 and one error line` fail (2026-11-22).
   process.exitCode = 2;
 }

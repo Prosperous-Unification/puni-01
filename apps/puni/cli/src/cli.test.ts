@@ -37,11 +37,15 @@ function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-cli-'));
   repositories.push(root);
   writeFileSync(join(root, 'nx.json'), '{}');
-  mkdirSync(join(root, 'apps/one'), { recursive: true });
+  mkdirSync(join(root, 'apps/one/src'), { recursive: true });
+  writeFileSync(join(root, 'apps/one/src/main.ts'), 'export {};\n');
   mkdirSync(join(root, 'libs'));
   writeFileSync(
     join(root, 'apps/one/project.json'),
-    JSON.stringify({ name: 'one', metadata: { readWhen: 'changing one' } }),
+    JSON.stringify({
+      name: 'one',
+      metadata: { readWhen: 'changing one', readFirst: 'src/main.ts' },
+    }),
   );
   return root;
 }
@@ -79,7 +83,7 @@ describe('runCommand', () => {
       errors: '',
     });
     const index = readFileSync(join(root, 'wiki/index/index.md'), 'utf8');
-    expect(index).toContain('- changing one: [one](../../apps/one)\n');
+    expect(index).toContain('- changing one: [one](../../apps/one/src/main.ts)\n');
     expect(index).toContain('- `puni burokrat check`: ');
   });
 
@@ -89,7 +93,8 @@ describe('runCommand', () => {
     expect(runIn(root, { group: 'burokrat', request: { kind: 'wiki index' } })).toEqual({
       code: 1,
       printed: '',
-      errors: 'error: apps/one/project.json: project one has no metadata.readWhen\n',
+      errors:
+        'error: apps/one/project.json: project one has no metadata.readWhen; apps/one/project.json: project one metadata.readFirst is missing\n',
     });
   });
 

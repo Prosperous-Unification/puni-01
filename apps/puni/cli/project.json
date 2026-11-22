@@ -3,7 +3,8 @@
   "name": "puni-cli",
   "projectType": "application",
   "metadata": {
-    "readWhen": "adding a command group, or changing how commands are parsed, printed or mapped to exit codes"
+    "readWhen": "adding a command group, or changing how commands are parsed, printed or mapped to exit codes",
+    "readFirst": "src/cli-parser.ts"
   },
   "sourceRoot": "apps/puni/cli/src",
   "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],

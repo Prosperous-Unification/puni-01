@@ -4,10 +4,10 @@
 
 ## Read when
 
-- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli)
-- adding or changing a command that executes or operates something: [puni-dash](../../libs/puni/dash)
-- adding or changing a command that plans work or decides what to do next: [puni-navigator](../../libs/puni/navigator)
-- adding or changing a repository rule, the check that enforces it, or how the wiki index is generated: [puni-burokrat](../../libs/puni/burokrat)
+- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/cli-parser.ts)
+- adding or changing a command that executes or operates something: [puni-dash](../../libs/puni/dash/src/index.ts)
+- adding or changing a command that plans work or decides what to do next: [puni-navigator](../../libs/puni/navigator/src/index.ts)
+- adding or changing a repository rule, the check that enforces it, or how the wiki index is generated: [puni-burokrat](../../libs/puni/burokrat/src/index.ts)
 
 ## Commands
 

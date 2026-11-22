@@ -26,11 +26,12 @@ export class UsageRefusal extends Error {
 
 /**
  * Every `puni` command line: one `command` per role group. Aliases select their group at runtime
- * and in completion but never appear in usage or help, which name only the canonical group.
+ * and in completion but never appear in usage or help, which name only the canonical group. A new
+ * group also needs a case in `runCommand` in `cli.ts`, which runs each parsed command and returns
+ * its exit code, 0 or 1.
  */
 export const puniParser = or(
   command('navigator', object({ group: constant('navigator'), request: navigatorParser }), {
-    // Proof: dropping `'n'` here made `n selects navigator` fail with UsageRefusal (2026-11-22).
     aliases: ['nav', 'n'],
     brief: message`Plan: decide what to do.`,
   }),

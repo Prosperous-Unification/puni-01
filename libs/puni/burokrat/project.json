@@ -3,7 +3,8 @@
   "name": "puni-burokrat",
   "projectType": "library",
   "metadata": {
-    "readWhen": "adding or changing a repository rule, the check that enforces it, or how the wiki index is generated"
+    "readWhen": "adding or changing a repository rule, the check that enforces it, or how the wiki index is generated",
+    "readFirst": "src/index.ts"
   },
   "sourceRoot": "libs/puni/burokrat/src",
   "targets": {

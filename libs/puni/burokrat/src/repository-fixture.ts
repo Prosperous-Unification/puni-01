@@ -15,15 +15,21 @@ export function writeRepositoryFile(root: string, path: string, content: string)
   writeFileSync(join(root, path), content);
 }
 
-/** Writes a `project.json`; `metadata` is omitted when `readWhen` is undefined. */
+/** Project metadata as a fixture writes it; an undefined field is left out of the JSON. */
+export interface FixtureMetadata {
+  readonly readWhen?: string | undefined;
+  readonly readFirst?: string | undefined;
+}
+
+/** Writes a `project.json` with `metadata`, and a `src/index.ts` for `readFirst` to name. */
 export function writeProject(
   root: string,
   directory: string,
   name: string,
-  readWhen?: string,
+  metadata: FixtureMetadata,
 ): void {
-  const metadata = readWhen === undefined ? {} : { metadata: { readWhen } };
-  writeRepositoryFile(root, `${directory}/project.json`, JSON.stringify({ name, ...metadata }));
+  writeRepositoryFile(root, `${directory}/project.json`, JSON.stringify({ name, metadata }));
+  writeRepositoryFile(root, `${directory}/src/index.ts`, 'export {};\n');
 }
 
 /**
@@ -58,7 +64,10 @@ export function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-burokrat-'));
   writeRepositoryFile(root, 'nx.json', '{}');
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
-  writeProject(root, 'apps/one', 'one', 'changing the one app');
+  writeProject(root, 'apps/one', 'one', {
+    readWhen: 'changing the one app',
+    readFirst: 'src/index.ts',
+  });
   mkdirSync(join(root, 'libs'));
   writeRepositoryFile(
     root,
