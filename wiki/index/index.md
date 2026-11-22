@@ -14,9 +14,10 @@
 - changing how nodes are listed, reached over SSH, or asked for their k3s cluster: [puni-dash-ops](../../libs/puni/dash/ops/src/node-shell.feature.ts)
 - changing how the file system, git, child processes or the clock are reached on this machine: [puni-shared-adapters](../../libs/puni/shared/adapters/src/index.ts)
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
-- changing the records schema or how record files are listed, read and filed: [puni-shared-records](../../libs/puni/shared/records/src/records-schema.ts)
+- changing the records schema or how record files are listed, read and filed: [puni-shared-records](../../libs/puni/shared/records/src/contract.ts)
 - changing what the code may ask of the file system, git, child processes or the clock: [puni-shared-ports](../../libs/puni/shared/ports/src/index.ts)
 - deciding where new code goes, or which kind a file is: [Architecture](../architecture.md)
+- the gate fails, or a finding names a rule you do not know: [When the gate fails](../gate-failures.md)
 - writing a test that needs a memory host or a real repository pair: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)
 
 ## Commands

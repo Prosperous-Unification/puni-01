@@ -22,8 +22,9 @@ Every source file but a test has one kind: its suffix, or a wiring name at a lib
 - **domain**: any other name; pure code importing no kind and no runtime.
 
 The direction is command → feature → rule → resource → port. A command sees its feature only as a
-`contract.ts` type; `module.ts` joins them. Only repositories and the app reach the runtime;
-rules, features, resources and domain read no clock. `forbiddenKinds` and `forbiddenByWiring` in
+`contract.ts` type; `module.ts` joins them. Only repositories and the app reach the runtime,
+ambient time included: code that needs the time declares `clock: Clock` in its requirements, as
+`records.resource.ts` does. `forbiddenKinds` and `forbiddenByWiring` in
 [eslint.config.js](../eslint.config.js) hold the exact lists.
 
 ## Libraries

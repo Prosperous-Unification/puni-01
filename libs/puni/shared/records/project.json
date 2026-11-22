@@ -5,7 +5,7 @@
   "tags": ["scope:shared", "type:shared"],
   "metadata": {
     "readWhen": "changing the records schema or how record files are listed, read and filed",
-    "readFirst": "src/records-schema.ts"
+    "readFirst": "src/contract.ts"
   },
   "sourceRoot": "libs/puni/shared/records/src",
   "targets": {
