@@ -169,7 +169,7 @@ const clock = {
 const toThrow = {
   selector: 'CallExpression[callee.property.name=/^toThrow/]',
   message:
-    "use node:assert/strict throws or rejects: under Bun 1.4.4 `expect(() => new Error('x')).toThrow()` passes although nothing is thrown",
+    "use node:assert/strict throws or rejects: under Bun 1.4.5 `expect(() => new Error('x')).toThrow()` passes although nothing is thrown",
 };
 
 /** The imports every non-test library file is refused, with its own kind list; ports optional. */

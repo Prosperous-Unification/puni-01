@@ -120,5 +120,4 @@ async function syncWikiIndex(tree) {
   return syncIndex(tree, printIndex(tree.root));
 }
 
-module.exports = syncWikiIndex;
-module.exports.syncIndex = syncIndex;
+module.exports = Object.assign(syncWikiIndex, { syncIndex });
