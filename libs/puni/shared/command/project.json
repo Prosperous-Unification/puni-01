@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-command",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:shared"],
+  "metadata": {
+    "readWhen": "changing how a command line is parsed, how help is printed, or what a command handler receives and returns",
+    "readFirst": "src/command.ts"
+  },
+  "sourceRoot": "libs/puni/shared/command/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/shared/command"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/shared/command/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/shared/command/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}

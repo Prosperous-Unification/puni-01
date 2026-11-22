@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-testing",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:testing"],
+  "metadata": {
+    "readWhen": "writing a test that needs a memory host or a real repository pair",
+    "readFirst": "src/index.ts"
+  },
+  "sourceRoot": "libs/puni/shared/testing/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "libs/puni/shared/testing"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx eslint libs/puni/shared/testing/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx tsc --noEmit -p libs/puni/shared/testing/tsconfig.json"
+      }
+    },
+    "puni-bur-check": {}
+  }
+}

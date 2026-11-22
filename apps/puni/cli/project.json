@@ -2,24 +2,31 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "name": "puni-cli",
   "projectType": "application",
+  "tags": ["scope:app", "type:app"],
   "metadata": {
     "readWhen": "adding a command group, or changing how commands are parsed, printed or mapped to exit codes",
-    "readFirst": "src/cli-parser.ts"
+    "readFirst": "src/root-parser.ts"
   },
   "sourceRoot": "apps/puni/cli/src",
-  "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
-      "options": { "command": "bun test src", "cwd": "apps/puni/cli" }
+      "options": {
+        "command": "bun test src --timeout=20000",
+        "cwd": "apps/puni/cli"
+      }
     },
     "lint": {
       "executor": "nx:run-commands",
-      "options": { "command": "bunx eslint apps/puni/cli/src" }
+      "options": {
+        "command": "bunx eslint apps/puni/cli/src"
+      }
     },
     "typecheck": {
       "executor": "nx:run-commands",
-      "options": { "command": "bunx tsc --noEmit -p apps/puni/cli/tsconfig.json" }
+      "options": {
+        "command": "bunx tsc --noEmit -p apps/puni/cli/tsconfig.json"
+      }
     },
     "build": {
       "executor": "nx:run-commands",

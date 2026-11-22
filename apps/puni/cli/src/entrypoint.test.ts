@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import cliPackage from '../package.json' with { type: 'json' };
@@ -9,10 +18,12 @@ const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 function runPuni(
   args: readonly string[],
   cwd = process.cwd(),
+  env: Readonly<Record<string, string>> = {},
+  runtimeArgs: readonly string[] = [],
 ): { code: number; stdout: string; stderr: string } {
-  const child = Bun.spawnSync([process.execPath, entrypoint, ...args], {
+  const child = Bun.spawnSync([process.execPath, ...runtimeArgs, entrypoint, ...args], {
     cwd,
-    env: { ...process.env, CLAUDECODE: '0', AGENT: '0' },
+    env: { ...process.env, CLAUDECODE: '0', AGENT: '0', ...env },
   });
   return {
     code: child.exitCode,
@@ -168,6 +179,77 @@ describe('entrypoint', () => {
       expect(run.code).toBe(2);
       expect(run.stdout).toBe('');
       expect(run.stderr).toMatch(stderr);
+    });
+
+    describe('an unexpected failure', () => {
+      let reports = '';
+      const line = /^error: unexpected failure, reference (\S+), report (\S+)\n$/u;
+
+      beforeEach(() => {
+        reports = join(parent, 'tmp');
+        mkdirSync(reports);
+        mkdirSync(join(state, 'AGENTS.md'));
+        writeFileSync(join(state, 'AGENTS.md/inside.md'), 'a directory where a file belongs\n');
+      });
+
+      test('exits 3 with one error line naming the reference and the report file', () => {
+        const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
+        expect([run.code, run.stdout]).toEqual([3, '']);
+        const [, reference = '', path = ''] = line.exec(run.stderr) ?? [];
+        expect(path).toBe(join(reports, 'puni-failures', `${reference}.json`));
+        const report: unknown = JSON.parse(readFileSync(path, 'utf8'));
+        expect(report).toMatchObject({ occurrence_id: reference, v: 'corj/v0.15' });
+        expect(readFileSync(path, 'utf8')).toContain('EISDIR');
+      });
+
+      test('with PUNI_FAILURE_REPORT=stderr the report is printed above the error line instead', () => {
+        const run = runPuni(['burokrat', 'check'], state, {
+          TMPDIR: reports,
+          PUNI_FAILURE_REPORT: 'stderr',
+        });
+        expect(run.code).toBe(3);
+        const [report = '', error = '', ...rest] = run.stderr.split('\n');
+        expect(rest).toEqual(['']);
+        const [, reference = '', where = ''] = line.exec(`${error}\n`) ?? [];
+        expect(where).toBe('above');
+        expect(JSON.parse(report)).toMatchObject({ occurrence_id: reference });
+        expect(existsSync(join(reports, 'puni-failures'))).toBe(false);
+      });
+
+      test('a report that cannot be written is named lost, still with exit 3', () => {
+        writeFileSync(join(reports, 'puni-failures'), 'a file where the directory belongs');
+        const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
+        expect(run.code).toBe(3);
+        expect(run.stderr).toMatch(
+          /^error: unexpected failure, reference \S+, report lost: [^\n]*EEXIST[^\n]*\n$/u,
+        );
+      });
+
+      test('a failure while importing main is reported the same way', () => {
+        const preload = join(parent, 'break-main.ts');
+        writeFileSync(
+          preload,
+          [
+            "import { plugin } from 'bun';",
+            'plugin({',
+            "  name: 'break-main',",
+            '  setup(build) {',
+            '    build.onLoad({ filter: /[\\/]main\\.ts$/ }, () => {',
+            "      throw new Error('main failed to load');",
+            '    });',
+            '  },',
+            '});',
+            '',
+          ].join('\n'),
+        );
+        const run = runPuni(['--version'], state, { TMPDIR: reports }, ['--preload', preload]);
+        expect([run.code, run.stdout]).toEqual([3, '']);
+        expect(run.stderr).toMatch(line);
+        const [written = ''] = readdirSync(join(reports, 'puni-failures'));
+        expect(readFileSync(join(reports, 'puni-failures', written), 'utf8')).toContain(
+          'main failed to load',
+        );
+      });
     });
 
     test('wiki index writes the system-state index through the registry', () => {
