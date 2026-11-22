@@ -35,13 +35,14 @@ In `apps/puni/cli/src`:
 
 Tests, one per seam:
 
-8. The library test, modelled on `libs/puni/dash/ops/src/ops.test.ts`: a container from
-   `withInstalledModules` and `memoryHost(tree).services`, closed through `closeAfterEach`; resolve
-   the command key and run requests against a collecting `Io`, covering every outcome.
+8. The library test, modelled on `libs/puni/dash/ops/src/ops.test.ts`: the module and the shared
+   modules it requires in `withInstalledModules`, over `memoryHost(tree).services`, closed through
+   `closeAfterEach`; resolve the command key and run requests against a collecting `Io`, covering
+   every outcome.
 9. `apps/puni/cli/src/group-parsers.test.ts`: the leaf's lines parse; bad ones are refused.
 10. Update the tests pinning the tree: `root-parser.test.ts` (`--help lists`, `listCommands`),
-    `composition.test.ts` (`exportedKeys`) and `main.test.ts` (the `failing` container, which
-    provides every command key).
+    `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
+    which provides every command key).
 11. A spawned run, as in `apps/puni/cli/src/ops-entrypoint.test.ts`, for the real streams and exit
     code.
 
