@@ -4,6 +4,7 @@ import {
   type ReportPair,
 } from 'application-exception';
 import type { CorjInspection } from 'caught-object-report-json';
+import { describeCause } from './cause';
 import { createFailureRedaction } from './redaction';
 
 const inspection: CorjInspection = 'no-invoke';
@@ -59,7 +60,10 @@ export function reportFailure(
     });
     return { reported: true, reports };
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    return { reported: false, occurrenceId: readOccurrenceId(caught), reason };
+    return {
+      reported: false,
+      occurrenceId: readOccurrenceId(caught),
+      reason: describeCause(cause),
+    };
   }
 }

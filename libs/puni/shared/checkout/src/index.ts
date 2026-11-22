@@ -1,31 +1,16 @@
 export { compareBytes } from './byte-order';
 export type {
-  CheckoutEntries,
   CheckoutEntry,
-  CheckoutExports,
   CheckoutFiles,
   CheckoutFilesResource,
-  CheckoutListing,
-  CheckoutRequirements,
   ProjectScopeResource,
   RepositoryRegistryResource,
   WikiIndexResource,
 } from './contract';
-export {
-  CheckoutMissing,
-  checkoutDefects,
-  CheckoutPathRefused,
-  gitListingRemedy,
-  ProjectNameShared,
-  ProjectsUnlistable,
-  ProjectUnknown,
-  RegistryInvalid,
-  RegistryMissing,
-  RootProjectMissing,
-  StagedTextUnreadable,
-} from './failures';
-export { type FrontMatter, type FrontMatterField, parseFrontMatter } from './front-matter';
-export type { IndexDrift, IndexSources, ReadWhenEntry, SourceDefect } from './index-sources';
+export { checkoutDefects, CheckoutUnlistable, FileUnreadable, ProjectUnknown } from './failures';
+export { type FrontMatter, parseFrontMatter } from './front-matter';
+export type { IndexSources } from './index-sources';
+export { isRecord } from './json';
 export { checkoutModule } from './module';
 export {
   type CheckScope,
@@ -33,24 +18,16 @@ export {
   isRepositoryLevel,
   ownsPath,
   type Project,
-  type ProjectScope,
   repositoryScope,
 } from './ownership';
-export { judgeReadWhen, readWhenWordBudget } from './read-when';
+export { leavesRoot } from './paths';
+export { nameProject, readProjectFiles } from './project-files';
 export {
-  allReposKey,
   formatRegistry,
-  githubUrlPattern,
   nameRepository,
-  parseRegistry,
-  type Remote,
-  remoteTypes,
-  type Repository,
-  type RepositoryEntry,
   type RepositoryRegistry,
   type RepositoryType,
   repositoryTypes,
-  thisRepoTypeKey,
 } from './registry';
 export { indexDirectory, indexFile, renderIndex } from './render-index';
 export { countWords } from './word-count';

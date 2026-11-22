@@ -1,10 +1,6 @@
 import { posix } from 'node:path';
-import type { CheckoutFiles } from '@puni/shared-checkout';
-import { type Breach, breachListing, type Rule } from '../finding';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { type CheckoutFiles, isRecord, nameProject, readProjectFiles } from '@puni/shared-checkout';
+import type { Breach, Rule } from '../finding';
 
 /** The JSON object at `path`, or `undefined` when it is absent or not a JSON object. */
 function readObject(files: CheckoutFiles, path: string): Record<string, unknown> | undefined {
@@ -43,10 +39,10 @@ function includesSource(include: unknown): boolean {
 function judgeProject(
   files: CheckoutFiles,
   path: string,
-  project: Record<string, unknown>,
-  defaults: Record<string, unknown>,
+  name: string,
+  project: Readonly<Record<string, unknown>>,
+  defaults: Readonly<Record<string, unknown>>,
 ) {
-  const name = String(project['name']);
   const directory = posix.dirname(path);
   const targets = isRecord(project['targets']) ? project['targets'] : {};
   const required = ['test', 'lint', 'typecheck'];
@@ -86,26 +82,19 @@ function judgeProject(
  * Every project the scope owns but the root (which holds only the workspace checks) declares
  * `test`, `lint` and `typecheck` targets, and `build` when it is an application; its
  * `tsconfig.json` includes `src`; and every `bun test` it runs, its own or the `nx.json` target
- * default, carries `--timeout`. A
- * `project.json` that names no project is not a project.
+ * default, carries `--timeout`. A `project.json` that names no project is not a project.
  */
 export const requireProjectTargets: Rule = {
   id: 'project.targets',
   remedy:
     'give the project test, lint and typecheck targets (and build for an application), a tsconfig.json including src, and --timeout on every bun test',
   judge({ files, scope }) {
-    const listing = files.listVisible(scope);
-    if ('failure' in listing) return breachListing(listing.failure);
     const targetDefaults = readObject(files, 'nx.json')?.['targetDefaults'];
     const defaults = isRecord(targetDefaults) ? targetDefaults : {};
-    return listing.files
-      .filter((path) => posix.basename(path) === 'project.json' && path !== 'project.json')
-      .filter((path) => !path.split('/').includes('node_modules'))
-      .flatMap((path) => {
-        const project = readObject(files, path);
-        const name = project?.['name'];
-        if (project === undefined || typeof name !== 'string' || name === '') return [];
-        return judgeProject(files, path, project, defaults);
-      });
+    return readProjectFiles(files, scope).flatMap((file) => {
+      const name = nameProject(file);
+      if (file.path === 'project.json' || name === undefined || !('json' in file)) return [];
+      return judgeProject(files, file.path, name, file.json, defaults);
+    });
   },
 };

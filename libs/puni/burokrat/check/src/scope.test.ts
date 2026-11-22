@@ -2,18 +2,27 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { throws } from 'node:assert/strict';
 import { appendFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findOwner, indexFile, ownsPath, type RepositoryType } from '@puni/shared-checkout';
-import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  findOwner,
+  formatRegistry,
+  indexFile,
+  ownsPath,
+  type RepositoryType,
+} from '@puni/shared-checkout';
+import {
+  FixtureGitFailed,
+  fixtureRemotes,
+  removeFixture,
+  runGit,
+  writeProject,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { formatFinding } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
 import { credentialSamples } from './secrets.test-host';
-import {
-  formatFixtureRegistry,
-  makeRepository,
-  regenerateIndex,
-} from './repository-pair.test-host';
+import { makeRepository, regenerateIndex } from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -217,9 +226,11 @@ describe('project ownership', () => {
     if (two === undefined) throw new Error('two is not a project');
     const scope = { kind: 'project', project: two, projects } as const;
     const listing = openFiles().listVisible(scope);
-    expect(listing).toEqual({
-      files: ['libs/two/project.json', 'libs/two/src/index.ts', 'libs/two/tsconfig.json'],
-    });
+    expect(listing).toEqual([
+      'libs/two/project.json',
+      'libs/two/src/index.ts',
+      'libs/two/tsconfig.json',
+    ]);
     expect(ownsPath(scope, 'libs/two/inner/src/index.ts')).toBe(false);
   });
 
@@ -321,12 +332,13 @@ describe('check --project', () => {
     expect(runIn('two')).toEqual(untracked);
   });
 
-  test('git failing is reported, not a pass', () => {
-    writeFileSync(join(root, 'puni.json'), formatFixtureRegistry('system-state'));
+  test('git failing is the one repository.git finding, not a pass', () => {
+    writeFileSync(join(root, 'puni.json'), formatRegistry('system-state', fixtureRemotes));
     rmSync(join(root, '.git'), { recursive: true });
     const run = runIn('two');
     expect(run.code).toBe(1);
-    expect(run.findings[0]).toStartWith('repository.projects .: git ls-files exited 128');
+    expect(run.findings).toHaveLength(1);
+    expect(run.findings[0]).toStartWith('repository.git .: git ls-files exited 128');
   });
 });
 
@@ -352,7 +364,7 @@ describe('check --staged', () => {
 });
 
 describe('an index with unmerged entries', () => {
-  test('is a finding of every rule that lists files, never a pass', () => {
+  test('is the one repository.git finding, never a pass', () => {
     const git = (...args: string[]): void => {
       runGit(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args]);
     };
@@ -365,11 +377,11 @@ describe('an index with unmerged entries', () => {
     git('commit', '-qam', 'main');
     throws(() => {
       git('merge', '-q', 'side');
-    }, /^Error: git -c/u);
+    }, FixtureGitFailed);
     const run = runIn();
     expect(run.code).toBe(1);
-    expect(run.findings).toContain(
-      'history.date .: the git index has unmerged entries: README.md; fix: make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
-    );
+    expect(run.findings).toEqual([
+      'repository.git .: the git index has unmerged entries: README.md; fix: make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
+    ]);
   });
 });

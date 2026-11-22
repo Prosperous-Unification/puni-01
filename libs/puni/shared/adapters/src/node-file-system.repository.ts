@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -22,8 +23,13 @@ function kindOf(entry: Described): Exclude<PathKind, 'absent'> {
   return entry.isDirectory() ? 'directory' : 'other';
 }
 
-function isMissing(cause: unknown): boolean {
-  return cause instanceof Error && 'code' in cause && cause.code === 'ENOENT';
+/** Whether `cause` says nothing is at the path: it is missing, or a path segment is a file. */
+function isAbsence(cause: unknown): boolean {
+  return (
+    cause instanceof Error &&
+    'code' in cause &&
+    (cause.code === 'ENOENT' || cause.code === 'ENOTDIR')
+  );
 }
 
 /** The {@link FileSystem} of this machine, through `node:fs`. */
@@ -34,10 +40,11 @@ export function createNodeFileSystem(): FileSystem {
       try {
         return kindOf(links === 'follow' ? statSync(path) : lstatSync(path));
       } catch (cause) {
-        if (isMissing(cause)) return 'absent';
+        if (isAbsence(cause)) return 'absent';
         throw cause;
       }
     },
+    exists: (path) => existsSync(path),
     readLink: (path) => readlinkSync(path),
     list: (path): DirectoryEntry[] =>
       readdirSync(path, { withFileTypes: true }).map((entry) => ({

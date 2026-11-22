@@ -1,37 +1,13 @@
-import { posix } from 'node:path';
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, ProjectScopeResource } from './contract';
-import {
-  ProjectNameShared,
-  ProjectsUnlistable,
-  ProjectUnknown,
-  RootProjectMissing,
-} from './failures';
+import { ProjectNameShared, ProjectUnknown, RootProjectMissing } from './failures';
 import { type Project, repositoryScope } from './ownership';
-
-function readProjectName(files: CheckoutFiles, path: string): string | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(files.readText(path));
-  } catch (cause) {
-    if (cause instanceof SyntaxError) return undefined;
-    throw cause;
-  }
-  if (typeof parsed !== 'object' || parsed === null || !('name' in parsed)) return undefined;
-  return typeof parsed.name === 'string' && parsed.name !== '' ? parsed.name : undefined;
-}
+import { nameProject, readProjectFiles } from './project-files';
 
 function listProjects(files: CheckoutFiles): Project[] {
-  const listing = files.listVisible(repositoryScope);
-  if ('failure' in listing) {
-    throw new ProjectsUnlistable({
-      details: { rule: 'repository.projects', path: '.', reason: listing.failure },
-    });
-  }
-  const projects = listing.files.flatMap((path) => {
-    if (posix.basename(path) !== 'project.json') return [];
-    const name = readProjectName(files, path);
-    return name === undefined ? [] : [{ name, directory: posix.dirname(path) }];
+  const projects = readProjectFiles(files, repositoryScope).flatMap((file) => {
+    const name = nameProject(file);
+    return name === undefined ? [] : [{ name, directory: file.directory }];
   });
   for (const [index, project] of projects.entries()) {
     const twin = projects.findIndex((other) => other.name === project.name);

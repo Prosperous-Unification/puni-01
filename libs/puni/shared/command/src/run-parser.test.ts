@@ -1,7 +1,8 @@
 import { command, constant, message, object, or } from '@optique/core';
 import { describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { listCommands } from './command-catalog';
-import { UsageRefused } from './failures';
+import { CommandTreeInvalid, UsageRefused } from './failures';
 import type { CliProgram } from './program';
 import { printHelp, readInvocation } from './run-parser';
 
@@ -67,6 +68,24 @@ describe('printHelp', () => {
 });
 
 describe('listCommands', () => {
+  test('a command without a brief is CommandTreeInvalid naming it', () => {
+    const briefless: CliProgram<{ readonly leaf: 'one' } | { readonly leaf: 'two' }> = {
+      ...program,
+      parser: or(
+        command('one', object({ leaf: constant('one') }), { brief: message`The first.` }),
+        command('two', object({ leaf: constant('two') })),
+      ),
+    };
+    throws(
+      () => listCommands(briefless),
+      (caught) => {
+        expect(caught).toBeInstanceOf(CommandTreeInvalid);
+        expect(caught).toMatchObject({ message: 'demo two has no brief' });
+        return true;
+      },
+    );
+  });
+
   test('walks the tree by canonical path, with each brief', () => {
     expect(listCommands(program)).toEqual([
       { path: 'demo one', brief: 'The first.' },

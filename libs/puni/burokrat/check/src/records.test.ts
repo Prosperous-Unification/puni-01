@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { CheckoutUnlistable, formatRegistry } from '@puni/shared-checkout';
 import {
   optionalRecordKeys,
   recordDirectories,
@@ -10,10 +12,10 @@ import {
   recordTopicLimit,
   requiredRecordKeys,
 } from '@puni/shared-records';
-import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
+import { fixtureRemotes, removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
 import type { CheckRequest } from './contract';
-import { gitListingRemedy, type Rule } from './finding';
+import type { Rule } from './finding';
 import { recordsRules } from './rule-set.rule';
 import { agentsExists, agentsWords, claudeLinksAgents } from './rules/entry.rule';
 import { resolveAgentsLinks } from './rules/links.rule';
@@ -25,7 +27,6 @@ import {
 } from './rules/records.rule';
 import {
   describeRecord,
-  formatFixtureRegistry,
   makeRecordsRepository,
   supersededRecord,
   supersedingRecord,
@@ -126,19 +127,14 @@ describe('files git ignores', () => {
     ['records.name', judgeRecordNames],
     ['records.front-matter', judgeRecordFrontMatter],
     ['records.supersession', judgeSupersession],
-  ] as const)('git failing is a %s finding, not a pass', (rule, judgeRule) => {
-    rmSync(join(root, '.git'), { recursive: true });
-    mkdirSync(join(root, '.git'));
-    expect(host.judge(judgeRule, root, stateRoot())).toEqual([
-      {
-        rule,
-        path: '.',
-        message:
-          'git ls-files exited 128: fatal: not a git repository (or any of the parent directories): .git',
-        remedy: gitListingRemedy,
-      },
-    ]);
-  });
+  ] as const)(
+    'git failing makes %s throw the repository.git defect, not pass',
+    (_rule, judgeRule) => {
+      rmSync(join(root, '.git'), { recursive: true });
+      mkdirSync(join(root, '.git'));
+      throws(() => host.judge(judgeRule, root, stateRoot()), CheckoutUnlistable);
+    },
+  );
 });
 
 describe('records.layout', () => {
@@ -146,7 +142,7 @@ describe('records.layout', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
       else if (name !== 'CLAUDE.md')
-        writeRepositoryFile(root, name, formatFixtureRegistry('system-records'));
+        writeRepositoryFile(root, name, formatRegistry('system-records', fixtureRemotes));
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });
@@ -421,7 +417,7 @@ describe('the check command on a records repository', () => {
   });
 
   test('a records repository holding its own puni.json is judged as system-records with no option', () => {
-    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-records'));
+    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes));
     expect(runIn(join(root, 'nav/plans'), {})).toEqual({
       code: 0,
       printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,

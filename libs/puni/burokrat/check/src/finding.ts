@@ -3,7 +3,6 @@ import {
   type CheckoutFiles,
   type CheckScope,
   findOwner,
-  gitListingRemedy,
   type Project,
   type RepositoryRegistry,
   type WikiIndexResource,
@@ -12,7 +11,6 @@ import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
 
 export type { Finding };
-export { gitListingRemedy };
 
 /**
  * Which references from a file to another path (Markdown links, backticked paths) a run judges:
@@ -78,11 +76,6 @@ export function applyRule(rule: Rule, reading: RuleReading): Finding[] {
     message: breach.message,
     remedy: breach.remedy ?? rule.remedy,
   }));
-}
-
-/** The one breach a rule reports when git cannot list the checkout: `failure`, at the root. */
-export function breachListing(failure: string): Breach[] {
-  return [{ path: '.', message: failure, remedy: gitListingRemedy }];
 }
 
 /** Whether `reach` judges a reference from the file at `from` to the path `to`. */

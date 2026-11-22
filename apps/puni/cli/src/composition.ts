@@ -1,6 +1,6 @@
 import { burokratCheckModule } from '@puni/burokrat-check';
 import { burokratWikiModule } from '@puni/burokrat-wiki';
-import { createBunGit, createBunProcessRunner, createNodeFileSystem } from '@puni/shared-adapters';
+import { nodeHostModule } from '@puni/shared-adapters';
 import { checkoutModule } from '@puni/shared-checkout';
 import { type CommandCatalog, listCommands } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
@@ -12,13 +12,11 @@ import { puniProgram } from './root-parser';
  * Resolution is lazy, so a run builds only the services of its command.
  */
 export const puniGraph = DiBag.createBuilder()
+  .withInstalledModules([nodeHostModule])
   .withInstalledModules([checkoutModule, recordsModule, burokratCheckModule, burokratWikiModule])
   .withServices({
-    fileSystem: createNodeFileSystem,
-    processRunner: createBunProcessRunner,
     commandCatalog: (): CommandCatalog => ({ list: () => listCommands(puniProgram) }),
-  })
-  .withServices({ git: createBunGit });
+  });
 
 /** A fresh container of {@link puniGraph}; its owner closes it. */
 export function createPuniContainer() {

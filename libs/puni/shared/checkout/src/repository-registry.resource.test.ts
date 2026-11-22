@@ -2,23 +2,27 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { findDefect, type Finding } from '@puni/shared-failures';
-import { nodeHost, removeFixture, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  fixtureRemotes,
+  nodeHostModule,
+  removeFixture,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { checkoutDefects } from './failures';
 import { checkoutModule } from './module';
-import type { Repository, RepositoryRegistry, RepositoryType } from './registry';
 import {
-  fixtureRemotes,
-  formatFixtureRegistry,
-  makeRegistryPair,
-  type RegistryPair,
-} from './registry.test-host';
+  formatRegistry,
+  type Repository,
+  type RepositoryRegistry,
+  type RepositoryType,
+} from './registry';
+import { makeRegistryPair, type RegistryPair } from './registry.test-host';
 
 let pair: RegistryPair = { state: '', records: '' };
 
 const container = DiBag.createBuilder()
-  .withInstalledModules([checkoutModule])
-  .withServices(nodeHost())
+  .withInstalledModules([nodeHostModule, checkoutModule])
   .buildContainer();
 
 afterAll(async () => {
@@ -212,7 +216,11 @@ describe('findRepository', () => {
   });
 
   test('a records repository holding its own puni.json is found as system-records', () => {
-    writeRepositoryFile(pair.records, 'puni.json', formatFixtureRegistry('system-records'));
+    writeRepositoryFile(
+      pair.records,
+      'puni.json',
+      formatRegistry('system-records', fixtureRemotes),
+    );
     expect(findRepository(pair.records).type).toBe('system-records');
   });
 

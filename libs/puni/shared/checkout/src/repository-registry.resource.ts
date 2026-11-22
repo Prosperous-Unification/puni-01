@@ -2,6 +2,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { FileSystem, RepositoryRegistryResource } from './contract';
 import { CheckoutMissing, RegistryMissing } from './failures';
 import { nameRepository, parseRegistry } from './registry';
+import { readOrRefuse } from './unreadable';
 
 /** The {@link RepositoryRegistryResource} over `fileSystem`. */
 export function createRepositoryRegistry({
@@ -15,7 +16,8 @@ export function createRepositoryRegistry({
       for (;;) {
         const file = join(directory, 'puni.json');
         if (fileSystem.stat(file, 'no-follow') === 'file') {
-          const registry = parseRegistry(fileSystem.readText(file), file);
+          const text = readOrRefuse(file, () => fileSystem.readText(file));
+          const registry = parseRegistry(text, file);
           return { root: directory, type: registry.thisType, registry };
         }
         const parent = dirname(directory);

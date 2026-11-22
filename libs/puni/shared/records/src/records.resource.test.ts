@@ -1,21 +1,19 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { checkoutModule } from '@puni/shared-checkout';
-import { type MemoryTree, memoryHost } from '@puni/shared-testing';
+import { describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
+import { CheckoutUnlistable, checkoutModule } from '@puni/shared-checkout';
+import { closeAfterEach, type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { recordsModule } from './module';
 
-const containers: { close(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const container of containers.splice(0)) await container.close();
-});
+const track = closeAfterEach();
 
 function open(tree: MemoryTree, options: Parameters<typeof memoryHost>[1] = {}) {
-  const container = DiBag.createBuilder()
-    .withInstalledModules([checkoutModule, recordsModule])
-    .withServices(memoryHost(tree, options).services)
-    .buildContainer();
-  containers.push(container);
+  const container = track(
+    DiBag.createBuilder()
+      .withInstalledModules([checkoutModule, recordsModule])
+      .withServices(memoryHost(tree, options).services)
+      .buildContainer(),
+  );
   return {
     files: container.resolve('checkoutFiles').open('/r'),
     records: container.resolve('recordsCatalog'),
@@ -31,19 +29,17 @@ describe('recordsCatalog', () => {
       '/r/bur/adr/2031-04-07-b.md': 'b',
       '/r/dash/anything.md': 'x',
     });
-    expect(records.list(files)).toEqual({
-      records: [
-        { path: 'bur/adr/2031-04-07-b.md', kind: 'adr' },
-        { path: 'nav/plans/2031-04-05-a.md', kind: 'plan' },
-      ],
-    });
+    expect(records.list(files)).toEqual([
+      { path: 'bur/adr/2031-04-07-b.md', kind: 'adr' },
+      { path: 'nav/plans/2031-04-05-a.md', kind: 'plan' },
+    ]);
     expect(records.readFrontMatter(files, 'nav/plans/2031-04-05-a.md')).toEqual({
       fields: [{ key: 'kind', value: 'plan' }],
     });
   });
 
-  test('a git failure is the listing', () => {
+  test('a git failure is the repository.git defect', () => {
     const { files, records } = open({}, { gitFailure: 'git exploded' });
-    expect(records.list(files)).toEqual({ failure: 'git exploded' });
+    throws(() => records.list(files), CheckoutUnlistable);
   });
 });

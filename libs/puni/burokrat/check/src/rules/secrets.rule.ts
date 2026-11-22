@@ -1,4 +1,4 @@
-import { breachListing, type Rule } from '../finding';
+import type { Rule } from '../finding';
 
 const credentialKey = String.raw`\b[A-Za-z0-9_]*(?:password|passwd|secret|token|api[_-]?key)["']?`;
 const longValue = '16,';
@@ -34,9 +34,7 @@ export const forbidPlaintextSecrets: Rule = {
   remedy:
     'remove the credential from the file, rotate it, and read it from the environment or a secret store',
   judge({ files, scope }) {
-    const listing = files.listVisible(scope);
-    if ('failure' in listing) return breachListing(listing.failure);
-    return listing.files.flatMap((path) => {
+    return files.listVisible(scope).flatMap((path) => {
       const text = files.readText(path);
       if (text.includes('\0')) return [];
       return text.split('\n').flatMap((line, index) =>

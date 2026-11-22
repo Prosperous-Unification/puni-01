@@ -7,14 +7,15 @@ export interface RecordFile {
   readonly kind: RecordKind;
 }
 
-/** The record files of a checkout, sorted by path, or why git listed none. */
-export type RecordListing =
-  { readonly records: readonly RecordFile[] } | { readonly failure: string };
-
 /** The records of a records repository. */
 export interface RecordsCatalog {
-  /** Every visible record file of `files`; a tracked record deleted from the working tree is none. */
-  list(files: CheckoutFiles): RecordListing;
+  /**
+   * Every visible record file of `files`, sorted by path; a tracked record deleted from the
+   * working tree is none.
+   *
+   * @throws CheckoutUnlistable when git cannot list the checkout.
+   */
+  list(files: CheckoutFiles): readonly RecordFile[];
   /** The parsed front matter of the record at `path`. */
   readFrontMatter(files: CheckoutFiles, path: string): FrontMatter;
 }

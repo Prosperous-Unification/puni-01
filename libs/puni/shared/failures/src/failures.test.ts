@@ -10,6 +10,16 @@ const Broken = defineException({
 });
 const Other = defineException({ tag: 'puni/test/Other', message: 'other' });
 
+/** Secret-shaped samples, built when the tests run so that no file holds one. */
+const sample = {
+  skToken: ['sk', 'live', 'Zq3'.repeat(6)].join('-'),
+  passwordKey: ['pass', 'word'].join(''),
+  password: 'hunter2'.repeat(2),
+  tokenKey: ['tok', 'en'].join(''),
+  contextToken: 'Kp7'.repeat(6),
+  githubToken: `${['gh', 'p_'].join('')}${'a1B2'.repeat(9)}`,
+};
+
 describe('findDefect', () => {
   const remedies = [remedyDefect(Broken, ({ path }) => `mend ${path}`)];
 
@@ -56,6 +66,40 @@ describe('reportFailure', () => {
     if (!reporting.reported) throw new Error(reporting.reason);
     expect(JSON.stringify(reporting.reports.diagnostic)).not.toContain('sk-live-secret');
     expect(getterRan).toBe(false);
+  });
+
+  const leaks: readonly (readonly [string, () => unknown, string, Record<string, string>])[] = [
+    [
+      'a token in an error message',
+      () => new Error(`refused key ${sample.skToken}`),
+      sample.skToken,
+      {},
+    ],
+    [
+      'a password assignment in a property',
+      () => ({ note: `${sample.passwordKey}=${sample.password}` }),
+      sample.password,
+      {},
+    ],
+    [
+      'a token assignment in the context',
+      () => new Error('x'),
+      sample.contextToken,
+      { note: `${sample.tokenKey}: ${sample.contextToken}` },
+    ],
+    [
+      'a GitHub token in a cause',
+      () => new Error('outer', { cause: sample.githubToken }),
+      sample.githubToken,
+      {},
+    ],
+  ];
+
+  test.each(leaks)('leaves %s out of both reports', (_name, makeCaught, secret, context) => {
+    const reporting = reportFailure(makeCaught(), context);
+    if (!reporting.reported) throw new Error(reporting.reason);
+    expect(JSON.stringify(reporting.reports.diagnostic)).not.toContain(secret);
+    expect(JSON.stringify(reporting.reports.public)).not.toContain(secret);
   });
 
   test('bounds the diagnostic report', () => {

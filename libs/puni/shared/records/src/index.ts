@@ -1,8 +1,7 @@
-export type { RecordFile, RecordListing, RecordsCatalog, RecordsExports } from './contract';
+export type { RecordFile, RecordsCatalog } from './contract';
 export { recordsModule } from './module';
 export {
   optionalRecordKeys,
-  type RecordKind,
   recordDirectories,
   recordKinds,
   recordNamePattern,

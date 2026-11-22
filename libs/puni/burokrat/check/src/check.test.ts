@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   appendFileSync,
+  chmodSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -12,7 +13,7 @@ import { indexFile } from '@puni/shared-checkout';
 import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
-import { gitListingRemedy, type Rule } from './finding';
+import type { Rule } from './finding';
 import { codeRules, crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
 import {
   agentsExists,
@@ -177,21 +178,6 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'history.records',
       path: 'notes.txt',
       message: `names the records repository ${recordsName}`,
-    },
-  ],
-  [
-    'git failing',
-    confineRecordsName,
-    () => {
-      rmSync(join(root, '.git'), { recursive: true });
-      mkdirSync(join(root, '.git'));
-    },
-    {
-      rule: 'history.records',
-      path: '.',
-      message:
-        'git ls-files exited 128: fatal: not a git repository (or any of the parent directories): .git',
-      remedy: gitListingRemedy,
     },
   ],
   [
@@ -640,5 +626,115 @@ describe('the check command', () => {
     expect(run.printed).toBe(
       `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
     );
+  });
+});
+
+describe('a link target the file system cannot describe is missing, not a crash', () => {
+  const finding = (path: string, target: string) =>
+    `links.resolve ${path}: links to missing ${target}; fix: point the link at a path that exists, or remove it`;
+
+  function runCheck(request = {}): { code: number; stdout: string } {
+    const run = host.runCheck(request, root);
+    expect(run.stderr).toBe('');
+    return { code: run.code, stdout: run.stdout };
+  }
+
+  test.each([
+    ['below a file (ENOTDIR)', () => 'AGENTS.md/child'],
+    [
+      'a symlink loop (ELOOP)',
+      () => {
+        symlinkSync('loop', join(root, 'loop'));
+        runGit(root, ['add', 'loop']);
+        return 'loop';
+      },
+    ],
+    ['a name too long (ENAMETOOLONG)', () => 'n'.repeat(300)],
+    [
+      'inside a directory that cannot be searched (EACCES)',
+      () => {
+        mkdirSync(join(root, 'locked'));
+        chmodSync(join(root, 'locked'), 0o000);
+        return 'locked/inside.md';
+      },
+    ],
+  ])('a README.md link %s', (_name, makeTarget) => {
+    const target = makeTarget();
+    appendFileSync(join(root, 'README.md'), `[a](${target})\n`);
+    try {
+      const run = runCheck();
+      expect(run.code).toBe(1);
+      expect(run.stdout.split('\n')).toContain(finding('README.md', target));
+    } finally {
+      if (target.startsWith('locked/')) chmodSync(join(root, 'locked'), 0o700);
+    }
+  });
+
+  test('a project-scoped link below a file is a finding of its project', () => {
+    writeRepositoryFile(root, 'apps/one/notes.md', '[a](src/index.ts/child)\n');
+    const run = runCheck({ project: 'one' });
+    expect(run.code).toBe(1);
+    expect(run.stdout).toStartWith(`${finding('apps/one/notes.md', 'src/index.ts/child')}\n`);
+  });
+
+  test('wiki/index replaced by a file leaves a project check ok', () => {
+    rmSync(join(root, 'wiki/index'), { recursive: true });
+    writeFileSync(join(root, 'wiki/index'), 'x\n');
+    expect(runCheck({ project: 'one' })).toEqual({
+      code: 0,
+      stdout: 'ok: system-state, project one, 7 rules, no findings.\n',
+    });
+  });
+});
+
+describe('a git that cannot list the checkout', () => {
+  test.each([
+    [
+      'no repository',
+      () => {
+        rmSync(join(root, '.git'), { recursive: true });
+        mkdirSync(join(root, '.git'));
+      },
+    ],
+    [
+      'a corrupt index',
+      () => {
+        writeFileSync(join(root, '.git/index'), 'not an index');
+      },
+    ],
+  ])('%s is one repository.git finding at the root', (_name, breakGit) => {
+    breakGit();
+    const run = host.runCheck({}, root);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toBe('');
+    const lines = run.stdout.split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^repository\.git \.: git ls-files exited 128: /u);
+    expect(lines[1]).toBe(`fail: system-state, ${String(codeRules.length)} rules, 1 finding.`);
+  });
+});
+
+describe('a file the check needs that cannot be read', () => {
+  test('a directory where AGENTS.md belongs is one error line and exit 1', () => {
+    rmSync(join(root, 'AGENTS.md'));
+    mkdirSync(join(root, 'AGENTS.md'));
+    expect(host.runCheck({}, root)).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: `error: cannot read AGENTS.md: EISDIR: illegal operation on a directory, read\n`,
+    });
+  });
+
+  test('a puni.json without read permission is one error line naming it, exit 1', () => {
+    chmodSync(join(root, 'puni.json'), 0o000);
+    try {
+      expect(host.runCheck({}, root)).toEqual({
+        code: 1,
+        stdout: '',
+        stderr: `error: cannot read ${join(root, 'puni.json')}: EACCES: permission denied, open '${join(root, 'puni.json')}'\n`,
+      });
+    } finally {
+      chmodSync(join(root, 'puni.json'), 0o600);
+    }
   });
 });

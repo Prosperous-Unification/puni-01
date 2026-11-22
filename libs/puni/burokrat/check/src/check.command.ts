@@ -1,6 +1,6 @@
 import { choice, constant, message, object, option, optional, string } from '@optique/core';
 import type { Command } from '@puni/shared-command';
-import { ProjectUnknown, repositoryTypes } from '@puni/shared-checkout';
+import { FileUnreadable, ProjectUnknown, repositoryTypes } from '@puni/shared-checkout';
 import type { CheckRequest, RepositoryCheck } from './contract';
 import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
 import { formatFinding } from './finding';
@@ -34,7 +34,8 @@ export const checkParser = object({
  * a summary naming the type and scope, and returns 1; with no finding it prints one `ok` line and
  * returns 0. A `project` that names no project, a scoping option when the judged repository is
  * not `system-state`, or two scoping options, prints one `error: ` line to `stderr` and returns
- * 2: the command line is wrong, so nothing was judged.
+ * 2: the command line is wrong, so nothing was judged. A file the check needs that cannot be
+ * read prints one `error: ` line naming it and returns 1: nothing can be judged until it can.
  */
 export function createCheckCommand({
   repositoryCheck,
@@ -47,6 +48,10 @@ export function createCheckCommand({
       try {
         verdict = repositoryCheck.check(request, io.cwd);
       } catch (caught) {
+        if (caught instanceof FileUnreadable) {
+          io.stderr(`error: ${caught.message}\n`);
+          return 1;
+        }
         const refused =
           caught instanceof ProjectUnknown ||
           caught instanceof ProjectScopeRefused ||

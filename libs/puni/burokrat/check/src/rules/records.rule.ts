@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { compareBytes } from '@puni/shared-checkout';
+import { type CheckoutEntry, compareBytes } from '@puni/shared-checkout';
 import {
   discoverValidateAndCaptureDag,
   materializeMultiEntryDagInputFromRecordCatalog,
@@ -10,7 +10,7 @@ import {
   recordsTopLevel,
   requiredRecordKeys,
 } from '@puni/shared-records';
-import { type Breach, breachListing, type Rule, type RuleReading } from '../finding';
+import type { Breach, Rule, RuleReading } from '../finding';
 import {
   describeSchema,
   groupDirectories,
@@ -20,14 +20,12 @@ import {
   recordKeyForms,
 } from '../record-values';
 
-/** Runs `judge` over the visible record files, or reports the git failure as one breach. */
+/** Runs `judge` over the visible record files. */
 function judgeRecordFiles(
   { files, records }: RuleReading,
   judge: (recordFiles: readonly RecordFile[]) => Breach[],
 ): Breach[] {
-  const listing = records.list(files);
-  if ('failure' in listing) return breachListing(listing.failure);
-  return judge(listing.records);
+  return judge(records.list(files));
 }
 
 /**
@@ -41,11 +39,10 @@ export const judgeRecordsLayout: Rule = {
   judge: ({ files }) => judgeLayout(files.listVisibleEntries()),
 };
 
-function judgeLayout(listing: ReturnType<RuleReading['files']['listVisibleEntries']>): Breach[] {
-  if ('failure' in listing) return breachListing(listing.failure);
+function judgeLayout(entries: readonly CheckoutEntry[]): Breach[] {
   const found = new Map<string, string>();
   const allowedTop = Object.keys(recordsTopLevel).join(', ');
-  for (const { path, kind } of listing.entries) {
+  for (const { path, kind } of entries) {
     const [top = '', inner = '', ...rest] = path.split('/');
     const expected = recordsTopLevel[top];
     if (expected === undefined) {

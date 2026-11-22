@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import { RegistryInvalid } from './failures';
+import { isRecord } from './json';
 
 /** The `puni.json` key naming the type of the repository that holds the file. */
 export const thisRepoTypeKey = 'this-repo-type';
@@ -50,10 +51,6 @@ export interface Repository {
 
 function describeValue(value: unknown): string {
   return value === undefined ? 'missing' : JSON.stringify(value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isRepositoryType(value: unknown): value is RepositoryType {

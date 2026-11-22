@@ -1,3 +1,3 @@
-export type { WikiExports, WikiIndexOutcome, WikiIndexRequest, WikiRequirements } from './contract';
+export type { WikiExports } from './contract';
 export { wikiParser } from './group';
 export { burokratWikiModule } from './module';

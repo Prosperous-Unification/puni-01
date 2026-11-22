@@ -1,33 +1,17 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { throws } from 'node:assert/strict';
-import { type MemoryTree, memoryHost } from '@puni/shared-testing';
+import { describe, expect, test } from 'bun:test';
+import { formatRegistry } from '@puni/shared-checkout';
+import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
-import { gitListingRemedy } from './finding';
 import { createRepositoryCheck } from './repository-check.feature';
 import { claudeLinksAgents, readmeWords } from './rules/entry.rule';
 
-const hosts: CheckHost[] = [];
-
-afterEach(async () => {
-  for (const host of hosts.splice(0)) await host.close();
-});
+const track = closeAfterEach();
 
 function openMemoryHost(tree: MemoryTree, options: Parameters<typeof memoryHost>[1] = {}) {
-  const host = openCheckHost(memoryHost(tree, options).services);
-  hosts.push(host);
-  return host;
+  return track(openCheckHost(memoryHost(tree, options).services));
 }
 
-const registry = JSON.stringify({
-  'this-repo-type': 'system-state',
-  'all-repos': [
-    { type: 'system-state', remote: { type: 'github', url: 'https://github.com/acme/demo' } },
-    {
-      type: 'system-records',
-      remote: { type: 'github', url: 'https://github.com/acme/demo-records' },
-    },
-  ],
-});
+const registry = formatRegistry('system-state', fixtureRemotes);
 
 describe('a rule over a memory file system', () => {
   test('CLAUDE.md linking elsewhere is a claude.symlink finding', () => {
@@ -88,23 +72,19 @@ describe('the repository check turns defect kinds into findings', () => {
     });
   });
 
-  test('projects git cannot list are one repository.projects finding', () => {
-    const host = openMemoryHost({ '/r/puni.json': registry }, { gitFailure: 'git exploded' });
-    expect(createCheck(host).check({ project: 'two' }, '/r')).toEqual({
-      summary: 'system-state',
-      findings: [
+  test.each([{ project: 'two' }, {}])(
+    'a git that cannot list the checkout is one repository.git finding: %j',
+    (request) => {
+      const host = openMemoryHost({ '/r/puni.json': registry }, { gitFailure: 'git exploded' });
+      expect(createCheck(host).check(request, '/r').findings).toEqual([
         {
-          rule: 'repository.projects',
+          rule: 'repository.git',
           path: '.',
           message: 'git exploded',
-          remedy: gitListingRemedy,
+          remedy:
+            'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
         },
-      ],
-    });
-  });
-
-  test('anything that is not a defect kind propagates', () => {
-    const host = openMemoryHost({ '/r/puni.json': registry, '/r/AGENTS.md': { directory: true } });
-    throws(() => createCheck(host).check({}, '/r'), /ENOENT/u);
-  });
+      ]);
+    },
+  );
 });

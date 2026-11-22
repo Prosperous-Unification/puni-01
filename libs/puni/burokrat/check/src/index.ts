@@ -1,4 +1,3 @@
 export { checkParser } from './check.command';
-export type { CheckExports, CheckRequest, CheckRequirements, CheckVerdict } from './contract';
-export { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+export type { CheckExports } from './contract';
 export { burokratCheckModule } from './module';

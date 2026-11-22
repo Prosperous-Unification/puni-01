@@ -1,10 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rejects } from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readInvocation as readProgramInvocation } from '@puni/shared-command';
+import { removeFixture } from '@puni/shared-testing';
+import { DiBag } from 'di-bag';
 import { createPuniContainer, type PuniContainer } from './composition';
-import { runPuni } from './main';
+import { type CommandSelection, runProcess, runPuni } from './main';
+import { makeStateRepository } from './repository.test-host';
 import { puniProgram } from './root-parser';
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
@@ -54,37 +57,13 @@ function runIn(
 const repositories: string[] = [];
 
 function makeRepository(): string {
-  const root = mkdtempSync(join(tmpdir(), 'puni-cli-'));
+  const root = makeStateRepository();
   repositories.push(root);
-  writeFileSync(
-    join(root, 'puni.json'),
-    JSON.stringify({
-      'this-repo-type': 'system-state',
-      'all-repos': [
-        { type: 'system-state', remote: { type: 'github', url: 'https://github.com/acme/demo' } },
-        {
-          type: 'system-records',
-          remote: { type: 'github', url: 'https://github.com/acme/demo-records' },
-        },
-      ],
-    }),
-  );
-  mkdirSync(join(root, 'apps/one/src'), { recursive: true });
-  writeFileSync(join(root, 'apps/one/src/main.ts'), 'export {};\n');
-  mkdirSync(join(root, 'libs'));
-  writeFileSync(
-    join(root, 'apps/one/project.json'),
-    JSON.stringify({
-      name: 'one',
-      metadata: { readWhen: 'changing one', readFirst: 'src/main.ts' },
-    }),
-  );
-  expect(Bun.spawnSync(['git', 'init', '-q'], { cwd: root }).exitCode).toBe(0);
   return root;
 }
 
 afterEach(() => {
-  for (const root of repositories.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of repositories.splice(0)) removeFixture(root);
 });
 
 describe('runPuni', () => {
@@ -116,7 +95,7 @@ describe('runPuni', () => {
       errors: '',
     });
     const index = readFileSync(join(root, 'wiki/index/index.md'), 'utf8');
-    expect(index).toContain('- changing one: [one](../../apps/one/src/main.ts)\n');
+    expect(index).toContain('- changing one: [one](../../apps/one/src/index.ts)\n');
     expect(index).toContain('- `puni burokrat check`: ');
   });
 
@@ -142,11 +121,66 @@ describe('runPuni', () => {
   test('check --project naming no project exits 2 with one error line', () => {
     const root = makeRepository();
     writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
-    expect(Bun.spawnSync(['git', 'init', '-q'], { cwd: root }).exitCode).toBe(0);
     expect(runIn(root, ['burokrat', 'check', '--project', 'nope'])).toEqual({
       code: 2,
       printed: '',
       errors: 'error: no project named nope; the projects are workspace, one\n',
     });
+  });
+});
+
+describe('runPuni tells what the line selected', () => {
+  test.each([
+    [['burokrat', 'check'], 'burokrat check'],
+    [['burokrat'], 'help'],
+    [['--version'], 'printed'],
+    [['nope'], 'refused'],
+  ] as const)('%j selects %s', (args, expected) => {
+    const selections: CommandSelection[] = [];
+    runPuni(
+      args,
+      { cwd: '/', stdout: () => undefined, stderr: () => undefined },
+      container,
+      (selection) => {
+        selections.push(selection);
+      },
+    );
+    expect(selections).toEqual([expected]);
+  });
+});
+
+describe('runProcess', () => {
+  test('a command failure and a rejected disposer are reported together, the command first', async () => {
+    const commandFailure = new Error('the command failed');
+    const closeFailure = new Error('the disposer failed');
+    const failing = DiBag.createBuilder()
+      .withServices({
+        burokratCheckCommand: DiBag.providerWithDisposal({
+          provider: () => ({
+            run: (): never => {
+              throw commandFailure;
+            },
+          }),
+          disposeService: () => Promise.reject(closeFailure),
+        }),
+        burokratWikiIndexCommand: () => ({ run: () => 0 as const }),
+      })
+      .buildContainer();
+    const argv = process.argv;
+    const exitCode = process.exitCode;
+    process.argv = [...argv.slice(0, 2), 'burokrat', 'check'];
+    try {
+      await rejects(
+        runProcess(() => undefined, failing),
+        (caught: unknown) =>
+          caught instanceof AggregateError &&
+          caught.errors[0] === commandFailure &&
+          caught.errors[1] instanceof AggregateError &&
+          caught.errors[1].errors.includes(closeFailure),
+      );
+    } finally {
+      process.argv = argv;
+      process.exitCode = exitCode;
+    }
   });
 });

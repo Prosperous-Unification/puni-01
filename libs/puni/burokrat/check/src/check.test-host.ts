@@ -1,7 +1,7 @@
 import { type CheckScope, checkoutModule, repositoryScope } from '@puni/shared-checkout';
 import type { CommandBrief, CommandExitCode } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
-import { nodeHost } from '@puni/shared-testing';
+import { type MemoryHost, nodeHostModule } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { CheckRequest } from './contract';
 import { applyRule, type Finding, type ReferenceReach, type Rule } from './finding';
@@ -16,18 +16,22 @@ export interface CheckRun {
 }
 
 /**
- * The check module over `host` (this machine by default) with the checkout and records modules
- * it needs and `commands` as the command catalog. Its owner closes it.
+ * The check module with the checkout and records modules it needs and `commands` as the command
+ * catalog, over this machine, or over the memory host services `memory` put in its place. Its
+ * owner closes it.
  */
 export function openCheckHost(
-  host: ReturnType<typeof nodeHost> = nodeHost(),
+  memory?: MemoryHost['services'],
   commands: readonly CommandBrief[] = fixtureCommands,
 ) {
-  const container = DiBag.createBuilder()
-    .withInstalledModules([checkoutModule, recordsModule, burokratCheckModule])
-    .withServices(host)
+  const machine = DiBag.createBuilder()
+    .withInstalledModules([nodeHostModule, checkoutModule, recordsModule, burokratCheckModule])
     .withServices({ commandCatalog: () => ({ list: () => commands }) })
     .buildContainer();
+  const container =
+    memory === undefined
+      ? machine
+      : machine.createIndependentContainer(['fileSystem', 'git', 'processRunner'], memory);
   return {
     container,
     /**
@@ -69,7 +73,10 @@ export function openCheckHost(
       });
       return { code, stdout, stderr };
     },
-    close: () => container.close(),
+    async close() {
+      if (container !== machine) await container.close();
+      await machine.close();
+    },
   };
 }
 
