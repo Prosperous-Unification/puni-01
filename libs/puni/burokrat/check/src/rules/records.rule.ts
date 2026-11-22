@@ -5,20 +5,18 @@ import {
   materializeMultiEntryDagInputFromRecordCatalog,
 } from 'configurable-tree-traversal';
 import {
-  type RecordFile,
-  recordNamePattern,
-  recordsTopLevel,
-  requiredRecordKeys,
-} from '@puni/shared-records';
-import type { Breach, Rule, RuleReading } from '../finding';
-import {
   describeSchema,
   groupDirectories,
   isCalendarDate,
   isRecordKey,
   judgeRecordValue,
+  type RecordFile,
   recordKeyForms,
-} from '../record-values';
+  recordNamePattern,
+  recordsTopLevel,
+  requiredRecordKeys,
+} from '@puni/shared-records';
+import type { Breach, Rule, RuleReading } from '../finding';
 
 /** Runs `judge` over the visible record files. */
 function judgeRecordFiles(

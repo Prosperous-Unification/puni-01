@@ -16,4 +16,9 @@ export interface Git {
   listStagedFiles(root: string): GitListing;
   /** The text the index of the repository at `root` holds for `path`. */
   readStagedText(root: string, path: string): GitText;
+  /**
+   * The abbreviated hash of the commit `HEAD` names in the repository at `root`, as its text; a
+   * repository with no commit is a `failure`.
+   */
+  readHeadCommit(root: string): GitText;
 }

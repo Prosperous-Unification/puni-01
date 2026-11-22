@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-navigator-plan",
+  "projectType": "library",
+  "tags": ["scope:navigator", "type:group"],
+  "metadata": {
+    "readWhen": "changing how a plan is filed in the records repository",
+    "readFirst": "src/plan-filing.feature.ts"
+  },
+  "sourceRoot": "libs/puni/navigator/plan/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

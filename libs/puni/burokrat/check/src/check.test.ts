@@ -497,7 +497,7 @@ describe('rule boundaries', () => {
     writeRepositoryFile(root, 'wiki/ops/one.md', 'See `apps/one/src/gone.ts`.\n');
     const projects = host.container
       .resolve('checkoutProjectScope')
-      .list(host.container.resolve('checkoutFiles').open(root));
+      .list(host.container.resolve('checkoutFiles').open(root, 'system-state'));
     const finding = {
       rule: 'docs.paths',
       path: 'wiki/ops/one.md',
@@ -581,7 +581,7 @@ describe('rule boundaries', () => {
 });
 
 describe('the check command', () => {
-  function runIn(cwd: string): { code: 0 | 1 | 2; printed: string } {
+  function runIn(cwd: string): { code: number; printed: string } {
     const run = host.runCheck({}, cwd);
     if (run.stderr !== '') throw new Error(`unexpected stderr: ${run.stderr}`);
     return { code: run.code, printed: run.stdout };

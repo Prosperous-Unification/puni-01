@@ -41,7 +41,7 @@ function openMemory(tree: MemoryTree, options: Parameters<typeof memoryHost>[1] 
   );
   return {
     host,
-    files: container.resolve('checkoutFiles').open('/r'),
+    files: container.resolve('checkoutFiles').open('/r', 'system-state'),
     wikiIndex: container.resolve('checkoutWikiIndex'),
   };
 }
@@ -146,7 +146,7 @@ describe('a path git ignores is invisible', () => {
           .withInstalledModules([nodeHostModule, checkoutModule])
           .buildContainer(),
       );
-      const files = container.resolve('checkoutFiles').open(root);
+      const files = container.resolve('checkoutFiles').open(root, 'system-state');
       const wikiIndex = container.resolve('checkoutWikiIndex');
       expect(wikiIndex.readSources(files)).toEqual({
         entries: [{ name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one' }],

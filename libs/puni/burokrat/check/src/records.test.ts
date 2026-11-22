@@ -403,7 +403,7 @@ describe('the check command on a records repository', () => {
   function runIn(
     cwd: string,
     request: CheckRequest = { repo: 'system-records' },
-  ): { code: 0 | 1 | 2; printed: string } {
+  ): { code: number; printed: string } {
     const run = host.runCheck(request, cwd);
     if (run.stderr !== '') throw new Error(`unexpected stderr: ${run.stderr}`);
     return { code: run.code, printed: run.stdout };

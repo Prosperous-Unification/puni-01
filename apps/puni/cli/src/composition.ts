@@ -1,5 +1,7 @@
 import { burokratCheckModule } from '@puni/burokrat-check';
 import { burokratWikiModule } from '@puni/burokrat-wiki';
+import { dashOpsModule } from '@puni/dash-ops';
+import { navigatorPlanModule } from '@puni/navigator-plan';
 import { nodeHostModule } from '@puni/shared-adapters';
 import { checkoutModule } from '@puni/shared-checkout';
 import { type CommandCatalog, listCommands } from '@puni/shared-command';
@@ -13,7 +15,13 @@ import { puniProgram } from './root-parser';
  */
 export const puniGraph = DiBag.createBuilder()
   .withInstalledModules([nodeHostModule])
-  .withInstalledModules([checkoutModule, recordsModule, burokratCheckModule, burokratWikiModule])
+  .withInstalledModules([checkoutModule, recordsModule])
+  .withInstalledModules([
+    navigatorPlanModule,
+    dashOpsModule,
+    burokratCheckModule,
+    burokratWikiModule,
+  ])
   .withServices({
     commandCatalog: (): CommandCatalog => ({ list: () => listCommands(puniProgram) }),
   });

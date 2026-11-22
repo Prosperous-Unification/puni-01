@@ -56,7 +56,7 @@ export function createWikiIndexWriter({
         reason: `wiki index needs the system-state repository; ${file} declares this-repo-type ${repository.type}`,
       };
     }
-    const files = checkoutFiles.open(repository.root);
+    const files = checkoutFiles.open(repository.root, repository.type);
     const sources = checkoutWikiIndex.readSources(files);
     if (sources.defects.length > 0) {
       const named = sources.defects.map((defect) => `${defect.path}: ${defect.message}`);

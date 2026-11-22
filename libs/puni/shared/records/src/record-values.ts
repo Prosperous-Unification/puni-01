@@ -1,16 +1,16 @@
 import { posix } from 'node:path';
 import { countWords, leavesRoot } from '@puni/shared-checkout';
+import type { RecordFile } from './contract';
 import { RecordDirectoryInvalid } from './failures';
 import {
   optionalRecordKeys,
-  type RecordFile,
   recordDirectories,
   recordNamePattern,
   recordSummaryWordBudget,
   recordTopicLimit,
   requiredRecordKeys,
   slugPattern,
-} from '@puni/shared-records';
+} from './records-schema';
 
 /** Whether `text` is `YYYY-MM-DD` naming a day that exists in the Gregorian calendar. */
 export function isCalendarDate(text: string): boolean {
@@ -51,12 +51,16 @@ export function isRecordKey(key: string): key is RecordKey {
   return Object.hasOwn(recordKeyForms, key);
 }
 
-/** Why `value` is not a valid `key` of the record `file`, or `undefined` when it is. */
+/**
+ * Why `value` is not a valid `key` of the record `file`, or `undefined` when it is. A value
+ * holding a line break is never valid: front matter holds one value per line.
+ */
 export function judgeRecordValue(
   file: RecordFile,
   key: RecordKey,
   value: string,
 ): string | undefined {
+  if (/[\r\n]/u.test(value)) return 'is not on one line';
   switch (key) {
     case 'kind':
       return value === file.kind ? undefined : `is ${value}`;

@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["scope:shared", "type:adapters"],
   "metadata": {
-    "readWhen": "changing how the file system, git or child processes are reached on this machine",
+    "readWhen": "changing how the file system, git, child processes or the clock are reached on this machine",
     "readFirst": "src/index.ts"
   },
   "sourceRoot": "libs/puni/shared/adapters/src",

@@ -8,7 +8,8 @@ type GitRun = { readonly stdout: string } | { readonly failure: string };
  * `git <command> exited <code>: <first stderr line>`. Visible files are
  * `git ls-files -z --cached --others --exclude-standard`, refused while
  * `git ls-files --unmerged` lists anything; staged files are
- * `git diff --cached --name-only -z --diff-filter=ACMR`, read with `git cat-file blob :<path>`.
+ * `git diff --cached --name-only -z --diff-filter=ACMR`, read with `git cat-file blob :<path>`; the
+ * `HEAD` commit is `git rev-parse --short --verify HEAD`.
  */
 export function createBunGit({ processRunner }: { processRunner: ProcessRunner }): Git {
   const run = (root: string, args: readonly string[]): GitRun => {
@@ -39,6 +40,10 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
     readStagedText(root, path): GitText {
       const blob = run(root, ['cat-file', 'blob', `:${path}`]);
       return 'failure' in blob ? blob : { text: blob.stdout };
+    },
+    readHeadCommit(root): GitText {
+      const head = run(root, ['rev-parse', '--short', '--verify', 'HEAD']);
+      return 'failure' in head ? head : { text: head.stdout.trim() };
     },
   };
 }

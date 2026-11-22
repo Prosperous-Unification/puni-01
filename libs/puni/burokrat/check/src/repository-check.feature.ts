@@ -128,7 +128,7 @@ export function createRepositoryCheck({
         summary = type;
         const { root, registry } = checkoutRegistry.resolve(found, type);
         const files =
-          mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root);
+          mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
         const { scope, references, rules, label } = plan(mode, ruleSets[type], files);
         summary = `${type}, ${label}${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
         const reading = {

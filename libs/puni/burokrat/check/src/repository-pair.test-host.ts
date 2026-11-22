@@ -30,7 +30,7 @@ export async function regenerateIndex(root: string): Promise<void> {
     .withInstalledModules([nodeHostModule, checkoutModule])
     .buildContainer();
   try {
-    const files = container.resolve('checkoutFiles').open(root);
+    const files = container.resolve('checkoutFiles').open(root, 'system-state');
     const sources = container.resolve('checkoutWikiIndex').readSources(files);
     if (sources.defects.length > 0)
       throw new Error(`fixture defects: ${JSON.stringify(sources.defects)}`);

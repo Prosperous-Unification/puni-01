@@ -30,6 +30,8 @@
       "@puni/shared-testing": ["./libs/puni/shared/testing/src/index.ts"],
       "@puni/burokrat-check": ["./libs/puni/burokrat/check/src/index.ts"],
       "@puni/burokrat-wiki": ["./libs/puni/burokrat/wiki/src/index.ts"],
+      "@puni/dash-ops": ["./libs/puni/dash/ops/src/index.ts"],
+      "@puni/navigator-plan": ["./libs/puni/navigator/plan/src/index.ts"],
       "@puni/nx-sync": ["./tools/nx-sync/src/wiki-index.cjs"]
     }
   }

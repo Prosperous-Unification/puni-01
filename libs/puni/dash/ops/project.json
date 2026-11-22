@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-dash-ops",
+  "projectType": "library",
+  "tags": ["scope:dash", "type:group"],
+  "metadata": {
+    "readWhen": "changing how nodes are listed, reached over SSH, or asked for their k3s cluster",
+    "readFirst": "src/node-shell.feature.ts"
+  },
+  "sourceRoot": "libs/puni/dash/ops/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

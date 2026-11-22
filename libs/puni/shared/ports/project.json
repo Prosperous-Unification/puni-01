@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["scope:shared", "type:shared"],
   "metadata": {
-    "readWhen": "changing what the code may ask of the file system, git or child processes",
+    "readWhen": "changing what the code may ask of the file system, git, child processes or the clock",
     "readFirst": "src/index.ts"
   },
   "sourceRoot": "libs/puni/shared/ports/src",

@@ -48,9 +48,11 @@ export function openCheckHost(
         ? { kind: 'all' }
         : { kind: 'within-project', projects: scope.projects },
     ): Finding[] {
+      const located = container.resolve('checkoutRegistry').locate(registryRoot);
+      const type = root === located.root ? located.type : 'system-records';
       return applyRule(rule, {
-        files: container.resolve('checkoutFiles').open(root),
-        registry: container.resolve('checkoutRegistry').locate(registryRoot).registry,
+        files: container.resolve('checkoutFiles').open(root, type),
+        registry: located.registry,
         commands,
         scope,
         references,
