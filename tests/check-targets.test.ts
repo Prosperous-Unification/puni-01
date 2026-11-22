@@ -80,13 +80,12 @@ describe('puni-bur-check targets', () => {
     ]);
   });
 
-  test('Nx infers project edges from imports; only workspace depends on every project, so every change affects its checks', () => {
+  test('Nx infers project edges from imports, so no project declares implicit dependencies', () => {
     expect(field(nx, 'pluginsConfig', '@nx/js', 'analyzeSourceFiles')).toBe(true);
     const declaring = listProjectFiles().filter(
       (path) => field(readJson(path), 'implicitDependencies') !== undefined,
     );
-    expect(declaring).toEqual(['project.json']);
-    expect(field(readJson('project.json'), 'implicitDependencies')).toEqual(['*']);
+    expect(declaring).toEqual([]);
   });
 
   test('the wiki index sync generator stays registered: Nx suggests removing a failing one', () => {

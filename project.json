@@ -6,7 +6,8 @@
     "test": {
       "inputs": [
         "default",
-        "^production",
+        "{workspaceRoot}/apps/**/*",
+        "{workspaceRoot}/libs/**/*",
         "{workspaceRoot}/**/project.json",
         "{workspaceRoot}/nx.json"
       ],
@@ -41,6 +42,5 @@
         "command": "bun apps/puni/cli/src/entrypoint.ts burokrat check --cross-project-links"
       }
     }
-  },
-  "implicitDependencies": ["*"]
+  }
 }
