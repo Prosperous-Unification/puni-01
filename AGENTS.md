@@ -5,7 +5,7 @@ repository it governs.
 
 ## Working here
 
-- Run `bun run gate` before calling work done. Bun and Nx only.
+- The gate is `bun run gate`. Bun and Nx only.
 - Unsure where something lives? `wiki/index/index.md` maps a task to the
   file to read first.
 - Every commit, commit message and pull request here is public: no
@@ -13,8 +13,8 @@ repository it governs.
 - Records live in <https://github.com/Prosperous-Unification/puni-01-records>,
   cloned beside this repository as `../puni-01-records`; its `AGENTS.md` says
   how to file one. File one when the task asks, or when you decide something
-  the code and its commit message cannot carry. Open one only when a task
-  names it.
+  the code and its commit message cannot carry. Read a record only when a
+  task names it.
 
 ## Rules
 
