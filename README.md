@@ -1,18 +1,22 @@
-# puni-01
+# PUNI
 
-The PUNI platform monorepo (Bun, Nx, TypeScript). It ships the `puni` CLI, whose commands are
-grouped by role.
+**AI agents can write anything. This is what makes them finish it.**
 
-## Find things
+PUNI builds your software, keeps it running, and leaves you the factory. This repository is that
+factory: the `puni` CLI and the rules every agent works by. One role plans the work, one does it,
+and one judges whether it was done right, so nothing is called finished on an agent's word alone.
 
-- Commands: `bun run puni --help`
-- Projects: `bunx nx show projects`
-- Map of modules and documentation: [`wiki/index/index.md`](wiki/index/index.md)
-- Rules: [`AGENTS.md`](AGENTS.md)
+**Tell us what you want at [puni.dev](https://puni.dev).**
 
-## Run
+## Look inside
+
+- The rules every session follows: [`AGENTS.md`](AGENTS.md)
+- A map of the code: [`wiki/index/index.md`](wiki/index/index.md)
+
+## Run it
 
 ```sh
 bun install --frozen-lockfile
+bun run puni --help
 bun run gate
 ```
