@@ -47,7 +47,9 @@ describe('the wiki index sync generator', () => {
       'wiki/index/index.md': 'fresh',
       'wiki/page.md': 'kept',
     });
-    expect(outcome.outOfSyncMessage).toContain('run `bun run fix`');
+    expect(outcome.outOfSyncMessage).toBe(
+      'wiki/index/index.md is stale; wiki/index/notes.md is not generated; wiki/index/deep/old.md is not generated; run `bun run fix`',
+    );
   });
 
   test('leaves a current index untouched', () => {
