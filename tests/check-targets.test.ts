@@ -159,3 +159,24 @@ describe('puni-bur-check targets', () => {
     expect(field(readJson('project.json'), 'name')).toBe('workspace');
   });
 });
+
+/**
+ * Every `typecheck` target runs `bunx tsc`, which is TypeScript 7, the native compiler, installed
+ * as `@typescript/native`. The `typescript` package stays on TypeScript 6 (`tsc6`) because
+ * typescript-eslint and Nx's import analysis load the JavaScript compiler API, which TypeScript 7
+ * does not ship. Were the `tsc` binary to come from the `typescript` package again, every
+ * typecheck would silently run TypeScript 6.
+ */
+describe('typecheck targets', () => {
+  test('the target default runs bunx tsc on the project', () => {
+    expect(field(nx, 'targetDefaults', 'typecheck', 'options', 'command')).toBe(
+      'bunx tsc --noEmit -p {projectRoot}/tsconfig.json',
+    );
+  });
+
+  test('bunx tsc is TypeScript 7', () => {
+    const child = Bun.spawnSync(['bunx', 'tsc', '--version'], { cwd: root });
+    if (child.exitCode !== 0) throw new Error(`bunx tsc failed: ${child.stderr.toString()}`);
+    expect(child.stdout.toString()).toMatch(/^Version 7\./u);
+  });
+});
