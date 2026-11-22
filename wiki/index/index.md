@@ -4,12 +4,12 @@
 
 ## Read when
 
-- adding a command group, or changing how commands are parsed, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/root-parser.ts)
 - adding a command or a command group: [Adding a command](../adding-a-command.md)
 - adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
 - changing how a command line is parsed, how help is printed, or what a command handler receives and returns: [puni-shared-command](../../libs/puni/shared/command/src/command.ts)
 - changing how a plan is filed in the records repository: [puni-navigator-plan](../../libs/puni/navigator/plan/src/plan-filing.feature.ts)
 - changing how a repository is located, its files listed, its projects scoped or its wiki index sourced: [puni-shared-checkout](../../libs/puni/shared/checkout/src/contract.ts)
+- changing how commands are parsed, dispatched, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/root-parser.ts)
 - changing how failures are modelled, turned into findings, or reported with a reference and exit code 3: [puni-shared-failures](../../libs/puni/shared/failures/src/report-failure.ts)
 - changing how nodes are listed, reached over SSH, or asked for their k3s cluster: [puni-dash-ops](../../libs/puni/dash/ops/src/node-shell.feature.ts)
 - changing how the file system, git, child processes or the clock are reached on this machine: [puni-shared-adapters](../../libs/puni/shared/adapters/src/index.ts)

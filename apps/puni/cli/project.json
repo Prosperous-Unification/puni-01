@@ -4,7 +4,7 @@
   "projectType": "application",
   "tags": ["scope:app", "type:app"],
   "metadata": {
-    "readWhen": "adding a command group, or changing how commands are parsed, printed or mapped to exit codes",
+    "readWhen": "changing how commands are parsed, dispatched, printed or mapped to exit codes",
     "readFirst": "src/root-parser.ts"
   },
   "sourceRoot": "apps/puni/cli/src",
