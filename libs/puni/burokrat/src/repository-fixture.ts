@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
+import { recordDirectories, recordKinds } from './records-schema';
 import { indexFile, readIndexSources, renderIndex, type CommandBrief } from './wiki/wiki-index';
 
 /** The command tree fixture repositories are indexed with. */
@@ -62,7 +63,7 @@ export function runGit(root: string, args: readonly string[]): void {
  */
 export function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-burokrat-'));
-  writeRepositoryFile(root, 'nx.json', '{}');
+  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'code' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',
@@ -81,3 +82,61 @@ export function makeRepository(): string {
   runGit(root, ['add', '-A']);
   return root;
 }
+
+/** Front matter for a fixture record: every required key, valid for `path`, then `extra`. */
+export function describeRecord(
+  path: string,
+  extra: Readonly<Record<string, string>> = {},
+): Record<string, string> {
+  const kind = recordKinds.find((candidate) => path.startsWith(`${recordDirectories[candidate]}/`));
+  if (kind === undefined) throw new Error(`${path} is not in a kind directory`);
+  return {
+    kind,
+    title: 'A fixture record',
+    date: posix.basename(path).slice(0, 10),
+    commit: 'abc1234',
+    topics: 'fixtures, records',
+    summary: 'A record the tests build.',
+    ...extra,
+  };
+}
+
+/** Writes a record at `path` whose front matter holds `fields` in order, then a body. */
+export function writeRecord(
+  root: string,
+  path: string,
+  fields: Readonly<Record<string, string>>,
+): void {
+  const lines = Object.entries(fields).map(([key, value]) => `${key}: ${value}`);
+  writeRepositoryFile(root, path, ['---', ...lines, '---', '', 'Body.', ''].join('\n'));
+}
+
+/**
+ * A fresh temporary records repository that passes every records rule: `puni.json`, `AGENTS.md`,
+ * the `CLAUDE.md` symlink, and two valid records, the second superseding the first.
+ */
+export function makeRecordsRepository(): string {
+  const root = mkdtempSync(join(tmpdir(), 'puni-records-'));
+  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'records' }));
+  writeRepositoryFile(root, 'AGENTS.md', '# demo records\n\nSee [the plans](nav/plans).\n');
+  symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
+  writeRecord(
+    root,
+    supersededRecord,
+    describeRecord(supersededRecord, { 'superseded-by': supersedingRecord }),
+  );
+  writeRecord(
+    root,
+    supersedingRecord,
+    describeRecord(supersedingRecord, { supersedes: supersededRecord }),
+  );
+  mkdirSync(join(root, 'dash/anything/deep'), { recursive: true });
+  writeRepositoryFile(root, 'dash/anything/deep/notes.txt', 'free form');
+  return root;
+}
+
+/** The fixture records repository's first record, superseded by {@link supersedingRecord}. */
+export const supersededRecord = 'nav/plans/2031-04-05-first-plan.md';
+
+/** The fixture records repository's second record, which supersedes the first. */
+export const supersedingRecord = 'nav/plans/2031-04-06-second-plan.md';

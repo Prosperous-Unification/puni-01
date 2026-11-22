@@ -1,10 +1,10 @@
 import { constant, object } from '@optique/core';
-import { compareBytes, findRepositoryRoot, RepositoryDefect } from '../repository';
+import { compareBytes, findRepository, RepositoryDefect } from '../repository';
 import type { CommandBrief } from '../wiki/wiki-index';
 import { formatFinding } from './finding';
-import { rules } from './rules';
+import { ruleSets } from './rules';
 
-/** `check`: judges the repository against every rule in {@link rules}. Takes no flags. */
+/** `check`: judges the repository against the rule set of its kind. Takes no flags. */
 export const checkParser = object({ kind: constant('check') });
 
 /** What `check` needs from the app that composes it. */
@@ -17,27 +17,32 @@ export interface CheckContext {
 }
 
 /**
- * Runs `check` against the repository found from `context.cwd`. Prints each finding as
- * `<rule-id> <path>: <message>`, sorted, then a summary line, and returns 1; with no finding it
- * prints one `ok` line and returns 0. A missing `nx.json` is a `repository.root` finding.
+ * Runs `check` against the repository found from `context.cwd`, applying the rule set its
+ * `puni.json` kind selects from {@link ruleSets}. Prints each finding as
+ * `<rule-id> <path>: <message>`, sorted, then a summary naming the kind, and returns 1; with no
+ * finding it prints one `ok` line and returns 0. A missing or invalid `puni.json` is a finding.
  */
 export function runCheck(context: CheckContext): 0 | 1 {
   let lines: string[];
+  let scope: string;
   try {
-    const root = findRepositoryRoot(context.cwd);
+    const { root, kind } = findRepository(context.cwd);
+    const rules = ruleSets[kind];
+    scope = `${kind}, ${String(rules.length)} rules`;
     lines = rules
       .flatMap((rule) => rule({ root, commands: context.commands }))
       .map(formatFinding)
       .sort(compareBytes);
   } catch (cause) {
     if (!(cause instanceof RepositoryDefect)) throw cause;
-    lines = [formatFinding({ rule: 'repository.root', path: '.', message: cause.message })];
+    scope = 'no repository';
+    lines = [formatFinding({ rule: cause.rule, path: cause.path, message: cause.message })];
   }
   if (lines.length === 0) {
-    context.stdout(`ok: ${String(rules.length)} rules, no findings.\n`);
+    context.stdout(`ok: ${scope}, no findings.\n`);
     return 0;
   }
   const noun = lines.length === 1 ? 'finding' : 'findings';
-  context.stdout(`${lines.join('\n')}\n${String(lines.length)} ${noun}.\n`);
+  context.stdout(`${lines.join('\n')}\nfail: ${scope}, ${String(lines.length)} ${noun}.\n`);
   return 1;
 }

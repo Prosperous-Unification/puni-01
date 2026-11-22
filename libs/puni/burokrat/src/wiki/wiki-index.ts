@@ -10,12 +10,14 @@ import {
 } from 'node:fs';
 import { join, posix } from 'node:path';
 import { countWords, readWhenWordBudget } from '../budgets';
+import { parseFrontMatter } from '../front-matter';
 import {
   compareBytes,
-  findRepositoryRoot,
+  findRepository,
   listFiles,
   listMarkdownFiles,
   RepositoryDefect,
+  type Repository,
 } from '../repository';
 
 /** `wiki index`: rewrites `wiki/index/` from the repository's projects, pages and commands. */
@@ -166,19 +168,16 @@ function readProject(root: string, path: string): Reading[] {
  * two `---` lines and holds one `key: value` per line.
  */
 function readPage(path: string, text: string): Reading {
-  const lines = text.split(/\r?\n/u);
-  const end = lines.indexOf('---', 1);
-  if (lines[0] !== '---' || end < 0) {
-    return defectOf(path, 'does not begin with front matter');
+  const frontMatter = parseFrontMatter(text);
+  if ('problem' in frontMatter) {
+    return defectOf(
+      path,
+      frontMatter.problem === 'absent'
+        ? 'does not begin with front matter'
+        : `has a malformed front matter line: ${frontMatter.line}`,
+    );
   }
-  const fields = new Map<string, string>();
-  for (const line of lines.slice(1, end)) {
-    const field = /^([A-Za-z][\w-]*):(.*)$/u.exec(line);
-    if (field?.[1] === undefined || field[2] === undefined) {
-      return defectOf(path, `has a malformed front matter line: ${line}`);
-    }
-    fields.set(field[1], field[2].trim());
-  }
+  const fields = new Map(frontMatter.fields.map((field) => [field.key, field.value]));
   const title = fields.get('title');
   if (title === undefined || title === '') return defectOf(path, 'has no title');
   const readWhen = fields.get('read-when');
@@ -285,18 +284,26 @@ function removeEmptyDirectories(root: string, directory: string): void {
 /**
  * Runs `wiki index` against the repository found from `context.cwd`: writes every missing or
  * stale file, removes every file under `wiki/index/` it did not generate, and returns 0. A defect
- * in the repository's inputs writes nothing, prints one `error: ` line to `stderr` naming every
- * defect, and returns 1.
+ * in the repository's inputs, or a repository whose `puni.json` declares a kind other than
+ * `code`, writes nothing, prints one `error: ` line to `stderr` and returns 1.
  */
 export function runWikiIndex(context: WikiIndexContext): 0 | 1 {
-  let root: string;
+  let repository: Repository;
   try {
-    root = findRepositoryRoot(context.cwd);
+    repository = findRepository(context.cwd);
   } catch (cause) {
     if (!(cause instanceof RepositoryDefect)) throw cause;
     context.stderr(`error: ${cause.message}\n`);
     return 1;
   }
+  if (repository.kind !== 'code') {
+    const file = join(repository.root, 'puni.json');
+    context.stderr(
+      `error: wiki index needs a code repository; ${file} declares kind ${repository.kind}\n`,
+    );
+    return 1;
+  }
+  const { root } = repository;
   const sources = readIndexSources(root);
   if (sources.defects.length > 0) {
     const named = sources.defects.map((defect) => `${defect.path}: ${defect.message}`);

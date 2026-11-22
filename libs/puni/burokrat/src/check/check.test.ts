@@ -28,7 +28,7 @@ import {
   requireReadWhen,
 } from './index-rules';
 import { resolveLinks } from './link-rules';
-import { rules } from './rules';
+import { codeRules } from './rules';
 
 let root = '';
 
@@ -51,7 +51,7 @@ function words(count: number): string {
 const recordsName = ['demo', 'records'].join('-');
 
 describe('every rule holds on the fixture repository', () => {
-  test.each(rules.map((rule) => [rule.name, rule] as const))('%s', (_name, rule) => {
+  test.each(codeRules.map((rule) => [rule.name, rule] as const))('%s', (_name, rule) => {
     expect(judge(rule)).toEqual([]);
   });
 });
@@ -336,7 +336,7 @@ describe('runCheck', () => {
   test('a clean repository prints one ok line and exits 0', () => {
     expect(runIn(root)).toEqual({
       code: 0,
-      printed: `ok: ${String(rules.length)} rules, no findings.\n`,
+      printed: `ok: code, ${String(codeRules.length)} rules, no findings.\n`,
     });
   });
 
@@ -348,16 +348,27 @@ describe('runCheck', () => {
       printed: [
         'agents.index AGENTS.md: does not name wiki/index/index.md',
         'readme.exists README.md: is missing',
-        '2 findings.',
+        `fail: code, ${String(codeRules.length)} rules, 2 findings.`,
         '',
       ].join('\n'),
     });
   });
 
-  test('no nx.json is a repository.root finding', () => {
-    rmSync(join(root, 'nx.json'));
+  test('no puni.json is a repository.root finding', () => {
+    rmSync(join(root, 'puni.json'));
     const run = runIn(root);
     expect(run.code).toBe(1);
-    expect(run.printed).toMatch(/^repository\.root \.: no nx\.json in [^\n]+\n1 finding\.\n$/u);
+    expect(run.printed).toMatch(
+      /^repository\.root \.: no puni\.json in [^\n]+\nfail: no repository, 1 finding\.\n$/u,
+    );
+  });
+
+  test('an invalid puni.json is a repository.kind finding', () => {
+    writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'library' }));
+    const run = runIn(root);
+    expect(run.code).toBe(1);
+    expect(run.printed).toBe(
+      `repository.kind puni.json: ${join(root, 'puni.json')} has kind "library"; expected one of code, records\nfail: no repository, 1 finding.\n`,
+    );
   });
 });

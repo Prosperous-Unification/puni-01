@@ -14,10 +14,17 @@ import {
   requireReadFirst,
   requireReadWhen,
 } from './index-rules';
-import { resolveLinks } from './link-rules';
+import { resolveAgentsLinks, resolveLinks } from './link-rules';
+import {
+  judgeRecordFrontMatter,
+  judgeRecordNames,
+  judgeRecordsLayout,
+  judgeSupersession,
+} from './records-rules';
+import type { RepositoryKind } from '../repository';
 
-/** Every rule `puni burokrat check` applies. */
-export const rules: readonly Rule[] = [
+/** The rules for a `code` repository. */
+export const codeRules: readonly Rule[] = [
   agentsExists,
   agentsWords,
   agentsNamesIndex,
@@ -32,3 +39,21 @@ export const rules: readonly Rule[] = [
   requireReadWhen,
   requireReadFirst,
 ];
+
+/** The rules for a `records` repository. */
+export const recordsRules: readonly Rule[] = [
+  agentsExists,
+  claudeLinksAgents,
+  agentsWords,
+  resolveAgentsLinks,
+  judgeRecordsLayout,
+  judgeRecordNames,
+  judgeRecordFrontMatter,
+  judgeSupersession,
+];
+
+/** The rule set `puni burokrat check` applies to each repository kind. */
+export const ruleSets: Readonly<Record<RepositoryKind, readonly Rule[]>> = {
+  code: codeRules,
+  records: recordsRules,
+};
