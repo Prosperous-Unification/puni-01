@@ -51,8 +51,20 @@ function listProjectFiles(): string[] {
     .filter((path) => path !== '');
 }
 
+/** A project-relative pattern as a positive glob, or a negated one prefixed with `!`. */
+function project(input: string): string {
+  return input.replace('{projectRoot}/', '');
+}
+
+/** Whether `path` matches `inputs` the way Nx reads them: some positive glob, and no negated one. */
 function matchesInput(inputs: readonly string[], path: string): boolean {
-  return inputs.some((input) => new Bun.Glob(input.replace('{workspaceRoot}/', '')).match(path));
+  const globs = inputs.map((input) => input.replace('{workspaceRoot}/', ''));
+  const included = globs.filter((glob) => !glob.startsWith('!'));
+  const excluded = globs.filter((glob) => glob.startsWith('!')).map((glob) => glob.slice(1));
+  return (
+    included.some((glob) => new Bun.Glob(glob).match(path)) &&
+    !excluded.some((glob) => new Bun.Glob(glob).match(path))
+  );
 }
 
 describe('puni-bur-check targets', () => {
@@ -62,7 +74,12 @@ describe('puni-bur-check targets', () => {
     expect(field(target, 'options', 'command')).toBe(
       'bun apps/puni/cli/src/entrypoint.ts burokrat check --project {projectName}',
     );
-    expect(readStrings(field(target, 'inputs'))).toEqual(['default', 'puniBurCheck']);
+    expect(field(target, 'inputs')).toEqual([
+      'default',
+      'puniBurCheck',
+      { projects: 'puni-cli', input: 'checkerSource' },
+      { projects: 'puni-cli', dependencies: true, input: 'checkerSource' },
+    ]);
   });
 
   test.each(listProjectFiles())('%s declares the target', (path) => {
@@ -124,20 +141,23 @@ describe('puni-bur-check targets', () => {
     }
   });
 
-  test('every project check reads the checker, puni.json, every .gitignore and the Bun version', () => {
+  /**
+   * The checker is the CLI and every library it depends on. It reaches each project's check as a
+   * project-scoped input rather than a workspace-root glob, so a change to one library touches only
+   * the projects whose results it can change, while any change to checker source still re-runs
+   * every check.
+   */
+  test('every project check reads the checker source, puni.json, every .gitignore and the Bun version', () => {
+    const checkerSource = readStrings(field(nx, 'namedInputs', 'checkerSource'));
     const cli = readJson('apps/puni/cli/package.json');
     expect(field(cli, 'bin', 'puni')).toBe('src/entrypoint.ts');
-    const aliases = field(readJson('tsconfig.base.json'), 'compilerOptions', 'paths');
-    const libraries = Object.values(aliases ?? {})
-      .flatMap((targets) => readStrings(targets).map((target) => target.replace(/^\.\//u, '')))
-      .filter((target) => target.startsWith('libs/'));
-    expect(libraries.length).toBeGreaterThan(0);
+    for (const path of ['package.json', 'src/main.ts', 'src/rules/history.rule.ts', 'src/a.cjs']) {
+      expect([path, matchesInput(checkerSource.map(project), path)]).toEqual([path, true]);
+    }
+    for (const path of ['src/check.test.ts', 'src/check.test-host.ts', 'NOTES.md']) {
+      expect([path, matchesInput(checkerSource.map(project), path)]).toEqual([path, false]);
+    }
     for (const path of [
-      'apps/puni/cli/src/entrypoint.ts',
-      'apps/puni/cli/src/main.ts',
-      'apps/puni/cli/package.json',
-      ...libraries,
-      'libs/puni/shared/checkout/src/ownership.ts',
       'puni.json',
       '.gitignore',
       'libs/puni/burokrat/check/.gitignore',
