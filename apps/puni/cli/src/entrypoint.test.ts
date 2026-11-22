@@ -216,6 +216,15 @@ describe('entrypoint', () => {
         expect(existsSync(join(reports, 'puni-failures'))).toBe(false);
       });
 
+      test('a report that cannot be written is named lost, still with exit 3', () => {
+        writeFileSync(join(reports, 'puni-failures'), 'a file where the directory belongs');
+        const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
+        expect(run.code).toBe(3);
+        expect(run.stderr).toMatch(
+          /^error: unexpected failure, reference \S+, report lost: [^\n]*EEXIST[^\n]*\n$/u,
+        );
+      });
+
       test('a failure while importing main is reported the same way', () => {
         const preload = join(parent, 'break-main.ts');
         writeFileSync(
