@@ -13,7 +13,7 @@
     "puniBurCheck": [
       "{workspaceRoot}/apps/puni/cli/package.json",
       "{workspaceRoot}/apps/puni/cli/src/**/*",
-      "{workspaceRoot}/libs/puni/*/src/**/*",
+      "{workspaceRoot}/libs/puni/**/src/**/*",
       "{workspaceRoot}/puni.json",
       "{workspaceRoot}/**/.gitignore",
       "{workspaceRoot}/.bun-version"
@@ -53,6 +53,11 @@
     }
   },
   "plugins": [],
+  "pluginsConfig": {
+    "@nx/js": {
+      "analyzeSourceFiles": true
+    }
+  },
   "defaultBase": "main",
   "useInferencePlugins": false,
   "analytics": false

@@ -7,7 +7,6 @@
     "readFirst": "src/cli-parser.ts"
   },
   "sourceRoot": "apps/puni/cli/src",
-  "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
