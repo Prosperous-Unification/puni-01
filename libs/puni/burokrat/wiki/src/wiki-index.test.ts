@@ -24,11 +24,11 @@ function readIndexSources(repository: string): IndexSources {
   return container.resolve('checkoutWikiIndex').readSources(files);
 }
 
-function runIndex(cwd = root): { code: 0 | 1 | 2; stdout: string; stderr: string } {
+function runIndex(cwd = root, print = false): { code: 0 | 1 | 2; stdout: string; stderr: string } {
   let stdout = '';
   let stderr = '';
   const code = container.resolve('burokratWikiIndexCommand').run(
-    { kind: 'wiki index' },
+    { kind: 'wiki index', print },
     {
       cwd,
       stdout: (text) => {
@@ -170,6 +170,31 @@ describe('readIndexSources', () => {
     expect(readIndexSources(root).defects).toEqual([
       { topic: 'read-when', path: 'libs', message: 'directory is missing' },
     ]);
+  });
+});
+
+describe('wiki index --print', () => {
+  test('prints one JSON object, path to content, and writes nothing', () => {
+    writeRepositoryFile(root, indexFile, 'edited');
+    writeRepositoryFile(root, 'wiki/index/notes.md', 'hand-written');
+    const run = runIndex(root, true);
+    expect(run).toEqual({
+      code: 0,
+      stdout: `${JSON.stringify(Object.fromEntries(render()))}\n`,
+      stderr: '',
+    });
+    expect(readFileSync(join(root, indexFile), 'utf8')).toBe('edited');
+    expect(existsSync(join(root, 'wiki/index/notes.md'))).toBe(true);
+  });
+
+  test('defective inputs print one error line and exit 1', () => {
+    writeProject(root, 'libs/two', 'two', {});
+    expect(runIndex(root, true)).toEqual({
+      code: 1,
+      stdout: '',
+      stderr:
+        'error: libs/two/project.json: project two has no metadata.readWhen; libs/two/project.json: project two metadata.readFirst is missing\n',
+    });
   });
 });
 

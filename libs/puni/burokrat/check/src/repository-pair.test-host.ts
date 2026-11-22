@@ -56,8 +56,8 @@ export function formatFixtureRegistry(thisType: RepositoryType): string {
 
 /**
  * Builds a system-state repository named `demo` at `root` that passes every rule: `puni.json`,
- * entry files, the root project `workspace`, one project `one`, a generated index, and every
- * file staged in a real git repository.
+ * entry files, the CI workflow, the root project `workspace`, one project `one`, a generated
+ * index, and every file staged in a real git repository.
  */
 async function buildStateRepository(root: string): Promise<void> {
   mkdirSync(root);
@@ -72,10 +72,15 @@ async function buildStateRepository(root: string): Promise<void> {
   writeRepositoryFile(
     root,
     'AGENTS.md',
-    '# demo\n\nStart at `wiki/index/index.md`. History lives in `../demo-records`.\n',
+    `# demo\n\nStart at \`wiki/index/index.md\`. History lives in ${fixtureRemotes['system-records']}, checked out as \`../demo-records\`.\n`,
   );
   symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
   writeRepositoryFile(root, 'README.md', '# demo\n\nRules: [AGENTS.md](AGENTS.md).\n');
+  writeRepositoryFile(
+    root,
+    '.github/workflows/ci.yml',
+    'on: [push, pull_request]\njobs:\n  gate:\n    steps:\n      - run: bun run gate\n      - run: bun run gate:affected\n',
+  );
   runGit(root, ['init', '-q']);
   await regenerateIndex(root);
   runGit(root, ['add', '-A']);

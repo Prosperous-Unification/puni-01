@@ -6,6 +6,7 @@ export {
   memoryHost,
   type MemoryHostOptions,
   type MemoryNode,
+  type MemoryStaged,
   type MemoryTree,
 } from './memory-host';
 export { nodeHost } from './node-host';

@@ -1,3 +1,4 @@
+import { remedyDefect } from '@puni/shared-failures';
 import { defineException } from 'application-exception';
 
 /** No `puni.json` at or above the directory a command started from. */
@@ -69,14 +70,28 @@ export const RootProjectMissing = defineException<
     'is missing: --project needs a root project that owns every file no other project owns',
 });
 
-/** The repository defects this library raises; a feature reports each as one finding. */
+/** What to do when git cannot list a checkout, whichever check asked. */
+export const gitListingRemedy =
+  'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun';
+
+/** The repository defects this library raises and their remedies; a feature reports each as one finding. */
 export const checkoutDefects = [
-  RegistryMissing,
-  RegistryInvalid,
-  CheckoutMissing,
-  ProjectsUnlistable,
-  ProjectNameShared,
-  RootProjectMissing,
+  remedyDefect(
+    RegistryMissing,
+    () => 'run puni from the system-state repository or a directory in it',
+  ),
+  remedyDefect(
+    RegistryInvalid,
+    () =>
+      'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
+  ),
+  remedyDefect(CheckoutMissing, ({ url, root }) => `clone it: git clone ${url} ${root}`),
+  remedyDefect(ProjectsUnlistable, () => gitListingRemedy),
+  remedyDefect(
+    ProjectNameShared,
+    ({ second }) => `rename the project in ${second}/project.json; every project name is unique`,
+  ),
+  remedyDefect(RootProjectMissing, () => 'add a project.json at the root naming the root project'),
 ] as const;
 
 /** A `--project` naming no project of the checkout: a refused command line. */
@@ -93,4 +108,11 @@ export const ProjectUnknown = defineException({
 export const CheckoutPathRefused = defineException({
   tag: 'puni/shared-checkout/CheckoutPathRefused',
   message: ({ path, reason }: { path: string; reason: string }) => `${path}: ${reason}`,
+});
+
+/** A staged file whose text git does not give, though it listed the file as staged. */
+export const StagedTextUnreadable = defineException({
+  tag: 'puni/shared-checkout/StagedTextUnreadable',
+  message: ({ path, reason }: { path: string; reason: string }) =>
+    `the staged text of ${path} cannot be read: ${reason}`,
 });

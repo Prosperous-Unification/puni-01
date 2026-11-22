@@ -135,7 +135,7 @@ describe('runPuni', () => {
     const root = makeRepository();
     const run = runIn(root, ['burokrat', 'check']);
     expect(run.code).toBe(1);
-    expect(run.printed).toContain('agents.exists AGENTS.md: is missing\n');
+    expect(run.printed).toContain('agents.exists AGENTS.md: is missing; fix: ');
     expect(run.printed).toContain('index.current wiki/index/index.md: is missing');
   });
 

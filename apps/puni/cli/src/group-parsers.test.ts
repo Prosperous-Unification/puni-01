@@ -15,10 +15,37 @@ describe('burokratParser', () => {
   });
 
   test.each([
-    ['wiki index', { kind: 'wiki index' }],
-    ['check', { kind: 'check', repo: undefined, project: undefined }],
-    ['check --project puni-dash', { kind: 'check', repo: undefined, project: 'puni-dash' }],
-    ['check --repo system-records', { kind: 'check', repo: 'system-records', project: undefined }],
+    ['wiki index', { kind: 'wiki index', print: false }],
+    [
+      'check',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+      },
+    ],
+    [
+      'check --project puni-dash',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: 'puni-dash',
+        crossProjectLinks: false,
+        staged: false,
+      },
+    ],
+    [
+      'check --repo system-records',
+      {
+        kind: 'check',
+        repo: 'system-records',
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+      },
+    ],
   ] as const)('%s parses to its leaf', (line, value) => {
     expect(parse(burokratParser, line.split(' '))).toEqual({ success: true, value });
   });

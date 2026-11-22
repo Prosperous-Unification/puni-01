@@ -71,7 +71,7 @@ describe('the puni container', () => {
     expect(runIn(container, '/work', ['burokrat', 'check'])).toEqual({
       code: 1,
       stdout:
-        'repository.root .: no puni.json in /work or any directory above it; run puni from the system-state repository, which holds puni.json\nfail: no repository, 1 finding.\n',
+        'repository.root .: no puni.json in /work or any directory above it; run puni from the system-state repository, which holds puni.json; fix: run puni from the system-state repository or a directory in it\nfail: no repository, 1 finding.\n',
       stderr: '',
     });
   });

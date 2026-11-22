@@ -72,6 +72,37 @@ describe('createBunGit', () => {
     });
   });
 
+  test('an index holding unmerged entries is a failure naming them, not a doubled listing', () => {
+    const git = (...args: string[]) =>
+      Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: root });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(join(root, 'a.md'), 'base\n');
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    git('switch', '-qc', 'side');
+    writeFileSync(join(root, 'a.md'), 'side\n');
+    git('commit', '-qam', 'side');
+    git('switch', '-q', 'main');
+    writeFileSync(join(root, 'a.md'), 'main\n');
+    git('commit', '-qam', 'main');
+    expect(git('merge', '-q', 'side').exitCode).not.toBe(0);
+    expect(
+      createBunGit({ processRunner: createBunProcessRunner() }).listVisibleFiles(root),
+    ).toEqual({ failure: 'the git index has unmerged entries: a.md' });
+  });
+
+  test('lists staged files and reads their staged text, not the working tree', () => {
+    expect(Bun.spawnSync(['git', 'init', '-q'], { cwd: root }).exitCode).toBe(0);
+    writeFileSync(join(root, 'a.md'), 'staged');
+    writeFileSync(join(root, 'b.md'), 'unstaged');
+    expect(Bun.spawnSync(['git', 'add', 'a.md'], { cwd: root }).exitCode).toBe(0);
+    writeFileSync(join(root, 'a.md'), 'edited after staging');
+    expect(git.listStagedFiles(root)).toEqual({ files: ['a.md'] });
+    expect(git.readStagedText(root, 'a.md')).toEqual({ text: 'staged' });
+    const unstaged = git.readStagedText(root, 'b.md');
+    expect('failure' in unstaged && unstaged.failure).toStartWith('git cat-file exited 128: ');
+  });
+
   test('a git that cannot start is a failure', () => {
     const unstarted = createBunGit({
       processRunner: { run: () => ({ kind: 'unstarted', reason: 'no git' }) },

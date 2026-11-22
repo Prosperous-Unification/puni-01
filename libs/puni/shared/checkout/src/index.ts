@@ -15,12 +15,14 @@ export {
   CheckoutMissing,
   checkoutDefects,
   CheckoutPathRefused,
+  gitListingRemedy,
   ProjectNameShared,
   ProjectsUnlistable,
   ProjectUnknown,
   RegistryInvalid,
   RegistryMissing,
   RootProjectMissing,
+  StagedTextUnreadable,
 } from './failures';
 export { type FrontMatter, type FrontMatterField, parseFrontMatter } from './front-matter';
 export type { IndexDrift, IndexSources, ReadWhenEntry, SourceDefect } from './index-sources';
@@ -31,6 +33,7 @@ export {
   isRepositoryLevel,
   ownsPath,
   type Project,
+  type ProjectScope,
   repositoryScope,
 } from './ownership';
 export { judgeReadWhen, readWhenWordBudget } from './read-when';

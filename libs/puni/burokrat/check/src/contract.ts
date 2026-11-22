@@ -9,10 +9,15 @@ import type {
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
 
-/** A parsed `check` request: the repository type to judge and the project to scope it to. */
+/**
+ * A parsed `check` request: the repository type to judge, and at most one choice of what in it to
+ * judge: one project, only the references crossing projects, or only the staged files.
+ */
 export interface CheckRequest {
   readonly repo?: RepositoryType | undefined;
   readonly project?: string | undefined;
+  readonly crossProjectLinks?: boolean | undefined;
+  readonly staged?: boolean | undefined;
 }
 
 /** What one check found: a summary naming what was judged, and every finding sorted. */
@@ -28,8 +33,10 @@ export interface RepositoryCheck {
    * `cwd`. A defect of the repository's own inputs is one finding.
    *
    * @throws ProjectUnknown when `project` names no project.
-   * @throws ProjectScopeRefused when `project` is given for a repository other than
-   *   `system-state`.
+   * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository
+   *   other than `system-state`.
+   * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks` and
+   *   `staged` is given.
    */
   check(request: CheckRequest, cwd: string): CheckVerdict;
 }
