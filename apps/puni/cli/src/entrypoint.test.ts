@@ -171,11 +171,9 @@ describe('entrypoint', () => {
         const [, reference = '', path = ''] = line.exec(run.stderr) ?? [];
         expect(path).toBe(join(ownReports, `${reference}.json`));
         const text = readFileSync(path, 'utf8');
-        expect(JSON.parse(text)).toMatchObject({
-          occurrence_id: reference,
-          v: 'corj/v0.15',
-          context: { command: 'burokrat check' },
-        });
+        const report: unknown = JSON.parse(text);
+        expect(report).toMatchObject({ occurrence_id: reference, v: 'corj/v0.15' });
+        expect(report).toHaveProperty('context', { command: 'burokrat check' });
         expect(text).toContain('EACCES');
         expect(text).not.toContain(token);
         expect(statSync(ownReports).mode & 0o777).toBe(0o700);
