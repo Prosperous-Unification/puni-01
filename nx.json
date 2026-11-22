@@ -14,6 +14,13 @@
       "{workspaceRoot}/puni.json",
       "{workspaceRoot}/**/.gitignore",
       "{workspaceRoot}/.bun-version"
+    ],
+    "checkerSource": [
+      "{projectRoot}/package.json",
+      "{projectRoot}/src/**/*.ts",
+      "{projectRoot}/src/**/*.cjs",
+      "!{projectRoot}/**/*.test.ts",
+      "!{projectRoot}/**/*.test-host.ts"
     ]
   },
   "targetDefaults": {
@@ -62,12 +69,12 @@
         "puniBurCheck",
         {
           "projects": "puni-cli",
-          "input": "production"
+          "input": "checkerSource"
         },
         {
           "projects": "puni-cli",
           "dependencies": true,
-          "input": "production"
+          "input": "checkerSource"
         }
       ]
     }
