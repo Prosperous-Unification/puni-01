@@ -2,6 +2,9 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "name": "puni-cli",
   "projectType": "application",
+  "metadata": {
+    "description": "The `puni` CLI: composes the Navigator, Dash and Burokrat command groups."
+  },
   "sourceRoot": "apps/puni/cli/src",
   "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],
   "targets": {

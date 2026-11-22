@@ -2,6 +2,7 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "name": "puni-navigator",
   "projectType": "library",
+  "metadata": { "description": "Navigator commands: decide what to do." },
   "sourceRoot": "libs/puni/navigator/src",
   "targets": {
     "test": {

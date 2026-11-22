@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import cliPackage from '../package.json' with { type: 'json' };
-import { type Group, readInvocation, UsageRefusal } from './cli-parser';
+import { type Group, listCommands, readInvocation, UsageRefusal } from './cli-parser';
 
 function readPrinted(args: readonly string[]): string {
   let printed = '';
@@ -43,14 +43,36 @@ const spellings: readonly (readonly [string, Group])[] = [
 
 describe('readInvocation', () => {
   test.each(spellings)('%s selects %s', (spelling, group) => {
-    expect(readInvocation([spelling], () => undefined)).toEqual({
+    const invocation: unknown = readInvocation([spelling], () => undefined);
+    expect(invocation).toEqual({
       kind: 'command',
-      command: { group, request: {} },
+      command: { group, request: group === 'burokrat' ? { kind: 'help', path: [] } : {} },
     });
   });
 
+  test.each(['b wiki index --check', 'bur wiki index --check'])('%s selects wiki index', (line) => {
+    expect(readInvocation(line.split(' '), () => undefined)).toEqual({
+      kind: 'command',
+      command: { group: 'burokrat', request: { kind: 'wiki index', check: true } },
+    });
+  });
+
+  test('b wiki --help prints the wiki help listing index', () => {
+    const help = readPrinted(['b', 'wiki', '--help']);
+    expect(help).toContain('Generate and judge the wiki index.\nUsage: puni burokrat');
+    expect(readListedNames(help)).toEqual(['index']);
+  });
+
   test.each(spellings)('%s --help prints the %s help', (spelling, group) => {
-    expect(readPrinted([spelling, '--help'])).toContain(`Usage: puni ${group}\n`);
+    expect(readPrinted([spelling, '--help'])).toMatch(
+      new RegExp(`^Usage: puni ${group}[ \n]`, 'mu'),
+    );
+  });
+
+  test('b --help shows that a bare burokrat is valid and lists wiki', () => {
+    const help = readPrinted(['b', '--help']);
+    expect(help).toContain('Usage: puni burokrat [wiki [index [--check]]]\n');
+    expect(readListedNames(help)).toEqual(['wiki']);
   });
 
   test.each(['--help', 'help', ''])(
@@ -83,6 +105,7 @@ describe('readInvocation', () => {
     ['nav stray', 'Unexpected option or subcommand: `stray`.'],
     ['--bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['d --bogus', 'Unexpected option or subcommand: `--bogus`.'],
+    ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
     [
       'completion',
       'Missing shell name for completion. Generate shell completion script or provide completions.',
@@ -94,5 +117,20 @@ describe('readInvocation', () => {
   test('a wrapped refusal is joined into one line', () => {
     const token = `x${'y'.repeat(120)}`;
     expect(readRefusal([token]).message).toBe(`Unexpected option or subcommand: \`${token}\`.`);
+  });
+});
+
+describe('listCommands', () => {
+  test('walks the parser tree: every group and leaf by canonical path, with its brief', () => {
+    expect(listCommands()).toEqual([
+      { path: 'puni navigator', brief: 'Plan: decide what to do.' },
+      { path: 'puni dash', brief: 'Execute and operate: do it.' },
+      { path: 'puni burokrat', brief: 'Judge: decide whether it was done right.' },
+      { path: 'puni burokrat wiki', brief: 'Generate and judge the wiki index.' },
+      {
+        path: 'puni burokrat wiki index',
+        brief: 'Write the generated wiki index; with --check, only judge it.',
+      },
+    ]);
   });
 });

@@ -1,6 +1,15 @@
-import { command, constant, type InferValue, message, object, or } from '@optique/core';
+import {
+  command,
+  constant,
+  formatMessage,
+  getDocPageSync,
+  type InferValue,
+  message,
+  object,
+  or,
+} from '@optique/core';
 import { run } from '@optique/run';
-import { burokratParser } from '@puni/burokrat';
+import { burokratParser, type CommandBrief } from '@puni/burokrat';
 import { dashParser } from '@puni/dash';
 import { navigatorParser } from '@puni/navigator';
 import cliPackage from '../package.json' with { type: 'json' };
@@ -102,11 +111,37 @@ export function readInvocation(
 }
 
 /**
- * Prints the help page of one group to `stdout`, exactly as `puni <group> --help` does.
+ * Prints the help page of one group or sub-group to `stdout`, exactly as
+ * `puni <path...> --help` does.
  *
- * @throws Error if Optique parses `<group> --help` as a command instead of printing help.
+ * @throws Error if Optique parses `<path...> --help` as a command instead of printing help.
  */
-export function printGroupHelp(group: Group, stdout: (text: string) => void): void {
-  const invocation = readInvocation([group, '--help'], stdout);
-  if (invocation.kind !== 'printed') throw new Error(`${group} --help did not print help`);
+export function printHelp(path: readonly string[], stdout: (text: string) => void): void {
+  const invocation = readInvocation([...path, '--help'], stdout);
+  if (invocation.kind !== 'printed') throw new Error(`${path.join(' ')} --help did not print help`);
+}
+
+/**
+ * Every group and leaf of the `puni` tree, read from the doc pages of {@link puniParser}: each
+ * command entry on the page at a path is a child, visited in turn. Paths use canonical names;
+ * help and completion, which the runner adds, are not part of the tree.
+ *
+ * @throws Error when a page cannot be built or a command has no brief.
+ */
+export function listCommands(): CommandBrief[] {
+  const commands: CommandBrief[] = [];
+  const visit = (path: readonly string[]): void => {
+    const page = getDocPageSync(puniParser, path);
+    if (page === undefined) throw new Error(`no doc page for ${[programName, ...path].join(' ')}`);
+    for (const entry of page.sections.flatMap((section) => section.entries)) {
+      if (entry.term.type !== 'command') continue;
+      const childPath = [...path, entry.term.name];
+      const fullPath = [programName, ...childPath].join(' ');
+      if (entry.description === undefined) throw new Error(`${fullPath} has no brief`);
+      commands.push({ path: fullPath, brief: formatMessage(entry.description, { colors: false }) });
+      visit(childPath);
+    }
+  };
+  visit([]);
+  return commands;
 }

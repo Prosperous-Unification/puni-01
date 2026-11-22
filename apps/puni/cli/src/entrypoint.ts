@@ -9,7 +9,8 @@ function writeLine(text: string): void {
 
 try {
   const invocation = readInvocation(process.argv.slice(2), writeLine);
-  if (invocation.kind === 'command') process.exitCode = runCommand(invocation.command, writeLine);
+  if (invocation.kind === 'command')
+    process.exitCode = runCommand(invocation.command, { cwd: process.cwd(), stdout: writeLine });
 } catch (failure) {
   if (!(failure instanceof UsageRefusal)) throw failure;
   process.stderr.write(`error: ${failure.message}\n`);

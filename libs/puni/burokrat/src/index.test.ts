@@ -3,15 +3,31 @@ import { describe, expect, test } from 'bun:test';
 import { burokratParser } from './index';
 
 describe('burokratParser', () => {
-  test('a bare group parses to an empty request', () => {
-    expect(parse(burokratParser, [])).toEqual({ success: true, value: {} });
+  test('a bare group asks for the group help', () => {
+    expect(parse(burokratParser, [])).toEqual({ success: true, value: { kind: 'help', path: [] } });
   });
 
-  test('a stray token is refused', () => {
-    expect(parse(burokratParser, ['stray']).success).toBe(false);
+  test('a bare wiki asks for the wiki help', () => {
+    expect(parse(burokratParser, ['wiki'])).toEqual({
+      success: true,
+      value: { kind: 'help', path: ['wiki'] },
+    });
   });
 
-  test('an unknown flag is refused', () => {
-    expect(parse(burokratParser, ['--bogus']).success).toBe(false);
+  test.each([
+    [['wiki', 'index'], false],
+    [['wiki', 'index', '--check'], true],
+  ])('%j parses to wiki index with check %p', (args, check) => {
+    expect(parse(burokratParser, args)).toEqual({
+      success: true,
+      value: { kind: 'wiki index', check },
+    });
   });
+
+  test.each(['stray', '--bogus', 'wiki stray', 'wiki --bogus', 'wiki index --bogus'])(
+    '%s is refused',
+    (line) => {
+      expect(parse(burokratParser, line.split(' ')).success).toBe(false);
+    },
+  );
 });

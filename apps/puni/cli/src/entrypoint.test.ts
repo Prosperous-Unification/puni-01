@@ -23,7 +23,7 @@ describe('entrypoint', () => {
     });
   });
 
-  test.each(['nav stray', '--bogus', 'b --bogus'])(
+  test.each(['nav stray', '--bogus', 'b --bogus', 'b wiki nope'])(
     '%s refuses with exit 2 and one error line',
     (line) => {
       const run = runPuni(line.split(' '));
@@ -43,6 +43,14 @@ describe('entrypoint', () => {
     expect(runPuni(['--version'])).toEqual({
       code: 0,
       stdout: `${cliPackage.version}\n`,
+      stderr: '',
+    });
+  });
+
+  test('burokrat wiki index --check passes against this repository', () => {
+    expect(runPuni(['burokrat', 'wiki', 'index', '--check'])).toEqual({
+      code: 0,
+      stdout: 'wiki/index is current.\n',
       stderr: '',
     });
   });
