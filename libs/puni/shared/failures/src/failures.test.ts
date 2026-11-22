@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import * as appex from 'application-exception';
 import { decodePublicReport, defineException } from 'application-exception';
-import { findDefect } from './defect';
+import { findDefect, remedyDefect } from './defect';
 import { failureReportMaxBytes, reportFailure } from './report-failure';
 
 const Broken = defineException({
@@ -11,19 +11,22 @@ const Broken = defineException({
 const Other = defineException({ tag: 'puni/test/Other', message: 'other' });
 
 describe('findDefect', () => {
-  test('an occurrence of a listed kind is its finding', () => {
+  const remedies = [remedyDefect(Broken, ({ path }) => `mend ${path}`)];
+
+  test('an occurrence of a listed kind is its finding, with the remedy of its kind', () => {
     const defect = new Broken({ details: { rule: 'test.rule', path: 'a.md' } });
-    expect(findDefect(defect, [Broken])).toEqual({
+    expect(findDefect(defect, remedies)).toEqual({
       rule: 'test.rule',
       path: 'a.md',
       message: 'a.md is broken',
+      remedy: 'mend a.md',
     });
   });
 
   test('anything else is no finding', () => {
-    expect(findDefect(new Other(), [Broken])).toBeUndefined();
-    expect(findDefect(new Error('x'), [Broken])).toBeUndefined();
-    expect(findDefect('a string', [Broken])).toBeUndefined();
+    expect(findDefect(new Other(), remedies)).toBeUndefined();
+    expect(findDefect(new Error('x'), remedies)).toBeUndefined();
+    expect(findDefect('a string', remedies)).toBeUndefined();
   });
 });
 

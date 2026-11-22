@@ -13,6 +13,9 @@ export type CheckScope =
   | { readonly kind: 'repository' }
   | { readonly kind: 'project'; readonly project: Project; readonly projects: readonly Project[] };
 
+/** The scope of one project. */
+export type ProjectScope = Extract<CheckScope, { readonly kind: 'project' }>;
+
 /** The whole-repository scope. */
 export const repositoryScope: CheckScope = { kind: 'repository' };
 

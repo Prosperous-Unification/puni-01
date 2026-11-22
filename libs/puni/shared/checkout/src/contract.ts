@@ -1,6 +1,6 @@
 import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
-import type { IndexDrift, IndexSources, SourceDefect } from './index-sources';
-import type { CheckScope, Project } from './ownership';
+import type { IndexDrift, IndexSources } from './index-sources';
+import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
 export type { FileSystem, Git, PathKind };
@@ -75,6 +75,14 @@ export interface CheckoutFiles {
 export interface CheckoutFilesResource {
   /** The checkout whose root is the absolute directory `root`. */
   open(root: string): CheckoutFiles;
+  /**
+   * The staged view of that checkout: its visible files are those the git index adds, copies,
+   * modifies or renames, read as the index holds them; describing and existence still look at
+   * the working tree, and every write is refused.
+   *
+   * @throws StagedTextUnreadable when git cannot give the staged text of a file.
+   */
+  openStaged(root: string): CheckoutFiles;
 }
 
 /** The projects of a checkout and the scope a `--project` names. */
@@ -94,7 +102,7 @@ export interface ProjectScopeResource {
    *   project owns.
    * @throws ProjectUnknown when no project has that name.
    */
-  resolve(files: CheckoutFiles, name: string): CheckScope;
+  resolve(files: CheckoutFiles, name: string): ProjectScope;
 }
 
 /** The sources of the generated wiki index and the committed index itself. */
@@ -105,12 +113,6 @@ export interface WikiIndexResource {
    * Never throws for a defect in them; each one is returned, sorted by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
-  /**
-   * The index-source defects `scope` judges. The whole repository and the root project read every
-   * source and keep those the scope owns; another project reads only the `project.json` files it
-   * owns, and only when it is indexed (under `apps/` or `libs/`).
-   */
-  readScopeDefects(files: CheckoutFiles, scope: CheckScope): readonly SourceDefect[];
   /** How the committed `wiki/index/` differs from `expected`. */
   compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
   /**

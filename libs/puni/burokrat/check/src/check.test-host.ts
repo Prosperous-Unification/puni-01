@@ -1,11 +1,12 @@
 import { type CheckScope, checkoutModule, repositoryScope } from '@puni/shared-checkout';
 import type { CommandBrief, CommandExitCode } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
-import { fixtureCommands, nodeHost } from '@puni/shared-testing';
+import { nodeHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { CheckRequest } from './contract';
-import type { Finding, Rule } from './finding';
+import { applyRule, type Finding, type ReferenceReach, type Rule } from './finding';
 import { burokratCheckModule } from './module';
+import { fixtureCommands } from './repository-pair.test-host';
 
 /** One run of the check command: its exit code and what it printed. */
 export interface CheckRun {
@@ -29,18 +30,26 @@ export function openCheckHost(
     .buildContainer();
   return {
     container,
-    /** Runs `rule` on the checkout at `root`, with the registry found from `registryRoot`. */
+    /**
+     * Runs `rule` on the checkout at `root`, with the registry found from `registryRoot`; the
+     * references it reaches are every one in the whole repository and those within the project
+     * in a project scope, unless `references` says otherwise.
+     */
     judge(
       rule: Rule,
       root: string,
       registryRoot: string = root,
       scope: CheckScope = repositoryScope,
+      references: ReferenceReach = scope.kind === 'repository'
+        ? { kind: 'all' }
+        : { kind: 'within-project', projects: scope.projects },
     ): Finding[] {
-      return rule({
+      return applyRule(rule, {
         files: container.resolve('checkoutFiles').open(root),
         registry: container.resolve('checkoutRegistry').locate(registryRoot).registry,
         commands,
         scope,
+        references,
         wikiIndex: container.resolve('checkoutWikiIndex'),
         records: container.resolve('recordsCatalog'),
       });
@@ -62,6 +71,14 @@ export function openCheckHost(
     },
     close: () => container.close(),
   };
+}
+
+/** A finding as a test compares it, without its remedy. */
+export type Judged = Omit<Finding, 'remedy'>;
+
+/** `findings` without their remedies, for tests that judge only where and what. */
+export function dropRemedies(findings: readonly Finding[]): Judged[] {
+  return findings.map(({ rule, path, message }) => ({ rule, path, message }));
 }
 
 /** What {@link openCheckHost} returns. */

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const root = new URL('../../../../', import.meta.url).pathname;
+const root = new URL('../', import.meta.url).pathname;
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(join(root, path), 'utf8'));
@@ -72,7 +72,11 @@ describe('puni-bur-check targets', () => {
   test('the root package.json adds no script targets, which would make workspace run nx recursively', () => {
     expect(field(readJson('package.json'), 'nx', 'includedScripts')).toEqual([]);
     expect(Object.keys(field(readJson('project.json'), 'targets') ?? {})).toEqual([
+      'test',
+      'lint',
+      'typecheck',
       'puni-bur-check',
+      'puni-bur-links',
     ]);
   });
 
@@ -82,6 +86,27 @@ describe('puni-bur-check targets', () => {
       (path) => field(readJson(path), 'implicitDependencies') !== undefined,
     );
     expect(declaring).toEqual([]);
+  });
+
+  test('the wiki index sync generator stays registered: Nx suggests removing a failing one', () => {
+    expect(field(nx, 'sync', 'globalGenerators')).toEqual(['@puni/nx-sync:wiki-index']);
+    expect(field(readJson('tools/nx-sync/package.json'), 'name')).toBe('@puni/nx-sync');
+  });
+
+  test('test helpers are not production inputs', () => {
+    expect(readStrings(field(nx, 'namedInputs', 'production'))).toEqual([
+      'default',
+      '!{projectRoot}/**/*.test.ts',
+      '!{projectRoot}/**/*.test-host.ts',
+    ]);
+  });
+
+  test('the cross-project links check runs uncached over the whole workspace', () => {
+    const links = field(readJson('project.json'), 'targets', 'puni-bur-links');
+    expect(field(links, 'cache')).toBe(false);
+    expect(field(links, 'options', 'command')).toBe(
+      'bun apps/puni/cli/src/entrypoint.ts burokrat check --cross-project-links',
+    );
   });
 
   test('only the root project overrides the target inputs', () => {
@@ -103,9 +128,9 @@ describe('puni-bur-check targets', () => {
     const cli = readJson('apps/puni/cli/package.json');
     expect(field(cli, 'bin', 'puni')).toBe('src/entrypoint.ts');
     const aliases = field(readJson('tsconfig.base.json'), 'compilerOptions', 'paths');
-    const libraries = Object.values(aliases ?? {}).flatMap((targets) =>
-      readStrings(targets).map((target) => target.replace(/^\.\//u, '')),
-    );
+    const libraries = Object.values(aliases ?? {})
+      .flatMap((targets) => readStrings(targets).map((target) => target.replace(/^\.\//u, '')))
+      .filter((target) => target.startsWith('libs/'));
     expect(libraries.length).toBeGreaterThan(0);
     for (const path of [
       'apps/puni/cli/src/entrypoint.ts',
@@ -122,10 +147,15 @@ describe('puni-bur-check targets', () => {
     }
   });
 
-  test('the root project check reads every file: the index derives from every project, and links into other projects are judged there', () => {
+  test('the root project check reads its own files, every project.json and nx.json, not the whole workspace', () => {
     expect(
       readStrings(field(readJson('project.json'), 'targets', 'puni-bur-check', 'inputs')),
-    ).toEqual(['{workspaceRoot}/**/*']);
+    ).toEqual([
+      'default',
+      'puniBurCheck',
+      '{workspaceRoot}/**/project.json',
+      '{workspaceRoot}/nx.json',
+    ]);
     expect(field(readJson('project.json'), 'name')).toBe('workspace');
   });
 });

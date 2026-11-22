@@ -60,12 +60,37 @@ describe('readInvocation', () => {
   });
 
   test.each([
-    ['b wiki index', { kind: 'wiki index' }],
-    ['bur check', { kind: 'check', repo: undefined, project: undefined }],
-    ['b check --project puni-dash', { kind: 'check', repo: undefined, project: 'puni-dash' }],
+    ['b wiki index', { kind: 'wiki index', print: false }],
+    ['b wiki index --print', { kind: 'wiki index', print: true }],
+    [
+      'bur check',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+      },
+    ],
+    [
+      'b check --project puni-dash',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: 'puni-dash',
+        crossProjectLinks: false,
+        staged: false,
+      },
+    ],
     [
       'b check --repo system-records',
-      { kind: 'check', repo: 'system-records', project: undefined },
+      {
+        kind: 'check',
+        repo: 'system-records',
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+      },
     ],
   ] as const)('%s selects %j', (line, request) => {
     expect(readInvocation(line.split(' '), () => undefined)).toEqual({
@@ -89,7 +114,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists check and wiki', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] | wiki [index])]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]])]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki']);
   });

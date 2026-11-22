@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
-import { CheckoutPathRefused, ProjectsUnlistable, RegistryInvalid } from './failures';
+import {
+  CheckoutPathRefused,
+  ProjectsUnlistable,
+  RegistryInvalid,
+  StagedTextUnreadable,
+} from './failures';
 import { checkoutModule } from './module';
-import type { CheckScope } from './ownership';
+import { type CheckScope, repositoryScope } from './ownership';
 
 const containers: { close(): Promise<void> }[] = [];
 
@@ -125,5 +130,23 @@ describe('checkoutFiles over a memory file system', () => {
       message: 'git exploded',
       details: { rule: 'repository.projects', path: '.' },
     });
+  });
+});
+
+describe('the staged view of a checkout', () => {
+  test('lists and reads what the index holds, and writes nothing', () => {
+    const { container } = openHost(
+      { '/r/a.md': 'working tree', '/r/b.md': 'unstaged' },
+      { staged: { '/r/a.md': 'index' } },
+    );
+    const staged = container.resolve('checkoutFiles').openStaged('/r');
+    expect(staged.listVisible(repositoryScope)).toEqual({ files: ['a.md'] });
+    expect(staged.readText('a.md')).toBe('index');
+    expect(caught(() => staged.readText('b.md'))).toBeInstanceOf(StagedTextUnreadable);
+    expect(
+      caught(() => {
+        staged.write('wiki/index/index.md', 'x');
+      }),
+    ).toBeInstanceOf(CheckoutPathRefused);
   });
 });

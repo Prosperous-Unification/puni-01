@@ -1,19 +1,19 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { appendFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findOwner, indexFile, ownsPath, type RepositoryType } from '@puni/shared-checkout';
+import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
+import { type CheckHost, openCheckHost } from './check.test-host';
+import { formatFinding } from './finding';
+import { codeRules, crossProjectRules } from './rule-set.rule';
+import { credentialSamples } from './secrets.test-host';
 import {
   formatFixtureRegistry,
   makeRepository,
   regenerateIndex,
-  removeFixture,
-  runGit,
-  writeProject,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
-import { type CheckHost, openCheckHost } from './check.test-host';
-import { codeRules } from './rule-set.rule';
+} from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -60,8 +60,8 @@ interface Run {
   readonly errors: string;
 }
 
-function runIn(project?: string, repo?: RepositoryType): Run {
-  const { code, stdout, stderr } = host.runCheck({ project, repo }, root);
+function runIn(project?: string, repo?: RepositoryType, crossProjectLinks?: boolean): Run {
+  const { code, stdout, stderr } = host.runCheck({ project, repo, crossProjectLinks }, root);
   const lines = stdout.split('\n').filter((line) => line !== '');
   return { code, findings: lines.slice(0, -1), summary: lines.at(-1) ?? '', errors: stderr };
 }
@@ -104,6 +104,14 @@ const seeds: readonly (readonly [string, () => void])[] = [
         'See [up](../../../apps/one/x.md) on 2031-04-06.\n',
       );
       writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
+      writeRepositoryFile(root, 'libs/two/src/key.ts', `${credentialSamples[0]?.[1] ?? ''}\n`);
+      writeRepositoryFile(root, 'apps/one/tsconfig.json', '{}');
+      writeRepositoryFile(
+        root,
+        'wiki/ops/tools.md',
+        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope` and `demo burokrat nope`.\n',
+      );
+      rmSync(join(root, '.github'), { recursive: true });
     },
   ],
   [
@@ -114,15 +122,42 @@ const seeds: readonly (readonly [string, () => void])[] = [
       appendFileSync(join(root, indexFile), 'stale');
     },
   ],
+  [
+    'AGENTS.md giving no records location',
+    () => {
+      writeRepositoryFile(root, 'AGENTS.md', 'Start at `wiki/index/index.md`.\n');
+    },
+  ],
 ];
 
-describe('the union of every project check is the whole check', () => {
+/** The findings of the `whole`-level rules, printed, which no partial check runs. */
+function judgeWholeLevel(): string[] {
+  return codeRules
+    .filter(({ level }) => level === 'whole')
+    .flatMap(({ rule }) => host.judge(rule, root))
+    .map(formatFinding);
+}
+
+describe('every project check, the cross-project check and the whole-level rules are the whole check', () => {
   test.each(seeds)('%s', (_name, seed) => {
     seed();
     const whole = runIn();
-    const union = projectNames.flatMap((name) => runIn(name).findings).sort();
+    const union = [
+      ...projectNames.flatMap((name) => runIn(name).findings),
+      ...runIn(undefined, undefined, true).findings,
+      ...judgeWholeLevel(),
+    ].sort();
     expect(whole.code).toBe(1);
     expect(union).toEqual([...whole.findings].sort());
+  });
+
+  test('each part finds something the others do not', () => {
+    for (const [, seed] of seeds) seed();
+    const cross = runIn(undefined, undefined, true).findings;
+    const projects = projectNames.flatMap((name) => runIn(name).findings);
+    expect(cross.length).toBeGreaterThan(0);
+    expect(judgeWholeLevel().length).toBeGreaterThan(0);
+    expect(cross.filter((line) => projects.includes(line))).toEqual([]);
   });
 
   test('the seeds break every code rule', async () => {
@@ -152,9 +187,15 @@ describe('the union of every project check is the whole check', () => {
         'links.resolve',
         'readme.exists',
         'readme.words',
+        'secrets.plaintext',
+        'project.targets',
+        'docs.paths',
+        'docs.commands',
+        'agents.records',
+        'ci.gate',
       ].sort(),
     );
-    expect(broken.size).toBe(codeRules.length);
+    expect(broken).toEqual(new Set(codeRules.map(({ rule }) => rule.id)));
   });
 });
 
@@ -176,7 +217,9 @@ describe('project ownership', () => {
     if (two === undefined) throw new Error('two is not a project');
     const scope = { kind: 'project', project: two, projects } as const;
     const listing = openFiles().listVisible(scope);
-    expect(listing).toEqual({ files: ['libs/two/project.json', 'libs/two/src/index.ts'] });
+    expect(listing).toEqual({
+      files: ['libs/two/project.json', 'libs/two/src/index.ts', 'libs/two/tsconfig.json'],
+    });
     expect(ownsPath(scope, 'libs/two/inner/src/index.ts')).toBe(false);
   });
 
@@ -190,14 +233,15 @@ describe('project ownership', () => {
     const run = runIn('two');
     expect(run.code).toBe(1);
     expect(run.findings).toEqual([
-      'repository.projects libs/two/project.json: project two is named by both libs/three/project.json and libs/two/project.json',
+      'repository.projects libs/two/project.json: project two is named by both libs/three/project.json and libs/two/project.json; fix: rename the project in libs/two/project.json; every project name is unique',
     ]);
   });
 });
 
 describe('check --project', () => {
   test('names the project and runs only project-level rules outside the root', () => {
-    const projectRules = codeRules.filter((rule) => rule.level === 'project').length;
+    const projectRules = codeRules.filter(({ level }) => level === 'project').length;
+    const rootRules = codeRules.filter(({ level }) => level !== 'whole').length;
     expect(runIn('two')).toEqual({
       code: 0,
       findings: [],
@@ -205,7 +249,7 @@ describe('check --project', () => {
       errors: '',
     });
     expect(runIn('workspace').summary).toBe(
-      `ok: system-state, project workspace, ${String(codeRules.length)} rules, no findings.`,
+      `ok: system-state, project workspace, ${String(rootRules)} rules, no findings.`,
     );
   });
 
@@ -228,6 +272,36 @@ describe('check --project', () => {
     });
   });
 
+  test('--cross-project-links runs the reference rules over every file', () => {
+    expect(runIn(undefined, undefined, true)).toEqual({
+      code: 0,
+      findings: [],
+      summary: `ok: system-state, cross-project links, ${String(crossProjectRules.length)} rules, no findings.`,
+      errors: '',
+    });
+  });
+
+  test('--cross-project-links with --repo system-records or --project is refused with exit 2', () => {
+    expect(runIn(undefined, 'system-records', true).errors).toBe(
+      'error: --cross-project-links needs the system-state repository; system-records is judged whole\n',
+    );
+    expect(runIn('two', undefined, true)).toEqual({
+      code: 2,
+      findings: [],
+      summary: '',
+      errors:
+        'error: --project and --cross-project-links each choose what to judge; give at most one\n',
+    });
+  });
+
+  test('a link from one project to a missing file of another fails only the cross-project check', () => {
+    writeRepositoryFile(root, 'libs/two/README.md', 'See [one](../../apps/one/gone.md).\n');
+    expect(runIn('two').code).toBe(0);
+    expect(runIn(undefined, undefined, true).findings).toEqual([
+      'links.resolve libs/two/README.md: links to missing ../../apps/one/gone.md; fix: point the link at a path that exists, or remove it',
+    ]);
+  });
+
   test('--repo system-state is the default spelled out', () => {
     expect(runIn('two', 'system-state')).toEqual(runIn('two'));
   });
@@ -235,7 +309,7 @@ describe('check --project', () => {
   test('without a root project --project is a repository.projects finding', () => {
     rmSync(join(root, 'project.json'));
     expect(runIn('two').findings).toEqual([
-      'repository.projects project.json: is missing: --project needs a root project that owns every file no other project owns',
+      'repository.projects project.json: is missing: --project needs a root project that owns every file no other project owns; fix: add a project.json at the root naming the root project',
     ]);
   });
 
@@ -253,5 +327,49 @@ describe('check --project', () => {
     const run = runIn('two');
     expect(run.code).toBe(1);
     expect(run.findings[0]).toStartWith('repository.projects .: git ls-files exited 128');
+  });
+});
+
+describe('check --staged', () => {
+  test('judges the staged text for secrets, not the working tree', () => {
+    const sample = credentialSamples[2]?.[1] ?? '';
+    writeRepositoryFile(root, 'libs/two/src/env.ts', `${sample}\n`);
+    runGit(root, ['add', 'libs/two/src/env.ts']);
+    writeRepositoryFile(root, 'libs/two/src/env.ts', 'export {};\n');
+    const run = host.runCheck({ staged: true }, root);
+    expect(run.code).toBe(1);
+    expect(run.stdout).toBe(
+      'secrets.plaintext libs/two/src/env.ts: line 1 holds what looks like a GitHub token; fix: remove the credential from the file, rotate it, and read it from the environment or a secret store\nfail: system-state, staged files, 1 rule, 1 finding.\n',
+    );
+    expect(host.runCheck({}, root).code).toBe(0);
+  });
+
+  test('a clean index passes with one rule', () => {
+    expect(host.runCheck({ staged: true }, root).stdout).toBe(
+      'ok: system-state, staged files, 1 rule, no findings.\n',
+    );
+  });
+});
+
+describe('an index with unmerged entries', () => {
+  test('is a finding of every rule that lists files, never a pass', () => {
+    const git = (...args: string[]): void => {
+      runGit(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args]);
+    };
+    git('commit', '-qm', 'base');
+    git('switch', '-qc', 'side');
+    writeRepositoryFile(root, 'README.md', '# side\n');
+    git('commit', '-qam', 'side');
+    git('switch', '-q', '-');
+    writeRepositoryFile(root, 'README.md', '# main\n');
+    git('commit', '-qam', 'main');
+    throws(() => {
+      git('merge', '-q', 'side');
+    }, /^Error: git -c/u);
+    const run = runIn();
+    expect(run.code).toBe(1);
+    expect(run.findings).toContain(
+      'history.date .: the git index has unmerged entries: README.md; fix: make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
+    );
   });
 });

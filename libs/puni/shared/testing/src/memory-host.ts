@@ -4,6 +4,7 @@ import type {
   FileSystem,
   Git,
   GitListing,
+  GitText,
   PathKind,
   ProcessOutcome,
   ProcessRunner,
@@ -15,10 +16,15 @@ export type MemoryNode = string | { readonly symlink: string } | { readonly dire
 /** A memory tree by absolute POSIX path; every parent directory of a node exists implicitly. */
 export type MemoryTree = Readonly<Record<string, MemoryNode>>;
 
+/** Staged file texts by absolute POSIX path. */
+export type MemoryStaged = Readonly<Record<string, string>>;
+
 /** How a memory host answers git and child processes. */
 export interface MemoryHostOptions {
   /** Every git listing fails with this reason. */
   readonly gitFailure?: string;
+  /** The text the git index holds for each staged file, by absolute path. */
+  readonly staged?: MemoryStaged;
   /** The outcome of each argument vector, keyed by its words joined with spaces. */
   readonly processes?: Readonly<Record<string, ProcessOutcome>>;
 }
@@ -94,14 +100,27 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
 }
 
 /**
- * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, or
- * fails with `failure`.
+ * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, and
+ * holds `staged` in its index, or fails every listing with `failure`.
  */
 export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
+  staged: MemoryStaged = {},
 ): Git {
   return {
+    listStagedFiles(root): GitListing {
+      if (failure !== undefined) return { failure };
+      const files = Object.keys(staged)
+        .filter((path) => path.startsWith(`${root}/`))
+        .map((path) => path.slice(root.length + 1))
+        .sort();
+      return { files };
+    },
+    readStagedText(root, path): GitText {
+      const text = staged[posix.join(root, path)];
+      return text === undefined ? { failure: `${path} is not staged` } : { text };
+    },
     listVisibleFiles(root): GitListing {
       if (failure !== undefined) return { failure };
       const files = [...fileSystem.nodes]
@@ -137,7 +156,7 @@ export function createMemoryProcessRunner(
  */
 export function memoryHost(tree: MemoryTree, options: MemoryHostOptions = {}) {
   const fileSystem = createMemoryFileSystem(tree);
-  const git = createMemoryGit(fileSystem, options.gitFailure);
+  const git = createMemoryGit(fileSystem, options.gitFailure, options.staged);
   const processRunner = createMemoryProcessRunner(options.processes);
   return {
     nodes: fileSystem.nodes,

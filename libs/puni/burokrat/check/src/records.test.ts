@@ -10,27 +10,29 @@ import {
   recordTopicLimit,
   requiredRecordKeys,
 } from '@puni/shared-records';
-import {
-  describeRecord,
-  formatFixtureRegistry,
-  makeRecordsRepository,
-  removeFixture,
-  runGit,
-  supersededRecord,
-  supersedingRecord,
-  writeRecord,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
-import { type CheckHost, openCheckHost } from './check.test-host';
+import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
+import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
 import type { CheckRequest } from './contract';
-import type { Finding, Rule } from './finding';
+import { gitListingRemedy, type Rule } from './finding';
 import { recordsRules } from './rule-set.rule';
+import { agentsExists, agentsWords, claudeLinksAgents } from './rules/entry.rule';
+import { resolveAgentsLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
   judgeSupersession,
 } from './rules/records.rule';
+import {
+  describeRecord,
+  formatFixtureRegistry,
+  makeRecordsRepository,
+  supersededRecord,
+  supersedingRecord,
+  writeRecord,
+} from './repository-pair.test-host';
+import { forbidPlaintextSecrets } from './rules/secrets.rule';
+import { credentialSamples } from './secrets.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -56,8 +58,8 @@ function stateRoot(): string {
   return join(dirname(root), 'demo');
 }
 
-function judge(rule: Rule): Finding[] {
-  return host.judge(rule, root, stateRoot());
+function judge(rule: Rule): Judged[] {
+  return dropRemedies(host.judge(rule, root, stateRoot()));
 }
 
 const record = 'bur/adr/2031-04-07-a-decision.md';
@@ -68,24 +70,21 @@ function writeAdr(extra: Readonly<Record<string, string>> = {}, drop?: string): 
   writeRecord(root, record, fields);
 }
 
-function frontMatterFinding(message: string): Finding[] {
+function frontMatterFinding(message: string): Judged[] {
   return [{ rule: 'records.front-matter', path: record, message }];
 }
 
 describe('the fixture records repository passes every records rule', () => {
-  test.each(recordsRules.map((rule) => [rule.judge.name, rule.judge] as const))(
-    '%s',
-    (_name, rule) => {
-      expect(judge(rule)).toEqual([]);
-    },
-  );
+  test.each(recordsRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
+    expect(judge(rule)).toEqual([]);
+  });
 
   test('a record in every kind directory passes', () => {
     for (const kind of recordKinds) {
       const path = `${recordDirectories[kind]}/2031-04-07-one-${kind}.md`;
       writeRecord(root, path, describeRecord(path));
     }
-    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
+    expect(recordsRules.flatMap(({ rule }) => judge(rule))).toEqual([]);
   });
 
   test('an untracked, un-ignored record with bad front matter is still a finding', () => {
@@ -100,7 +99,7 @@ describe('files git ignores', () => {
   test('an ignored .idea/workspace.xml produces no finding', () => {
     writeRepositoryFile(root, '.gitignore', '.idea/\n');
     writeRepositoryFile(root, '.idea/workspace.xml', '<project/>');
-    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
+    expect(recordsRules.flatMap(({ rule }) => judge(rule))).toEqual([]);
   });
 
   test('the same file without the ignore rule is a records.layout finding', () => {
@@ -111,7 +110,7 @@ describe('files git ignores', () => {
   test('an ignored record is invisible to every records rule', () => {
     writeRepositoryFile(root, '.gitignore', 'nav/plans/*-scratch.md\n');
     writeRepositoryFile(root, 'nav/plans/2031-04-08-scratch.md', 'no front matter\n');
-    expect(recordsRules.flatMap((rule) => judge(rule.judge))).toEqual([]);
+    expect(recordsRules.flatMap(({ rule }) => judge(rule))).toEqual([]);
   });
 
   test('a tracked record deleted from the working tree is skipped', () => {
@@ -130,12 +129,13 @@ describe('files git ignores', () => {
   ] as const)('git failing is a %s finding, not a pass', (rule, judgeRule) => {
     rmSync(join(root, '.git'), { recursive: true });
     mkdirSync(join(root, '.git'));
-    expect(judge(judgeRule)).toEqual([
+    expect(host.judge(judgeRule, root, stateRoot())).toEqual([
       {
         rule,
         path: '.',
         message:
           'git ls-files exited 128: fatal: not a git repository (or any of the parent directories): .git',
+        remedy: gitListingRemedy,
       },
     ]);
   });
@@ -346,6 +346,63 @@ describe('records.supersession', () => {
   });
 });
 
+describe('supersession cycles', () => {
+  const third = 'nav/plans/2031-04-07-third-plan.md';
+
+  test('two records that each supersede the other are a cycle naming both', () => {
+    writeRecord(
+      root,
+      supersededRecord,
+      describeRecord(supersededRecord, {
+        supersedes: supersedingRecord,
+        'superseded-by': supersedingRecord,
+      }),
+    );
+    writeRecord(
+      root,
+      supersedingRecord,
+      describeRecord(supersedingRecord, {
+        supersedes: supersededRecord,
+        'superseded-by': supersededRecord,
+      }),
+    );
+    expect(host.judge(judgeSupersession, root, stateRoot())).toEqual([
+      {
+        rule: 'records.supersession',
+        path: supersededRecord,
+        message: `is in a supersession cycle: ${supersededRecord} → ${supersedingRecord}`,
+        remedy: 'break the cycle: a record supersedes only records older than itself',
+      },
+    ]);
+  });
+
+  test('three records superseding round in a ring are one cycle naming all three', () => {
+    const ring = [supersededRecord, supersedingRecord, third];
+    for (const [index, path] of ring.entries()) {
+      const newer = ring[(index + ring.length - 1) % ring.length] ?? '';
+      const older = ring[(index + 1) % ring.length] ?? '';
+      writeRecord(root, path, describeRecord(path, { supersedes: older, 'superseded-by': newer }));
+    }
+    expect(judge(judgeSupersession)).toEqual([
+      {
+        rule: 'records.supersession',
+        path: supersededRecord,
+        message: `is in a supersession cycle: ${ring.join(' → ')}`,
+      },
+    ]);
+  });
+
+  test('a chain of three is no cycle', () => {
+    writeRecord(
+      root,
+      supersedingRecord,
+      describeRecord(supersedingRecord, { supersedes: supersededRecord, 'superseded-by': third }),
+    );
+    writeRecord(root, third, describeRecord(third, { supersedes: supersedingRecord }));
+    expect(judge(judgeSupersession)).toEqual([]);
+  });
+});
+
 describe('the check command on a records repository', () => {
   function runIn(
     cwd: string,
@@ -374,7 +431,7 @@ describe('the check command on a records repository', () => {
   test('standing in the records checkout without puni.json is repository.root with the hint', () => {
     expect(runIn(root, {})).toEqual({
       code: 1,
-      printed: `repository.root .: no puni.json in ${root} or any directory above it; run puni from the system-state repository, which holds puni.json\nfail: no repository, 1 finding.\n`,
+      printed: `repository.root .: no puni.json in ${root} or any directory above it; run puni from the system-state repository, which holds puni.json; fix: run puni from the system-state repository or a directory in it\nfail: no repository, 1 finding.\n`,
     });
   });
 
@@ -396,7 +453,7 @@ describe('the check command on a records repository', () => {
     breach();
     expect(runIn(stateRoot())).toEqual({
       code: 1,
-      printed: `repository.checkout .: the system-records repository is not checked out at ${root}; clone https://github.com/acme/demo-records there\nfail: system-records, 1 finding.\n`,
+      printed: `repository.checkout .: the system-records repository is not checked out at ${root}; clone https://github.com/acme/demo-records there; fix: clone it: git clone https://github.com/acme/demo-records ${root}\nfail: system-records, 1 finding.\n`,
     });
   });
 
@@ -409,7 +466,84 @@ describe('the check command on a records repository', () => {
     writeRepositoryFile(root, 'AGENTS.md', 'See [gone](bur/gone.md).\n');
     expect(runIn(stateRoot())).toEqual({
       code: 1,
-      printed: `links.resolve AGENTS.md: links to missing bur/gone.md\nfail: system-records, ${String(recordsRules.length)} rules, 1 finding.\n`,
+      printed: `links.resolve AGENTS.md: links to missing bur/gone.md; fix: point the link at a path that exists, or remove it\nfail: system-records, ${String(recordsRules.length)} rules, 1 finding.\n`,
     });
   });
+});
+
+/** One breach for every records rule, each making its rule find something. */
+const breaches: readonly (readonly [Rule, () => void])[] = [
+  [
+    agentsExists,
+    () => {
+      rmSync(join(root, 'AGENTS.md'));
+    },
+  ],
+  [
+    claudeLinksAgents,
+    () => {
+      rmSync(join(root, 'CLAUDE.md'));
+      symlinkSync('nav', join(root, 'CLAUDE.md'));
+    },
+  ],
+  [
+    agentsWords,
+    () => {
+      writeRepositoryFile(root, 'AGENTS.md', 'word '.repeat(500));
+    },
+  ],
+  [
+    resolveAgentsLinks,
+    () => {
+      writeRepositoryFile(root, 'AGENTS.md', 'See [gone](bur/gone.md).\n');
+    },
+  ],
+  [
+    judgeRecordsLayout,
+    () => {
+      writeRepositoryFile(root, 'notes.md', 'stray');
+    },
+  ],
+  [
+    judgeRecordNames,
+    () => {
+      writeRecord(root, 'bur/adr/a-decision.md', describeRecord('bur/adr/2031-04-07-x.md'));
+    },
+  ],
+  [
+    judgeRecordFrontMatter,
+    () => {
+      writeRepositoryFile(root, record, 'no front matter\n');
+    },
+  ],
+  [
+    judgeSupersession,
+    () => {
+      writeAdr({ supersedes: record });
+    },
+  ],
+  [
+    forbidPlaintextSecrets,
+    () => {
+      writeRepositoryFile(root, 'dash/notes.txt', `${credentialSamples[1]?.[1] ?? ''}\n`);
+    },
+  ],
+];
+
+describe('every records rule has a breach it finds, and a remedy', () => {
+  test('the breaches cover the records rule set exactly', () => {
+    expect(new Set(breaches.map(([rule]) => rule))).toEqual(
+      new Set(recordsRules.map(({ rule }) => rule)),
+    );
+  });
+
+  test.each(breaches.map(([rule, breach]) => [rule.id, rule, breach] as const))(
+    '%s finds its breach and names a remedy',
+    (_id, rule, breach) => {
+      breach();
+      const findings = host.judge(rule, root, stateRoot());
+      expect(findings.length).toBeGreaterThan(0);
+      for (const finding of findings) expect(finding.remedy).not.toBe('');
+    },
+  );
 });

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { memoryHost } from '@puni/shared-testing';
 import { createPuniContainer } from './composition';
 import { type CommandContainer, runPuni } from './main';
@@ -70,7 +71,7 @@ describe('the puni container', () => {
     expect(runIn(container, '/work', ['burokrat', 'check'])).toEqual({
       code: 1,
       stdout:
-        'repository.root .: no puni.json in /work or any directory above it; run puni from the system-state repository, which holds puni.json\nfail: no repository, 1 finding.\n',
+        'repository.root .: no puni.json in /work or any directory above it; run puni from the system-state repository, which holds puni.json; fix: run puni from the system-state repository or a directory in it\nfail: no repository, 1 finding.\n',
       stderr: '',
     });
   });
@@ -88,6 +89,9 @@ describe('the puni container', () => {
         }),
       }),
     );
-    expect(() => runIn(container, '/work', ['burokrat', 'check'])).toThrow(failure);
+    throws(
+      () => runIn(container, '/work', ['burokrat', 'check']),
+      (caught) => caught === failure,
+    );
   });
 });

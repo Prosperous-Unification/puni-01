@@ -161,3 +161,20 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
   const repos = Object.fromEntries(byType) as Record<RepositoryType, RepositoryEntry>;
   return { thisType, repos };
 }
+
+/**
+ * The text of a `puni.json` declaring `thisType` and every repository type at its remote in
+ * `remotes`: what {@link parseRegistry} reads back as the same registry.
+ */
+export function formatRegistry(
+  thisType: RepositoryType,
+  remotes: Readonly<Record<RepositoryType, string>>,
+): string {
+  return JSON.stringify({
+    [thisRepoTypeKey]: thisType,
+    [allReposKey]: repositoryTypes.map((type) => ({
+      type,
+      remote: { type: 'github', url: remotes[type] },
+    })),
+  });
+}

@@ -2,7 +2,7 @@ import { join, posix } from 'node:path';
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, CheckoutFilesResource, FileSystem, Git } from './contract';
 import type { GitListing } from '@puni/shared-ports';
-import { CheckoutPathRefused } from './failures';
+import { CheckoutPathRefused, StagedTextUnreadable } from './failures';
 import { ownsPath } from './ownership';
 import { indexDirectory } from './render-index';
 
@@ -80,6 +80,39 @@ function openCheckout(root: string, fileSystem: FileSystem, git: Git): CheckoutF
   };
 }
 
+/** The staged view of the checkout at `root`: what the git index holds, read-only. */
+function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFiles {
+  const working = openCheckout(root, fileSystem, git);
+  let listing: GitListing | undefined;
+  const listStaged = (): GitListing => (listing ??= git.listStagedFiles(root));
+  const readOnly = (path: string): never => refuse(path, 'a staged view writes nothing');
+  return {
+    ...working,
+    readText(path) {
+      const staged = git.readStagedText(root, normalise(path));
+      if ('failure' in staged) {
+        throw new StagedTextUnreadable({ details: { path, reason: staged.failure } });
+      }
+      return staged.text;
+    },
+    listVisible(scope) {
+      const staged = listStaged();
+      if ('failure' in staged) return staged;
+      return { files: staged.files.filter((path) => ownsPath(scope, path)).sort(compareBytes) };
+    },
+    listVisibleEntries() {
+      const staged = listStaged();
+      if ('failure' in staged) return staged;
+      return {
+        entries: [...staged.files].sort(compareBytes).map((path) => ({ path, kind: 'file' })),
+      };
+    },
+    write: readOnly,
+    remove: readOnly,
+    removeEmptyDirectories: readOnly,
+  };
+}
+
 /** The {@link CheckoutFilesResource} over `fileSystem` and `git`. */
 export function createCheckoutFiles({
   fileSystem,
@@ -88,5 +121,8 @@ export function createCheckoutFiles({
   fileSystem: FileSystem;
   git: Git;
 }): CheckoutFilesResource {
-  return { open: (root) => openCheckout(root, fileSystem, git) };
+  return {
+    open: (root) => openCheckout(root, fileSystem, git),
+    openStaged: (root) => openStaged(root, fileSystem, git),
+  };
 }

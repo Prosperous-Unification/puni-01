@@ -65,13 +65,6 @@ describe('entrypoint', () => {
     });
   });
 
-  test('burokrat check passes against this repository', () => {
-    const run = runPuni(['burokrat', 'check']);
-    expect(run.stderr).toBe('');
-    expect(run.stdout).toMatch(/^ok: system-state, \d+ rules, no findings\.\n$/u);
-    expect(run.code).toBe(0);
-  });
-
   describe('against a temporary project: demo (system-state) beside demo-records', () => {
     let parent = '';
     let state = '';
@@ -146,7 +139,7 @@ describe('entrypoint', () => {
     test('check --repo system-records passes two records, one superseding the other', () => {
       expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
         code: 0,
-        stdout: 'ok: system-records, 8 rules, no findings.\n',
+        stdout: 'ok: system-records, 9 rules, no findings.\n',
         stderr: '',
       });
     });
@@ -156,14 +149,14 @@ describe('entrypoint', () => {
       const run = runPuni(['burokrat', 'check', '--repo', 'system-records'], state);
       expect(run.code).toBe(1);
       expect(run.stdout).toMatch(
-        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 8 rules, 1 finding\.\n$/u,
+        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 9 rules, 1 finding\.\n$/u,
       );
     });
 
     test('check from inside the records checkout is repository.root with the hint, exit 1', () => {
       expect(runPuni(['burokrat', 'check'], records)).toEqual({
         code: 1,
-        stdout: `repository.root .: no puni.json in ${records} or any directory above it; run puni from the system-state repository, which holds puni.json\nfail: no repository, 1 finding.\n`,
+        stdout: `repository.root .: no puni.json in ${records} or any directory above it; run puni from the system-state repository, which holds puni.json; fix: run puni from the system-state repository or a directory in it\nfail: no repository, 1 finding.\n`,
         stderr: '',
       });
     });

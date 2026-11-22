@@ -2,21 +2,19 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { findDefect, type Finding } from '@puni/shared-failures';
-import {
-  fixtureRemotes,
-  formatFixtureRegistry,
-  makeRepositoryPair,
-  nodeHost,
-  removeFixture,
-  type RepositoryPair,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
+import { nodeHost, removeFixture, writeRepositoryFile } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { checkoutDefects } from './failures';
 import { checkoutModule } from './module';
 import type { Repository, RepositoryRegistry, RepositoryType } from './registry';
+import {
+  fixtureRemotes,
+  formatFixtureRegistry,
+  makeRegistryPair,
+  type RegistryPair,
+} from './registry.test-host';
 
-let pair: RepositoryPair = { state: '', records: '' };
+let pair: RegistryPair = { state: '', records: '' };
 
 const container = DiBag.createBuilder()
   .withInstalledModules([checkoutModule])
@@ -27,8 +25,8 @@ afterAll(async () => {
   await container.close();
 });
 
-beforeEach(async () => {
-  pair = await makeRepositoryPair();
+beforeEach(() => {
+  pair = makeRegistryPair();
 });
 
 afterEach(() => {

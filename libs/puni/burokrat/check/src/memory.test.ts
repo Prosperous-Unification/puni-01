@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
+import { gitListingRemedy } from './finding';
 import { createRepositoryCheck } from './repository-check.feature';
 import { claudeLinksAgents, readmeWords } from './rules/entry.rule';
 
@@ -35,14 +37,24 @@ describe('a rule over a memory file system', () => {
       '/r/CLAUDE.md': { symlink: 'README.md' },
     });
     expect(host.judge(claudeLinksAgents, '/r')).toEqual([
-      { rule: 'claude.symlink', path: 'CLAUDE.md', message: 'points to README.md, not AGENTS.md' },
+      {
+        rule: 'claude.symlink',
+        path: 'CLAUDE.md',
+        message: 'points to README.md, not AGENTS.md',
+        remedy: 'recreate the link: ln -sf AGENTS.md CLAUDE.md',
+      },
     ]);
   });
 
   test('a README.md over its budget is a readme.words finding', () => {
     const host = openMemoryHost({ '/r/puni.json': registry, '/r/README.md': 'w '.repeat(151) });
     expect(host.judge(readmeWords, '/r')).toEqual([
-      { rule: 'readme.words', path: 'README.md', message: 'has 151 words; at most 150' },
+      {
+        rule: 'readme.words',
+        path: 'README.md',
+        message: 'has 151 words; at most 150',
+        remedy: 'shorten README.md to at most 150 words',
+      },
     ]);
   });
 });
@@ -69,6 +81,8 @@ describe('the repository check turns defect kinds into findings', () => {
           rule: 'repository.config',
           path: 'puni.json',
           message: '/r/puni.json is not a JSON object',
+          remedy:
+            'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
         },
       ],
     });
@@ -78,12 +92,19 @@ describe('the repository check turns defect kinds into findings', () => {
     const host = openMemoryHost({ '/r/puni.json': registry }, { gitFailure: 'git exploded' });
     expect(createCheck(host).check({ project: 'two' }, '/r')).toEqual({
       summary: 'system-state',
-      findings: [{ rule: 'repository.projects', path: '.', message: 'git exploded' }],
+      findings: [
+        {
+          rule: 'repository.projects',
+          path: '.',
+          message: 'git exploded',
+          remedy: gitListingRemedy,
+        },
+      ],
     });
   });
 
   test('anything that is not a defect kind propagates', () => {
     const host = openMemoryHost({ '/r/puni.json': registry, '/r/AGENTS.md': { directory: true } });
-    expect(() => createCheck(host).check({}, '/r')).toThrow(/ENOENT/u);
+    throws(() => createCheck(host).check({}, '/r'), /ENOENT/u);
   });
 });

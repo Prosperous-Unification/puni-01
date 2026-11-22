@@ -13,18 +13,47 @@ export type DefectKind = abstract new (
   ...input: never[]
 ) => Error & { readonly details: DefectDetails };
 
-/** One broken rule at one repository path. */
+/** One broken rule at one repository path, and what to do about it. */
 export interface Finding {
   /** A stable `subject.rule` id. */
   readonly rule: string;
   /** Relative to the repository root. */
   readonly path: string;
   readonly message: string;
+  /** What to do, in the imperative, naming the command when one exists. */
+  readonly remedy: string;
 }
 
-/** The finding `caught` stands for when it is an occurrence of one of `kinds`, else `undefined`. */
-export function findDefect(caught: unknown, kinds: readonly DefectKind[]): Finding | undefined {
-  const kind = kinds.find((candidate) => caught instanceof candidate);
-  if (kind === undefined || !(caught instanceof kind)) return undefined;
-  return { rule: caught.details.rule, path: caught.details.path, message: caught.message };
+/** A defect kind and the remedy of its occurrences, written once beside the kind. */
+export interface DefectRemedy {
+  readonly kind: DefectKind;
+  /** What to do about an occurrence whose details are `details`. */
+  remedy(details: DefectDetails): string;
+}
+
+/** Pairs `kind` with the remedy its occurrences carry, read from their typed details. */
+export function remedyDefect<Kind extends DefectKind>(
+  kind: Kind,
+  remedy: (details: InstanceType<Kind>['details']) => string,
+): DefectRemedy {
+  return { kind, remedy };
+}
+
+/**
+ * The finding `caught` stands for when it is an occurrence of one of the kinds in `remedies`,
+ * with that kind's remedy, else `undefined`.
+ */
+export function findDefect(
+  caught: unknown,
+  remedies: readonly DefectRemedy[],
+): Finding | undefined {
+  const known = remedies.find(({ kind }) => caught instanceof kind);
+  if (known === undefined || !(caught instanceof known.kind)) return undefined;
+  const { details } = caught;
+  return {
+    rule: details.rule,
+    path: details.path,
+    message: caught.message,
+    remedy: known.remedy(details),
+  };
 }
