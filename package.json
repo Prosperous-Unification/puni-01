@@ -15,7 +15,7 @@
     "format": "nx format:write --all",
     "format:check": "nx format:check --all",
     "gate": "nx sync:check && nx format:check --all && bun run puni burokrat check && nx run-many -t lint typecheck test build",
-    "gate:affected": "nx sync:check && nx format:check && nx affected -t puni-bur-check puni-bur-links lint typecheck test build",
+    "gate:affected": "nx sync:check && nx format:check && nx affected -t puni-bur-check puni-bur-links && nx affected -t lint typecheck test build",
     "fix": "nx sync && nx format:write --all"
   },
   "dependencies": {

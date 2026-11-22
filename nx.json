@@ -11,9 +11,6 @@
       "{workspaceRoot}/bun.lock"
     ],
     "puniBurCheck": [
-      "{workspaceRoot}/apps/puni/cli/package.json",
-      "{workspaceRoot}/apps/puni/cli/src/**/*",
-      "{workspaceRoot}/libs/puni/**/src/**/*",
       "{workspaceRoot}/puni.json",
       "{workspaceRoot}/**/.gitignore",
       "{workspaceRoot}/.bun-version"
@@ -60,7 +57,19 @@
       "options": {
         "command": "bun apps/puni/cli/src/entrypoint.ts burokrat check --project {projectName}"
       },
-      "inputs": ["default", "puniBurCheck"]
+      "inputs": [
+        "default",
+        "puniBurCheck",
+        {
+          "projects": "puni-cli",
+          "input": "production"
+        },
+        {
+          "projects": "puni-cli",
+          "dependencies": true,
+          "input": "production"
+        }
+      ]
     }
   },
   "sync": {
@@ -74,8 +83,5 @@
   },
   "defaultBase": "main",
   "useInferencePlugins": false,
-  "analytics": false,
-  "affected": {
-    "legacy": true
-  }
+  "analytics": false
 }
