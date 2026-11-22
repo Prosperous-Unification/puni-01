@@ -1,5 +1,5 @@
 import type { CheckoutFiles } from '@puni/shared-checkout';
-import { type Breach, breachListing, reachesReference, type Rule } from '../finding';
+import { type Breach, reachesReference, type Rule } from '../finding';
 import { listLinkTargets, resolveTarget } from '../links';
 
 const remedy = 'point the link at a path that exists, or remove it';
@@ -26,9 +26,8 @@ export const resolveLinks: Rule = {
   id: 'links.resolve',
   remedy,
   judge({ files, scope, references }) {
-    const listing = files.listVisible(scope);
-    if ('failure' in listing) return breachListing(listing.failure);
-    return listing.files
+    return files
+      .listVisible(scope)
       .filter((path) => path.endsWith('.md'))
       .flatMap((path) =>
         judgeLinks(files, path, (resolved) => reachesReference(references, path, resolved)),

@@ -2,15 +2,15 @@ import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
-import {
-  checkoutModule,
-  formatRegistry,
-  indexFile,
-  renderIndex,
-  type RepositoryType,
-} from '@puni/shared-checkout';
+import { checkoutModule, formatRegistry, indexFile, renderIndex } from '@puni/shared-checkout';
 import { recordDirectories, recordKinds } from '@puni/shared-records';
-import { nodeHost, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  fixtureRemotes,
+  nodeHostModule,
+  runGit,
+  writeProject,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 
 /** The command tree fixture repositories are indexed with. */
@@ -27,8 +27,7 @@ export const fixtureCommands: readonly CommandBrief[] = [
  */
 export async function regenerateIndex(root: string): Promise<void> {
   const container = DiBag.createBuilder()
-    .withInstalledModules([checkoutModule])
-    .withServices(nodeHost())
+    .withInstalledModules([nodeHostModule, checkoutModule])
     .buildContainer();
   try {
     const files = container.resolve('checkoutFiles').open(root);
@@ -43,17 +42,6 @@ export async function regenerateIndex(root: string): Promise<void> {
   }
 }
 
-/** The remote URL of each fixture repository; their last segments name the checkouts. */
-export const fixtureRemotes: Readonly<Record<RepositoryType, string>> = {
-  'system-state': 'https://github.com/acme/demo',
-  'system-records': 'https://github.com/acme/demo-records',
-};
-
-/** The text of a valid `puni.json` for the fixture repository of `thisType`. */
-export function formatFixtureRegistry(thisType: RepositoryType): string {
-  return formatRegistry(thisType, fixtureRemotes);
-}
-
 /**
  * Builds a system-state repository named `demo` at `root` that passes every rule: `puni.json`,
  * entry files, the CI workflow, the root project `workspace`, one project `one`, a generated
@@ -61,7 +49,7 @@ export function formatFixtureRegistry(thisType: RepositoryType): string {
  */
 async function buildStateRepository(root: string): Promise<void> {
   mkdirSync(root);
-  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-state'));
+  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {

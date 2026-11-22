@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { memoryHost } from '@puni/shared-testing';
+import { closeAfterEach, memoryHost } from '@puni/shared-testing';
 import { createPuniContainer } from './composition';
 import { type CommandContainer, runPuni } from './main';
 
@@ -18,16 +18,7 @@ const exportedKeys = [
   'recordsCatalog',
 ] as const;
 
-const containers: { close(): Promise<void> }[] = [];
-
-function track<Tracked extends { close(): Promise<void> }>(container: Tracked): Tracked {
-  containers.push(container);
-  return container;
-}
-
-afterEach(async () => {
-  for (const container of containers.splice(0).reverse()) await container.close();
-});
+const track = closeAfterEach();
 
 function runIn(container: CommandContainer, cwd: string, args: readonly string[]) {
   let stdout = '';
@@ -83,7 +74,7 @@ describe('the puni container', () => {
       track(createPuniContainer()).createIndependentContainer(['fileSystem'], {
         fileSystem: () => ({
           ...host.services.fileSystem(),
-          readText: () => {
+          stat: () => {
             throw failure;
           },
         }),

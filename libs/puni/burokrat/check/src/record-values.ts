@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
-import { countWords } from '@puni/shared-checkout';
+import { countWords, leavesRoot } from '@puni/shared-checkout';
+import { RecordDirectoryInvalid } from './failures';
 import {
   optionalRecordKeys,
   type RecordFile,
@@ -22,11 +23,17 @@ export function isCalendarDate(text: string): boolean {
   );
 }
 
-/** Each record group (`nav`, `bur`) and the kind directories inside it. */
+/**
+ * Each record group (`nav`, `bur`) and the kind directories inside it.
+ *
+ * @throws RecordDirectoryInvalid when the module loads, if a kind directory is not `group/name`.
+ */
 export const groupDirectories = new Map<string, string[]>();
 for (const directory of Object.values(recordDirectories)) {
   const [group, name] = directory.split('/');
-  if (group === undefined || name === undefined) throw new Error(`${directory} is not group/name`);
+  if (group === undefined || name === undefined) {
+    throw new RecordDirectoryInvalid({ details: { directory } });
+  }
   groupDirectories.set(group, [...(groupDirectories.get(group) ?? []), name]);
 }
 
@@ -78,7 +85,7 @@ export function judgeRecordValue(
     case 'supersedes':
     case 'superseded-by': {
       const normal = posix.normalize(value);
-      const escapes = normal === '..' || normal.startsWith('../') || posix.isAbsolute(value);
+      const escapes = leavesRoot(normal) || posix.isAbsolute(value);
       return value === '' || escapes ? `is ${JSON.stringify(value)}` : undefined;
     }
   }

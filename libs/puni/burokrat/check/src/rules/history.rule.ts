@@ -1,17 +1,13 @@
 import { nameRepository } from '@puni/shared-checkout';
-import { breachListing, type Rule } from '../finding';
+import type { Rule } from '../finding';
 
-/**
- * No ISO date (`YYYY-MM-DD`) in any visible Markdown file the scope owns. A git that cannot list
- * the files is a breach.
- */
+/** No ISO date (`YYYY-MM-DD`) in any visible Markdown file the scope owns. */
 export const forbidDates: Rule = {
   id: 'history.date',
   remedy: 'say what is true now without the date; history belongs in a record',
   judge({ files, scope }) {
-    const listing = files.listVisible(scope);
-    if ('failure' in listing) return breachListing(listing.failure);
-    return listing.files
+    return files
+      .listVisible(scope)
       .filter((path) => path.endsWith('.md'))
       .flatMap((path) =>
         files
@@ -37,11 +33,10 @@ export const confineRecordsName: Rule = {
   id: 'history.records',
   remedy: 'remove the name; AGENTS.md alone says where the records live',
   judge({ files, registry, scope }) {
-    const listing = files.listVisible(scope);
-    if ('failure' in listing) return breachListing(listing.failure);
     const records = nameRepository(registry.repos['system-records']);
     const exempt: readonly string[] = ['AGENTS.md', 'CLAUDE.md', 'puni.json'];
-    return listing.files
+    return files
+      .listVisible(scope)
       .filter((path) => !exempt.includes(path))
       .filter((path) => files.readText(path).includes(records))
       .map((path) => ({ path, message: `names the records repository ${records}` }));

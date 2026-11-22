@@ -1,17 +1,36 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
-import { checkoutModule, type IndexSources, indexFile, renderIndex } from '@puni/shared-checkout';
-import { nodeHost, removeFixture, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  checkoutModule,
+  formatRegistry,
+  type IndexSources,
+  indexFile,
+  renderIndex,
+} from '@puni/shared-checkout';
+import {
+  fixtureRemotes,
+  nodeHostModule,
+  removeFixture,
+  writeProject,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { burokratWikiModule } from './module';
-import { fixtureCommands, formatFixtureRegistry, makeRepository } from './wiki.test-host';
+import { fixtureCommands, makeRepository } from './wiki.test-host';
 
 let root = '';
 
 const container = DiBag.createBuilder()
-  .withInstalledModules([checkoutModule, burokratWikiModule])
-  .withServices(nodeHost())
+  .withInstalledModules([nodeHostModule, checkoutModule, burokratWikiModule])
   .withServices({ commandCatalog: () => ({ list: () => fixtureCommands }) })
   .buildContainer();
 
@@ -237,7 +256,7 @@ describe('the wiki index command', () => {
   });
 
   test('a puni.json declaring another repository type is refused with one error line and exit 1', () => {
-    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-records'));
+    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes));
     const before = readFileSync(join(root, indexFile), 'utf8');
     expect(runIndex()).toEqual({
       code: 1,
@@ -245,5 +264,43 @@ describe('the wiki index command', () => {
       stderr: `error: wiki index needs the system-state repository; ${join(root, 'puni.json')} declares this-repo-type system-records\n`,
     });
     expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
+  });
+
+  test.each([
+    [
+      'no repository',
+      () => {
+        rmSync(join(root, '.git'), { recursive: true });
+        mkdirSync(join(root, '.git'));
+      },
+    ],
+    [
+      'a corrupt index',
+      () => {
+        writeFileSync(join(root, '.git/index'), 'not an index');
+      },
+    ],
+  ])('a git that cannot list the checkout (%s) is one error line, exit 1', (_name, breakGit) => {
+    breakGit();
+    writeRepositoryFile(root, indexFile, 'edited');
+    const run = runIndex();
+    expect([run.code, run.stdout]).toEqual([1, '']);
+    expect(run.stderr).toMatch(/^error: git ls-files exited 128: [^\n]+\n$/u);
+    expect(readFileSync(join(root, indexFile), 'utf8')).toBe('edited');
+  });
+
+  test('a page that cannot be read is one error line naming it, exit 1', () => {
+    const page = join(root, 'wiki/deploy.md');
+    writeRepositoryFile(root, 'wiki/deploy.md', '---\ntitle: Deploy\nread-when: deploying\n---\n');
+    chmodSync(page, 0o000);
+    try {
+      expect(runIndex()).toEqual({
+        code: 1,
+        stdout: '',
+        stderr: `error: cannot read wiki/deploy.md: EACCES: permission denied, open '${page}'\n`,
+      });
+    } finally {
+      chmodSync(page, 0o600);
+    }
   });
 });

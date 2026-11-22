@@ -20,9 +20,15 @@ export interface FileSystem {
   readText(path: string): string;
   /**
    * What `path` names. With `follow`, a symlink is described by its target and a dangling one
-   * is `absent`; only a missing path is `absent`, any other failure throws.
+   * is `absent`. A missing path and a path below a file are `absent`; any other failure, such as
+   * a symlink loop, a name too long or a directory that cannot be searched, throws.
    */
   stat(path: string, links: LinkHandling): PathKind;
+  /**
+   * Whether something exists at `path`, a symlink followed to its target. Never throws: a path
+   * that cannot be described for any reason does not exist.
+   */
+  exists(path: string): boolean;
   /** The target text of the symlink at `path`. */
   readLink(path: string): string;
   /** The entries of the directory at `path`. */

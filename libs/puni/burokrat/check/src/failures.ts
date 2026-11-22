@@ -7,6 +7,12 @@ export const ProjectScopeRefused = defineException({
     `${option} needs the system-state repository; ${type} is judged whole`,
 });
 
+/** A record kind directory that is not `group/name`: a defect in the records schema. */
+export const RecordDirectoryInvalid = defineException({
+  tag: 'puni/burokrat-check/RecordDirectoryInvalid',
+  message: ({ directory }: { directory: string }) => `${directory} is not group/name`,
+});
+
 /** More than one of the options choosing what a check judges: a refused command line. */
 export const ScopeOptionsConflict = defineException({
   tag: 'puni/burokrat-check/ScopeOptionsConflict',

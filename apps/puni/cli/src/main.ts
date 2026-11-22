@@ -8,7 +8,7 @@ import {
 import type { CheckExports } from '@puni/burokrat-check';
 import type { WikiExports } from '@puni/burokrat-wiki';
 import { createPuniContainer } from './composition';
-import { handlerKeys, puniProgram, selectLeaf } from './root-parser';
+import { handlerKeys, type Leaf, puniProgram, selectLeaf } from './root-parser';
 
 type CommandExports = CheckExports & WikiExports;
 
@@ -18,15 +18,24 @@ export interface CommandContainer {
 }
 
 /**
+ * What a command line selected, as a failure report records it in place of the arguments, which
+ * may hold anything: a leaf's kind, `help`, `printed` for help, version or completion Optique
+ * printed, or `refused`.
+ */
+export type CommandSelection = Leaf['kind'] | 'printed' | 'refused';
+
+/**
  * Runs one `puni` command line against `container` and returns its exit code: 0 on success, 1
  * when a judgement failed or the repository's inputs are defective, 2 when the command line is
  * refused or names something the repository does not have. A bare group or sub-group prints its
- * own help. Anything unexpected propagates.
+ * own help. `select` hears what the line selected before anything runs. Anything unexpected
+ * propagates.
  */
 export function runPuni(
   args: readonly string[],
   io: Io,
   container: CommandContainer,
+  select: (selection: CommandSelection) => void = () => undefined,
 ): CommandExitCode {
   let invocation;
   try {
@@ -35,11 +44,16 @@ export function runPuni(
     });
   } catch (caught) {
     if (!(caught instanceof UsageRefused)) throw caught;
+    select('refused');
     io.stderr(`error: ${caught.message}\n`);
     return 2;
   }
-  if (invocation.kind === 'printed') return 0;
+  if (invocation.kind === 'printed') {
+    select('printed');
+    return 0;
+  }
   const leaf = selectLeaf(invocation.command);
+  select(leaf.kind);
   switch (leaf.kind) {
     case 'help':
       printHelp(puniProgram, leaf.path, (text) => {
@@ -59,11 +73,17 @@ function writeLine(text: string): void {
 }
 
 /**
- * Runs `puni` for this process: its arguments, working directory and streams. Sets
- * `process.exitCode`, never exits, and closes the container before it returns or rethrows.
+ * Runs `puni` for this process: its arguments, working directory and streams, against
+ * `container`, telling `select` what the line selected. Sets `process.exitCode`, never exits,
+ * and closes the container before it returns or rethrows. When the command throws and closing
+ * then fails too, it throws an `AggregateError` of the command's failure, then the close
+ * failure; a close failure alone is thrown as it is.
  */
-export async function runProcess(): Promise<void> {
-  const container = createPuniContainer();
+export async function runProcess(
+  select: (selection: CommandSelection) => void,
+  container: CommandContainer & { close(): Promise<void> } = createPuniContainer(),
+): Promise<void> {
+  let failure: { readonly caught: unknown } | undefined;
   try {
     process.exitCode = runPuni(
       process.argv.slice(2),
@@ -75,8 +95,20 @@ export async function runProcess(): Promise<void> {
         },
       },
       container,
+      select,
     );
-  } finally {
-    await container.close();
+  } catch (caught) {
+    failure = { caught };
   }
+  try {
+    await container.close();
+  } catch (closing) {
+    if (failure === undefined) throw closing;
+    throw new AggregateError(
+      [failure.caught, closing],
+      'the command failed, then closing its services failed',
+      { cause: closing },
+    );
+  }
+  if (failure !== undefined) throw failure.caught;
 }

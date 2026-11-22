@@ -1,5 +1,5 @@
 import { run } from '@optique/run';
-import { UsageRefused } from './failures';
+import { HelpNotPrinted, UsageRefused } from './failures';
 import type { CliProgram } from './program';
 
 /** What one invocation did: a parsed command to run, or help, version or a completion printed. */
@@ -70,7 +70,7 @@ export function readInvocation<Value>(
  * Prints the help page of one group or sub-group of `program` to `stdout`, exactly as
  * `<name> <path...> --help` does.
  *
- * @throws Error if Optique parses `<path...> --help` as a command instead of printing help.
+ * @throws HelpNotPrinted if Optique parses `<path...> --help` as a command instead of printing help.
  */
 export function printHelp<Value>(
   program: CliProgram<Value>,
@@ -78,5 +78,7 @@ export function printHelp<Value>(
   stdout: (text: string) => void,
 ): void {
   const invocation = readInvocation(program, [...path, '--help'], stdout);
-  if (invocation.kind !== 'printed') throw new Error(`${path.join(' ')} --help did not print help`);
+  if (invocation.kind !== 'printed') {
+    throw new HelpNotPrinted({ details: { path: path.join(' ') } });
+  }
 }

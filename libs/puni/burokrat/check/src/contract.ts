@@ -30,8 +30,10 @@ export interface CheckVerdict {
 export interface RepositoryCheck {
   /**
    * Judges the repository a `check` request names, starting the search for `puni.json` at
-   * `cwd`. A defect of the repository's own inputs is one finding.
+   * `cwd`. A defect of the repository's own inputs is one finding; a git that cannot list the
+   * checkout is the one `repository.git` finding at `.`.
    *
+   * @throws FileUnreadable when a file the check needs exists but cannot be read.
    * @throws ProjectUnknown when `project` names no project.
    * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository
    *   other than `system-state`.

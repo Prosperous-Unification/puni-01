@@ -29,15 +29,21 @@ export interface MemoryHostOptions {
   readonly processes?: Readonly<Record<string, ProcessOutcome>>;
 }
 
-function missing(path: string): Error {
-  return Object.assign(new Error(`ENOENT: no such file or directory, '${path}'`), {
-    code: 'ENOENT',
-  });
+/** A failure of the memory file system, carrying the `code` the runtime's own error would. */
+class MemoryFileError extends Error {
+  override readonly name = 'MemoryFileError';
+  readonly code: string;
+
+  constructor(code: string, path: string) {
+    super(`${code}: ${path}`);
+    this.code = code;
+  }
 }
 
 /**
- * A mutable in-memory file system over `tree`. A symlink's target resolves from the link's
- * directory; reading through a dangling link or a missing path throws an `ENOENT` error.
+ * A mutable in-memory file system over `tree`, keeping the {@link FileSystem} contract the node
+ * adapter keeps. A symlink's target resolves from the link's directory; more than eight links in
+ * a row are a loop (`ELOOP`); reading a missing path throws `ENOENT` and a directory `EISDIR`.
  */
 export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
   readonly nodes: Map<string, MemoryNode>;
@@ -51,7 +57,7 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
   const follow = (path: string, depth = 0): string => {
     const node = nodes.get(path);
     if (typeof node !== 'object' || !('symlink' in node)) return path;
-    if (depth > 8) throw new Error(`ELOOP: ${path}`);
+    if (depth > 8) throw new MemoryFileError('ELOOP', path);
     return follow(posix.resolve(dirname(path), node.symlink), depth + 1);
   };
   const kindAt = (path: string): PathKind => {
@@ -63,25 +69,33 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
   return {
     nodes,
     readText(path) {
-      const node = nodes.get(follow(path));
-      if (typeof node !== 'string') throw missing(path);
-      return node;
+      const target = follow(path);
+      const node = nodes.get(target);
+      if (typeof node === 'string') return node;
+      throw new MemoryFileError(isDirectory(target) ? 'EISDIR' : 'ENOENT', path);
     },
     stat: (path, links) => kindAt(links === 'follow' ? follow(path) : path),
+    exists(path) {
+      try {
+        return kindAt(follow(path)) !== 'absent';
+      } catch {
+        return false;
+      }
+    },
     readLink(path) {
       const node = nodes.get(path);
-      if (typeof node !== 'object' || !('symlink' in node)) throw missing(path);
-      return node.symlink;
+      if (typeof node === 'object' && 'symlink' in node) return node.symlink;
+      throw new MemoryFileError(kindAt(path) === 'absent' ? 'ENOENT' : 'EINVAL', path);
     },
     list(path): DirectoryEntry[] {
-      if (!isDirectory(path)) throw missing(path);
+      if (!isDirectory(path)) throw new MemoryFileError('ENOENT', path);
       const names = new Set<string>();
       for (const key of nodes.keys()) {
         if (key.startsWith(`${path}/`)) names.add(key.slice(path.length + 1).split('/')[0] ?? '');
       }
       return [...names].sort().map((name) => {
         const kind = kindAt(posix.join(path, name));
-        if (kind === 'absent') throw missing(posix.join(path, name));
+        if (kind === 'absent') throw new MemoryFileError('ENOENT', posix.join(path, name));
         return { name, kind };
       });
     },

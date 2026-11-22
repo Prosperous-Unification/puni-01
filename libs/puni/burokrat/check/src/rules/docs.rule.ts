@@ -1,20 +1,10 @@
 import type { CommandBrief } from '@puni/shared-command';
-import {
-  type Breach,
-  breachListing,
-  reachesReference,
-  type Rule,
-  type RuleReading,
-} from '../finding';
+import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
 import { isDocumentation, listCode, listInlineCode, readPathToken } from '../docs';
 
-type Documentation = { readonly paths: readonly string[] } | { readonly breaches: Breach[] };
-
-/** The visible documentation files the scope owns, or the breach of a git that cannot list them. */
-function listDocumentation({ files, scope }: RuleReading): Documentation {
-  const listing = files.listVisible(scope);
-  if ('failure' in listing) return { breaches: breachListing(listing.failure) };
-  return { paths: listing.files.filter(isDocumentation) };
+/** The visible documentation files the scope owns. */
+function listDocumentation({ files, scope }: RuleReading): readonly string[] {
+  return files.listVisible(scope).filter(isDocumentation);
 }
 
 /**
@@ -26,10 +16,8 @@ export const judgeDocPaths: Rule = {
   id: 'docs.paths',
   remedy: 'correct the path to one that exists, or remove it',
   judge(reading) {
-    const documentation = listDocumentation(reading);
-    if ('breaches' in documentation) return documentation.breaches;
     const { files, references } = reading;
-    return documentation.paths.flatMap((path) =>
+    return listDocumentation(reading).flatMap((path) =>
       listInlineCode(files.readText(path)).flatMap((span) => {
         const token = readPathToken(span);
         if (token === undefined || !reachesReference(references, path, token)) return [];
@@ -97,13 +85,11 @@ export const judgeDocCommands: Rule = {
   id: 'docs.commands',
   remedy: 'name a command that `puni --help` lists, or remove it',
   judge(reading) {
-    const documentation = listDocumentation(reading);
-    if ('breaches' in documentation) return documentation.breaches;
     const read = readScripts(reading);
     if ('breach' in read) return [read.breach];
     const { scripts } = read;
     const program = reading.commands[0]?.path.split(' ')[0];
-    return documentation.paths.flatMap((path) =>
+    return listDocumentation(reading).flatMap((path) =>
       listCode(reading.files.readText(path)).flatMap((code): Breach[] => {
         const breaches: Breach[] = [...code.matchAll(/\bbun run ([\w:.-]+)/gu)]
           .map((match) => match[1] ?? '')

@@ -3,8 +3,8 @@ import {
   type CheckoutFiles,
   checkoutDefects,
   compareBytes,
+  FileUnreadable,
   renderIndex,
-  type Repository,
 } from '@puni/shared-checkout';
 import { findDefect } from '@puni/shared-failures';
 import type { WikiIndexWriter, WikiRequirements } from './contract';
@@ -18,10 +18,28 @@ type Rendered =
   | { readonly kind: 'refused'; readonly reason: string };
 
 /**
+ * `run()`, or the refusal its failure stands for: a defect of the repository's inputs (a git that
+ * cannot list the checkout among them) or a file that cannot be read. Anything else propagates.
+ */
+function refuseDefects<Outcome>(
+  run: () => Outcome,
+): Outcome | Extract<Rendered, { kind: 'refused' }> {
+  try {
+    return run();
+  } catch (caught) {
+    if (caught instanceof FileUnreadable) return { kind: 'refused', reason: caught.message };
+    const defect = findDefect(caught, checkoutDefects);
+    if (defect === undefined) throw caught;
+    return { kind: 'refused', reason: defect.message };
+  }
+}
+
+/**
  * The {@link WikiIndexWriter}: against the repository found from `cwd` it renders the index;
  * writing, it writes every missing or stale file, removes every file under `wiki/index/` it did
- * not generate, and reports what it changed. A defect in the repository's inputs, or a repository whose `puni.json` declares a
- * `this-repo-type` other than `system-state`, writes nothing and is `refused`.
+ * not generate, and reports what it changed. A defect in the repository's inputs, a file that
+ * cannot be read, a git that cannot list the checkout, or a repository whose `puni.json`
+ * declares a `this-repo-type` other than `system-state`, writes nothing and is `refused`.
  */
 export function createWikiIndexWriter({
   checkoutRegistry,
@@ -30,14 +48,7 @@ export function createWikiIndexWriter({
   commandCatalog,
 }: WikiRequirements): WikiIndexWriter {
   const render = (cwd: string): Rendered => {
-    let repository: Repository;
-    try {
-      repository = checkoutRegistry.locate(cwd);
-    } catch (caught) {
-      const defect = findDefect(caught, checkoutDefects);
-      if (defect === undefined) throw caught;
-      return { kind: 'refused', reason: defect.message };
-    }
+    const repository = checkoutRegistry.locate(cwd);
     if (repository.type !== 'system-state') {
       const file = join(repository.root, 'puni.json');
       return {
@@ -58,23 +69,23 @@ export function createWikiIndexWriter({
     };
   };
   return {
-    render(cwd) {
-      const rendered = render(cwd);
-      return rendered.kind === 'refused'
-        ? rendered
-        : { kind: 'rendered', files: rendered.expected };
-    },
-    write(cwd) {
-      const rendered = render(cwd);
-      if (rendered.kind === 'refused') return rendered;
-      const { files, expected } = rendered;
-      const drift = checkoutWikiIndex.compare(files, expected);
-      checkoutWikiIndex.write(files, expected, drift);
-      return {
-        kind: 'written',
-        written: [...drift.missing, ...drift.stale].sort(compareBytes),
-        removed: drift.unexpected,
-      };
-    },
+    render: (cwd) =>
+      refuseDefects(() => {
+        const rendered = render(cwd);
+        return rendered.kind === 'refused'
+          ? rendered
+          : { kind: 'rendered', files: rendered.expected };
+      }),
+    write: (cwd) =>
+      refuseDefects(() => {
+        const rendered = render(cwd);
+        if (rendered.kind === 'refused') return rendered;
+        const drift = checkoutWikiIndex.write(rendered.files, rendered.expected);
+        return {
+          kind: 'written',
+          written: [...drift.missing, ...drift.stale].sort(compareBytes),
+          removed: drift.unexpected,
+        };
+      }),
   };
 }

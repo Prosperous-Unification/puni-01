@@ -38,10 +38,10 @@ export const CheckoutMissing = defineException({
   }) => `the ${type} repository is not checked out at ${root}; clone ${url} there`,
 });
 
-/** The projects of a checkout cannot be listed; `reason` is git's. */
-export const ProjectsUnlistable = defineException({
-  tag: 'puni/shared-checkout/ProjectsUnlistable',
-  message: ({ reason }: { rule: 'repository.projects'; path: '.'; reason: string }) => reason,
+/** Git cannot list the files of a checkout; `reason` is git's. */
+export const CheckoutUnlistable = defineException({
+  tag: 'puni/shared-checkout/CheckoutUnlistable',
+  message: ({ reason }: { rule: 'repository.git'; path: '.'; reason: string }) => reason,
 });
 
 /** Two `project.json` files name the same project. */
@@ -70,10 +70,6 @@ export const RootProjectMissing = defineException<
     'is missing: --project needs a root project that owns every file no other project owns',
 });
 
-/** What to do when git cannot list a checkout, whichever check asked. */
-export const gitListingRemedy =
-  'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun';
-
 /** The repository defects this library raises and their remedies; a feature reports each as one finding. */
 export const checkoutDefects = [
   remedyDefect(
@@ -86,7 +82,11 @@ export const checkoutDefects = [
       'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
   ),
   remedyDefect(CheckoutMissing, ({ url, root }) => `clone it: git clone ${url} ${root}`),
-  remedyDefect(ProjectsUnlistable, () => gitListingRemedy),
+  remedyDefect(
+    CheckoutUnlistable,
+    () =>
+      'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
+  ),
   remedyDefect(
     ProjectNameShared,
     ({ second }) => `rename the project in ${second}/project.json; every project name is unique`,
@@ -115,4 +115,13 @@ export const StagedTextUnreadable = defineException({
   tag: 'puni/shared-checkout/StagedTextUnreadable',
   message: ({ path, reason }: { path: string; reason: string }) =>
     `the staged text of ${path} cannot be read: ${reason}`,
+});
+
+/**
+ * A file the code needs that exists but cannot be read, such as one without read permission or a
+ * directory where a file belongs. `path` is as the caller named it; `cause` is the runtime's error.
+ */
+export const FileUnreadable = defineException({
+  tag: 'puni/shared-checkout/FileUnreadable',
+  message: ({ path, reason }: { path: string; reason: string }) => `cannot read ${path}: ${reason}`,
 });

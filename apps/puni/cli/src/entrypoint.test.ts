@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { userInfo } from 'node:os';
+import { dirname, join } from 'node:path';
+import { removeFixture, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
+import { makeStateRepository } from './repository.test-host';
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -88,52 +91,20 @@ describe('entrypoint', () => {
       writeFileSync(join(records, path), lines.join('\n'));
     }
 
-    function initGit(root: string): void {
-      const init = Bun.spawnSync(['git', 'init', '-q'], { cwd: root });
-      if (init.exitCode !== 0) throw new Error(`git init failed in ${root}`);
-    }
-
     beforeEach(() => {
-      parent = mkdtempSync(join(tmpdir(), 'puni-entrypoint-pair-'));
-      state = join(parent, 'demo');
+      state = makeStateRepository();
+      parent = dirname(state);
       records = join(parent, 'demo-records');
-      mkdirSync(join(state, 'apps/one/src'), { recursive: true });
-      mkdirSync(join(state, 'libs'));
-      writeFileSync(
-        join(state, 'puni.json'),
-        JSON.stringify({
-          'this-repo-type': 'system-state',
-          'all-repos': [
-            {
-              type: 'system-state',
-              remote: { type: 'github', url: 'https://github.com/acme/demo' },
-            },
-            {
-              type: 'system-records',
-              remote: { type: 'github', url: 'https://github.com/acme/demo-records' },
-            },
-          ],
-        }),
-      );
-      writeFileSync(join(state, 'apps/one/src/main.ts'), 'export {};\n');
-      writeFileSync(
-        join(state, 'apps/one/project.json'),
-        JSON.stringify({
-          name: 'one',
-          metadata: { readWhen: 'changing one', readFirst: 'src/main.ts' },
-        }),
-      );
-      initGit(state);
       mkdirSync(join(records, 'nav/plans'), { recursive: true });
       writeFileSync(join(records, 'AGENTS.md'), '# records\n');
       symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
       writeRecord(first, '2031-04-05', `superseded-by: ${second}`);
       writeRecord(second, '2031-04-06', `supersedes: ${first}`);
-      initGit(records);
+      runGit(records, ['init', '-q']);
     });
 
     afterEach(() => {
-      rmSync(parent, { recursive: true, force: true });
+      removeFixture(state);
     });
 
     test('check --repo system-records passes two records, one superseding the other', () => {
@@ -176,23 +147,48 @@ describe('entrypoint', () => {
 
     describe('an unexpected failure', () => {
       let reports = '';
+      let ownReports = '';
       const line = /^error: unexpected failure, reference (\S+), report (\S+)\n$/u;
+      const token = ['sk', 'live', 'x9'.repeat(12)].join('-');
 
       beforeEach(() => {
         reports = join(parent, 'tmp');
+        ownReports = join(reports, `puni-failures-${String(userInfo().uid)}`);
         mkdirSync(reports);
-        mkdirSync(join(state, 'AGENTS.md'));
-        writeFileSync(join(state, 'AGENTS.md/inside.md'), 'a directory where a file belongs\n');
+        mkdirSync(join(state, 'locked'));
+        writeFileSync(join(state, 'locked/inside.md'), 'a tracked file nobody may describe\n');
+        runGit(state, ['add', 'locked']);
+        chmodSync(join(state, 'locked'), 0o000);
       });
 
-      test('exits 3 with one error line naming the reference and the report file', () => {
-        const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
+      afterEach(() => {
+        chmodSync(join(state, 'locked'), 0o700);
+      });
+
+      test('exits 3 with one error line naming the reference and a private report file', () => {
+        const run = runPuni(['burokrat', 'check', '--project', token], state, { TMPDIR: reports });
         expect([run.code, run.stdout]).toEqual([3, '']);
         const [, reference = '', path = ''] = line.exec(run.stderr) ?? [];
-        expect(path).toBe(join(reports, 'puni-failures', `${reference}.json`));
-        const report: unknown = JSON.parse(readFileSync(path, 'utf8'));
+        expect(path).toBe(join(ownReports, `${reference}.json`));
+        const text = readFileSync(path, 'utf8');
+        const report: unknown = JSON.parse(text);
         expect(report).toMatchObject({ occurrence_id: reference, v: 'corj/v0.15' });
-        expect(readFileSync(path, 'utf8')).toContain('EISDIR');
+        expect(report).toHaveProperty('context', { command: 'burokrat check' });
+        expect(text).toContain('EACCES');
+        expect(text).not.toContain(token);
+        expect(statSync(ownReports).mode & 0o777).toBe(0o700);
+        expect(statSync(path).mode & 0o777).toBe(0o600);
+      });
+
+      test('a report directory others can open is not written to', () => {
+        mkdirSync(ownReports, { mode: 0o755 });
+        chmodSync(ownReports, 0o755);
+        const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
+        expect(run.code).toBe(3);
+        expect(run.stderr).toMatch(
+          /^error: unexpected failure, reference \S+, report lost: \S+ is not a directory only this user can open\n$/u,
+        );
+        expect(readdirSync(ownReports)).toEqual([]);
       });
 
       test('with PUNI_FAILURE_REPORT=stderr the report is printed above the error line instead', () => {
@@ -206,11 +202,11 @@ describe('entrypoint', () => {
         const [, reference = '', where = ''] = line.exec(`${error}\n`) ?? [];
         expect(where).toBe('above');
         expect(JSON.parse(report)).toMatchObject({ occurrence_id: reference });
-        expect(existsSync(join(reports, 'puni-failures'))).toBe(false);
+        expect(existsSync(ownReports)).toBe(false);
       });
 
       test('a report that cannot be written is named lost, still with exit 3', () => {
-        writeFileSync(join(reports, 'puni-failures'), 'a file where the directory belongs');
+        writeFileSync(ownReports, 'a file where the directory belongs');
         const run = runPuni(['burokrat', 'check'], state, { TMPDIR: reports });
         expect(run.code).toBe(3);
         expect(run.stderr).toMatch(
@@ -238,10 +234,70 @@ describe('entrypoint', () => {
         const run = runPuni(['--version'], state, { TMPDIR: reports }, ['--preload', preload]);
         expect([run.code, run.stdout]).toEqual([3, '']);
         expect(run.stderr).toMatch(line);
-        const [written = ''] = readdirSync(join(reports, 'puni-failures'));
-        expect(readFileSync(join(reports, 'puni-failures', written), 'utf8')).toContain(
-          'main failed to load',
+        const [written = ''] = readdirSync(ownReports);
+        expect(readFileSync(join(ownReports, written), 'utf8')).toContain('main failed to load');
+      });
+
+      test.each([
+        ['an unhandled rejection', 'void Promise.reject(new Error("stray failure"));'],
+        ['an uncaught exception', 'throw new Error("stray failure");'],
+      ])('%s outside the awaited path is reported the same way', (_name, stray) => {
+        const preload = join(parent, 'stray.ts');
+        const main = `export async function runProcess() { setTimeout(() => { ${stray} }, 0); }`;
+        writeFileSync(
+          preload,
+          [
+            "import { plugin } from 'bun';",
+            'plugin({',
+            "  name: 'stray-failure',",
+            '  setup(build) {',
+            `    build.onLoad({ filter: /[\\/]main\\.ts$/ }, () => ({ loader: 'ts', contents: ${JSON.stringify(main)} }));`,
+            '  },',
+            '});',
+            '',
+          ].join('\n'),
         );
+        const run = runPuni(['--version'], state, { TMPDIR: reports }, ['--preload', preload]);
+        expect([run.code, run.stdout]).toEqual([3, '']);
+        expect(run.stderr).toMatch(line);
+        const [written = ''] = readdirSync(ownReports);
+        expect(readFileSync(join(ownReports, written), 'utf8')).toContain('stray failure');
+      });
+    });
+
+    describe('a git that cannot list the checkout', () => {
+      const breaks: readonly (readonly [string, () => Readonly<Record<string, string>>])[] = [
+        [
+          'no repository',
+          () => {
+            rmSync(join(state, '.git'), { recursive: true });
+            mkdirSync(join(state, '.git'));
+            return {};
+          },
+        ],
+        [
+          'a corrupt index',
+          () => {
+            runGit(state, ['add', '-A']);
+            writeFileSync(join(state, '.git/index'), 'not an index');
+            return {};
+          },
+        ],
+        ['git missing from PATH', () => ({ PATH: join(parent, 'no-tools') })],
+      ];
+
+      test.each(breaks)('%s: check is one repository.git finding, exit 1', (_name, breakGit) => {
+        const run = runPuni(['burokrat', 'check'], state, breakGit());
+        expect([run.code, run.stderr]).toEqual([1, '']);
+        expect(run.stdout).toMatch(
+          /^repository\.git \.: git [^\n]+; fix: make `git ls-files` succeed[^\n]+\nfail: system-state, \d+ rules, 1 finding\.\n$/u,
+        );
+      });
+
+      test.each(breaks)('%s: wiki index is one error line, exit 1', (_name, breakGit) => {
+        const run = runPuni(['burokrat', 'wiki', 'index'], state, breakGit());
+        expect([run.code, run.stdout]).toEqual([1, '']);
+        expect(run.stderr).toMatch(/^error: git [^\n]+\n$/u);
       });
     });
 

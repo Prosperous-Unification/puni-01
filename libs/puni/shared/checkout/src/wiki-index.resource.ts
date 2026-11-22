@@ -2,8 +2,11 @@ import { posix } from 'node:path';
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, WikiIndexResource } from './contract';
 import { parseFrontMatter } from './front-matter';
-import type { IndexSources, ReadWhenEntry, SourceDefect } from './index-sources';
+import type { IndexDrift, IndexSources, ReadWhenEntry, SourceDefect } from './index-sources';
+import { isRecord } from './json';
 import { repositoryScope } from './ownership';
+import { leavesRoot } from './paths';
+import { nameProject, type ProjectFile, readProjectFiles } from './project-files';
 import { judgeReadWhen } from './read-when';
 import { indexDirectory } from './render-index';
 
@@ -11,14 +14,6 @@ type Reading = { readonly entry: ReadWhenEntry } | { readonly defect: SourceDefe
 
 function defectOf(path: string, message: string): Reading {
   return { defect: { topic: 'read-when', path, message } };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isBelowNodeModules(path: string): boolean {
-  return path.split('/').includes('node_modules');
 }
 
 /**
@@ -35,7 +30,7 @@ function judgeReadFirst(
     return 'must be a relative POSIX path';
   }
   const inside = posix.relative(directory, posix.join(directory, readFirst));
-  if (inside === '' || inside === '..' || inside.startsWith('../')) {
+  if (inside === '' || leavesRoot(inside)) {
     return 'must stay inside the project';
   }
   const kind = files.describe(posix.join(directory, inside));
@@ -47,19 +42,12 @@ function judgeReadFirst(
  * Reads one `project.json`: its `name`, `metadata.readWhen` and `metadata.readFirst`. Returns the
  * project's index entry, or one defect per invalid field.
  */
-function readProject(files: CheckoutFiles, path: string): Reading[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(files.readText(path));
-  } catch (cause) {
-    if (!(cause instanceof SyntaxError)) throw cause;
-    return [defectOf(path, `is not valid JSON: ${cause.message}`)];
-  }
-  if (!isRecord(parsed)) return [defectOf(path, 'is not a JSON object')];
-  const name = parsed['name'];
-  if (typeof name !== 'string' || name === '') return [defectOf(path, 'has no name')];
-  const metadata = isRecord(parsed['metadata']) ? parsed['metadata'] : {};
-  const directory = posix.dirname(path);
+function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
+  const { path, directory } = file;
+  if ('problem' in file) return [defectOf(path, file.problem)];
+  const name = nameProject(file);
+  if (name === undefined) return [defectOf(path, 'has no name')];
+  const metadata = isRecord(file.json['metadata']) ? file.json['metadata'] : {};
   const defects: Reading[] = [];
   const readWhen = metadata['readWhen'];
   if (typeof readWhen !== 'string' || readWhen === '') {
@@ -113,22 +101,17 @@ function readPage(path: string, text: string): Reading {
 
 function readSources(files: CheckoutFiles): IndexSources {
   const readings: Reading[] = [];
-  const listing = files.listVisible(repositoryScope);
-  const visible =
-    'failure' in listing ? [] : listing.files.filter((path) => !isBelowNodeModules(path));
-  if ('failure' in listing) readings.push(defectOf('.', listing.failure));
+  const projectFiles = readProjectFiles(files, repositoryScope);
   for (const top of ['apps', 'libs']) {
     if (!files.exists(top)) {
       readings.push(defectOf(top, 'directory is missing'));
       continue;
     }
-    for (const path of visible) {
-      if (path.startsWith(`${top}/`) && posix.basename(path) === 'project.json') {
-        readings.push(...readProject(files, path));
-      }
+    for (const file of projectFiles) {
+      if (file.path.startsWith(`${top}/`)) readings.push(...readProject(files, file));
     }
   }
-  for (const path of visible) {
+  for (const path of files.listVisible(repositoryScope)) {
     if (!path.startsWith('wiki/') || !path.endsWith('.md')) continue;
     if (path.startsWith(`${indexDirectory}/`)) continue;
     readings.push(readPage(path, files.readText(path)));
@@ -141,35 +124,33 @@ function readSources(files: CheckoutFiles): IndexSources {
   };
 }
 
-function listGenerated(files: CheckoutFiles): string[] {
-  const listing = files.listVisible(repositoryScope);
-  if ('failure' in listing) return [];
-  return listing.files.filter((path) => path.startsWith(`${indexDirectory}/`));
+function compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift {
+  const present = files
+    .listVisible(repositoryScope)
+    .filter((path) => path.startsWith(`${indexDirectory}/`));
+  const expectedPaths = [...expected.keys()].sort(compareBytes);
+  return {
+    missing: expectedPaths.filter((path) => !present.includes(path)),
+    stale: expectedPaths.filter(
+      (path) => present.includes(path) && files.readText(path) !== expected.get(path),
+    ),
+    unexpected: present.filter((path) => !expected.has(path)),
+  };
 }
 
 /** The {@link WikiIndexResource}. */
 export function createWikiIndex(): WikiIndexResource {
   return {
     readSources,
-    compare(files, expected) {
-      const present = listGenerated(files);
-      const expectedPaths = [...expected.keys()].sort(compareBytes);
-      return {
-        missing: expectedPaths.filter((path) => !present.includes(path)),
-        stale: expectedPaths.filter(
-          (path) => present.includes(path) && files.readText(path) !== expected.get(path),
-        ),
-        unexpected: present.filter((path) => !expected.has(path)).sort(compareBytes),
-      };
-    },
-    write(files, expected, drift) {
-      for (const path of [...drift.missing, ...drift.stale]) {
-        const content = expected.get(path);
-        if (content === undefined) throw new Error(`${path} was compared but not rendered`);
-        files.write(path, content);
+    compare,
+    write(files, expected) {
+      const drift = compare(files, expected);
+      for (const [path, content] of expected) {
+        if (drift.missing.includes(path) || drift.stale.includes(path)) files.write(path, content);
       }
       for (const path of drift.unexpected) files.remove(path);
       files.removeEmptyDirectories(indexDirectory);
+      return drift;
     },
   };
 }

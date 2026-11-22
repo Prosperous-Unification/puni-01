@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { indexDirectory } from '@puni/shared-checkout';
+import { indexDirectory, leavesRoot } from '@puni/shared-checkout';
 
 /**
  * Whether the file at `path` is documentation the docs rules judge: `AGENTS.md`, `README.md`, or
@@ -49,5 +49,5 @@ export function readPathToken(span: string): string | undefined {
   const isDirectory = span.endsWith('/');
   if (!isDirectory && !/\.[A-Za-z0-9]+$/u.test(posix.basename(span))) return undefined;
   const normal = posix.normalize(span).replace(/\/$/u, '');
-  return normal === '.' || normal.startsWith('../') ? undefined : normal;
+  return normal === '.' || leavesRoot(normal) ? undefined : normal;
 }

@@ -1,9 +1,9 @@
-import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
+import type { FileSystem, Git, GitListing, PathKind } from '@puni/shared-ports';
 import type { IndexDrift, IndexSources } from './index-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
-export type { FileSystem, Git, PathKind };
+export type { FileSystem, Git, GitListing, PathKind };
 
 /** What the checkout module needs from its host. */
 export interface CheckoutRequirements {
@@ -18,6 +18,7 @@ export interface RepositoryRegistryResource {
    * declares for it.
    *
    * @throws RegistryMissing when no such file exists up to the file system root.
+   * @throws FileUnreadable naming the file when it exists but cannot be read.
    * @throws RegistryInvalid when the file is not a valid registry.
    */
   locate(cwd: string): Repository;
@@ -30,39 +31,38 @@ export interface RepositoryRegistryResource {
   resolve(found: Repository, type: RepositoryType): Repository;
 }
 
-/** Visible regular files, as repository paths sorted by their bytes, or why git listed none. */
-export type CheckoutListing = { readonly files: readonly string[] } | { readonly failure: string };
-
 /** One visible path that exists in the working tree, and what it is. */
 export interface CheckoutEntry {
   readonly path: string;
   readonly kind: Exclude<PathKind, 'absent'>;
 }
 
-/** Every visible path that exists in the working tree, sorted, or why git listed none. */
-export type CheckoutEntries =
-  { readonly entries: readonly CheckoutEntry[] } | { readonly failure: string };
-
 /**
  * One checkout, the single way code sees a repository's files. Paths are repository-relative
  * POSIX paths; one that is absolute or leaves the root is refused with `CheckoutPathRefused`. A
  * visible file is one git shows (tracked, or untracked and not ignored) that is a regular file in
- * the working tree. A checkout asks git once, on its first listing, so it shows the files as
- * they were then; open a new one to see later changes.
+ * the working tree; a path git ignores is invisible to every listing. A checkout asks git once,
+ * on its first listing, so it shows the files as they were then; open a new one to see later
+ * changes. Every listing is sorted by its paths' bytes, and every listing throws
+ * `CheckoutUnlistable` (the `repository.git` defect) when git cannot list the checkout.
  */
 export interface CheckoutFiles {
-  /** The text of the file at `path`. */
+  /**
+   * The text of the file at `path`.
+   *
+   * @throws FileUnreadable naming `path` when it cannot be read, with the runtime's error as cause.
+   */
   readText(path: string): string;
-  /** What `path` is, a final symlink not followed. */
+  /** What `path` is, a final symlink not followed; a path below a file is `absent`. */
   describe(path: string): PathKind;
-  /** Whether something exists at `path`, a symlink followed to its target. */
+  /** Whether something exists at `path`, a symlink followed to its target. Never throws. */
   exists(path: string): boolean;
   /** The target text of the symlink at `path`. */
   readLinkTarget(path: string): string;
   /** The visible files `scope` owns. */
-  listVisible(scope: CheckScope): CheckoutListing;
+  listVisible(scope: CheckScope): readonly string[];
   /** Every path git shows that exists in the working tree, of whatever kind. */
-  listVisibleEntries(): CheckoutEntries;
+  listVisibleEntries(): readonly CheckoutEntry[];
   /** Writes `text` at `path` inside `wiki/index/`, creating its directories. */
   write(path: string, text: string): void;
   /** Removes the file at `path` inside `wiki/index/`. */
@@ -91,7 +91,6 @@ export interface ProjectScopeResource {
    * Every project: each visible `project.json` that parses and names its project, sorted by
    * directory. One that does not is no project; its files belong to the enclosing one.
    *
-   * @throws ProjectsUnlistable when git fails.
    * @throws ProjectNameShared when two projects share a name.
    */
   list(files: CheckoutFiles): Project[];
@@ -110,16 +109,17 @@ export interface WikiIndexResource {
   /**
    * Reads every Nx project (`project.json` under `apps/` and `libs/`) and every authored page
    * (Markdown under `wiki/` outside `wiki/index/`) that is visible and not below `node_modules`.
-   * Never throws for a defect in them; each one is returned, sorted by path.
+   * A defect in them is no failure; each one is returned, sorted by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
-  /** How the committed `wiki/index/` differs from `expected`. */
+  /** How the visible files of the committed `wiki/index/` differ from `expected`. */
   compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
   /**
-   * Makes `wiki/index/` exactly `expected`: writes each missing or stale file of `drift`, removes
-   * each unexpected one and every directory left empty.
+   * Makes the visible files of `wiki/index/` exactly `expected`: writes each missing or stale
+   * file, removes each unexpected one and every directory left empty, and returns that drift. A
+   * file git ignores there is neither compared nor removed.
    */
-  write(files: CheckoutFiles, expected: ReadonlyMap<string, string>, drift: IndexDrift): void;
+  write(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
 }
 
 /** What the checkout module exports. */

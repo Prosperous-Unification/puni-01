@@ -1,4 +1,5 @@
 import { posix } from 'node:path';
+import { leavesRoot } from '@puni/shared-checkout';
 
 /** Inline link targets outside fenced code blocks, without their `#fragment` or `?query`. */
 export function listLinkTargets(text: string): string[] {
@@ -22,5 +23,5 @@ export function listLinkTargets(text: string): string[] {
 export function resolveTarget(path: string, target: string): string | undefined {
   if (target === '' || /^[A-Za-z][\w+.-]*:/u.test(target)) return undefined;
   const resolved = posix.normalize(posix.join(posix.dirname(path), target));
-  return resolved === '..' || resolved.startsWith('../') ? undefined : resolved;
+  return leavesRoot(resolved) ? undefined : resolved;
 }
