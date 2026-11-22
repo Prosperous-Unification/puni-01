@@ -1,14 +1,15 @@
+import type { RepositoryRegistry } from '../registry';
 import type { CommandBrief } from '../wiki/wiki-index';
 import type { CheckScope } from './scope';
 
 /**
- * What a rule judges: the repository, its paired repository, the composed CLI's commands, and
+ * What a rule judges: the repository, the project's registry, the composed CLI's commands, and
  * the scope of the run. A project-level rule judges only what its scope owns.
  */
 export interface RepositoryReading {
   readonly root: string;
-  /** The paired repository, `owner/name`, as `puni.json` declares it. */
-  readonly counterpart: string;
+  /** The project's repositories by role, as the system-state `puni.json` registers them. */
+  readonly registry: RepositoryRegistry;
   readonly commands: readonly CommandBrief[];
   readonly scope: CheckScope;
 }

@@ -6,7 +6,8 @@ import {
   makeRepository,
   writeProject,
   writeRepositoryFile,
-  formatFixtureConfig,
+  formatFixtureRegistry,
+  removeFixture,
 } from '../repository-fixture';
 import { indexFile, readIndexSources, renderIndex, runWikiIndex } from './wiki-index';
 
@@ -39,7 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeFixture(root);
 });
 
 describe('renderIndex', () => {
@@ -197,13 +198,13 @@ describe('runWikiIndex', () => {
     expect(run.stderr).toMatch(/^error: no puni\.json in [^\n]+\n$/u);
   });
 
-  test('a records repository is refused with one error line and exit 1', () => {
-    writeRepositoryFile(root, 'puni.json', formatFixtureConfig('records'));
+  test('a puni.json declaring another repository type is refused with one error line and exit 1', () => {
+    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-records'));
     const before = readFileSync(join(root, indexFile), 'utf8');
     expect(runIndex()).toEqual({
       code: 1,
       stdout: '',
-      stderr: `error: wiki index needs a code repository; ${join(root, 'puni.json')} declares kind records\n`,
+      stderr: `error: wiki index needs the system-state repository; ${join(root, 'puni.json')} declares this-repo-type system-records\n`,
     });
     expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
   });

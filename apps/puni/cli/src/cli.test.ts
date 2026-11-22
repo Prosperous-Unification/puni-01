@@ -38,7 +38,16 @@ function makeRepository(): string {
   repositories.push(root);
   writeFileSync(
     join(root, 'puni.json'),
-    JSON.stringify({ 'puni-repo-kind': 'code', 'puni-repo-counterpart': 'acme/demo-records' }),
+    JSON.stringify({
+      'this-repo-type': 'system-state',
+      'all-repos': [
+        { type: 'system-state', remote: { type: 'github', url: 'https://github.com/acme/demo' } },
+        {
+          type: 'system-records',
+          remote: { type: 'github', url: 'https://github.com/acme/demo-records' },
+        },
+      ],
+    }),
   );
   mkdirSync(join(root, 'apps/one/src'), { recursive: true });
   writeFileSync(join(root, 'apps/one/src/main.ts'), 'export {};\n');
@@ -103,7 +112,10 @@ describe('runCommand', () => {
 
   test('check judges with the live command tree and exits 1 on findings', () => {
     const root = makeRepository();
-    const run = runIn(root, { group: 'burokrat', request: { kind: 'check', project: undefined } });
+    const run = runIn(root, {
+      group: 'burokrat',
+      request: { kind: 'check', repo: undefined, project: undefined },
+    });
     expect(run.code).toBe(1);
     expect(run.printed).toContain('agents.exists AGENTS.md: is missing\n');
     expect(run.printed).toContain('index.current wiki/index/index.md: is missing');
@@ -113,12 +125,15 @@ describe('runCommand', () => {
     const root = makeRepository();
     writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
     expect(Bun.spawnSync(['git', 'init', '-q'], { cwd: root }).exitCode).toBe(0);
-    expect(runIn(root, { group: 'burokrat', request: { kind: 'check', project: 'nope' } })).toEqual(
-      {
-        code: 2,
-        printed: '',
-        errors: 'error: no project named nope; the projects are workspace, one\n',
-      },
-    );
+    expect(
+      runIn(root, {
+        group: 'burokrat',
+        request: { kind: 'check', repo: undefined, project: 'nope' },
+      }),
+    ).toEqual({
+      code: 2,
+      printed: '',
+      errors: 'error: no project named nope; the projects are workspace, one\n',
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { nameCounterpart } from '../repository';
+import { nameRepository } from '../registry';
 import type { Finding, RepositoryReading } from './finding';
 import { isRegularFile, listScopeFiles, listScopeMarkdown, visibleFiles } from './scope';
 
@@ -26,15 +26,16 @@ export function forbidDates({ root, scope }: RepositoryReading): Finding[] {
 }
 
 /**
- * The records repository, the counterpart `puni.json` declares, is named only in `puni.json` and
+ * The records repository, the last URL segment of `system-records` in the registry, is named
+ * only in `puni.json` and
  * `AGENTS.md` (and `CLAUDE.md`, the same file). It judges the regular files the scope owns that
  * git shows, tracked or untracked and not ignored, so staging a file never changes the result.
  */
-export function confineRecordsName({ root, counterpart, scope }: RepositoryReading): Finding[] {
+export function confineRecordsName({ root, registry, scope }: RepositoryReading): Finding[] {
   const rule = 'history.records';
   const listing = listScopeFiles(root, scope, visibleFiles);
   if ('failure' in listing) return [{ rule, path: '.', message: listing.failure }];
-  const records = nameCounterpart(counterpart);
+  const records = nameRepository(registry.repos['system-records']);
   const exempt: readonly string[] = ['AGENTS.md', 'CLAUDE.md', 'puni.json'];
   return listing.files
     .filter((path) => !exempt.includes(path))

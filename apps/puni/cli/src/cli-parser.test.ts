@@ -52,8 +52,12 @@ describe('readInvocation', () => {
 
   test.each([
     ['b wiki index', { kind: 'wiki index' }],
-    ['bur check', { kind: 'check', project: undefined }],
-    ['b check --project puni-dash', { kind: 'check', project: 'puni-dash' }],
+    ['bur check', { kind: 'check', repo: undefined, project: undefined }],
+    ['b check --project puni-dash', { kind: 'check', repo: undefined, project: 'puni-dash' }],
+    [
+      'b check --repo system-records',
+      { kind: 'check', repo: 'system-records', project: undefined },
+    ],
   ] as const)('%s selects %j', (line, request) => {
     expect(readInvocation(line.split(' '), () => undefined)).toEqual({
       kind: 'command',
@@ -75,7 +79,9 @@ describe('readInvocation', () => {
 
   test('b --help shows that a bare burokrat is valid and lists check and wiki', () => {
     const help = readPrinted(['b', '--help']);
-    expect(help).toContain('Usage: puni burokrat [(check [--project NAME] | wiki [index])]\n');
+    expect(help).toContain(
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] | wiki [index])]\n',
+    );
     expect(readListedNames(help)).toEqual(['check', 'wiki']);
   });
 

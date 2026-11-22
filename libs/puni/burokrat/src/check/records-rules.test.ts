@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   describeRecord,
   makeRecordsRepository,
@@ -9,8 +9,8 @@ import {
   supersedingRecord,
   writeRecord,
   writeRepositoryFile,
-  fixtureCounterparts,
-  formatFixtureConfig,
+  formatFixtureRegistry,
+  removeFixture,
 } from '../repository-fixture';
 import {
   optionalRecordKeys,
@@ -23,6 +23,7 @@ import {
 } from '../records-schema';
 import { runCheck } from './check';
 import type { Finding, Rule } from './finding';
+import { readRegistry } from '../registry';
 import { repositoryScope } from './scope';
 import {
   judgeRecordFrontMatter,
@@ -39,13 +40,18 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeFixture(root);
 });
+
+/** The system-state repository beside the records repository under test. */
+function stateRoot(): string {
+  return join(dirname(root), 'demo');
+}
 
 function judge(rule: Rule): Finding[] {
   return rule({
     root,
-    counterpart: fixtureCounterparts.records,
+    registry: readRegistry(stateRoot()),
     commands: [],
     scope: repositoryScope,
   });
@@ -137,7 +143,7 @@ describe('records.layout', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
       else if (name !== 'CLAUDE.md')
-        writeRepositoryFile(root, name, formatFixtureConfig('records'));
+        writeRepositoryFile(root, name, formatFixtureRegistry('system-records'));
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });
@@ -338,41 +344,78 @@ describe('records.supersession', () => {
 });
 
 describe('runCheck on a records repository', () => {
-  function runIn(cwd: string): { code: 0 | 1 | 2; printed: string } {
+  function runIn(
+    cwd: string,
+    request: Parameters<typeof runCheck>[0] = { repo: 'system-records' },
+  ): { code: 0 | 1 | 2; printed: string } {
     let printed = '';
-    const code = runCheck(
-      {},
-      {
-        cwd,
-        stderr: (text) => {
-          throw new Error(`unexpected stderr: ${text}`);
-        },
-        commands: [],
-        stdout: (text) => {
-          printed += text;
-        },
+    const code = runCheck(request, {
+      cwd,
+      stderr: (text) => {
+        throw new Error(`unexpected stderr: ${text}`);
       },
-    );
+      commands: [],
+      stdout: (text) => {
+        printed += text;
+      },
+    });
     return { code, printed };
   }
 
-  test('applies the records rule set and names the kind', () => {
-    expect(runIn(join(root, 'nav/plans'))).toEqual({
+  test('--repo system-records from the system-state repository applies the records rule set', () => {
+    expect(runIn(join(stateRoot(), 'apps'))).toEqual({
       code: 0,
-      printed: `ok: records, ${String(recordsRules.length)} rules, no findings.\n`,
+      printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,
+    });
+  });
+
+  test('a records repository holding its own puni.json is judged as system-records with no option', () => {
+    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-records'));
+    expect(runIn(join(root, 'nav/plans'), {})).toEqual({
+      code: 0,
+      printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,
+    });
+  });
+
+  test('standing in the records checkout without puni.json is repository.root with the hint', () => {
+    expect(runIn(root, {})).toEqual({
+      code: 1,
+      printed: `repository.root .: no puni.json in ${root} or any directory above it; run puni from the system-state repository, which holds puni.json\nfail: no repository, 1 finding.\n`,
+    });
+  });
+
+  test.each([
+    [
+      'missing',
+      () => {
+        rmSync(root, { recursive: true });
+      },
+    ],
+    [
+      'a file in its place',
+      () => {
+        rmSync(root, { recursive: true });
+        writeRepositoryFile(dirname(root), 'demo-records', 'not a checkout');
+      },
+    ],
+  ])('a records checkout %s is one repository.checkout finding, exit 1', (_name, breach) => {
+    breach();
+    expect(runIn(stateRoot())).toEqual({
+      code: 1,
+      printed: `repository.checkout .: the system-records repository is not checked out at ${root}; clone https://github.com/acme/demo-records there\nfail: system-records, 1 finding.\n`,
     });
   });
 
   test('code-only rules do not apply: no README, index or package.json is needed', () => {
     writeRepositoryFile(root, 'dash/2031-04-05.md', 'dated and free form');
-    expect(runIn(root).code).toBe(0);
+    expect(runIn(stateRoot()).code).toBe(0);
   });
 
   test('a broken AGENTS.md link is a finding', () => {
     writeRepositoryFile(root, 'AGENTS.md', 'See [gone](bur/gone.md).\n');
-    expect(runIn(root)).toEqual({
+    expect(runIn(stateRoot())).toEqual({
       code: 1,
-      printed: `links.resolve AGENTS.md: links to missing bur/gone.md\nfail: records, ${String(recordsRules.length)} rules, 1 finding.\n`,
+      printed: `links.resolve AGENTS.md: links to missing bur/gone.md\nfail: system-records, ${String(recordsRules.length)} rules, 1 finding.\n`,
     });
   });
 });

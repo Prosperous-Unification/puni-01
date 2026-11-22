@@ -11,14 +11,8 @@ import {
 import { join, posix } from 'node:path';
 import { countWords, readWhenWordBudget } from '../budgets';
 import { parseFrontMatter } from '../front-matter';
-import {
-  compareBytes,
-  findRepository,
-  listFiles,
-  listMarkdownFiles,
-  RepositoryDefect,
-  type Repository,
-} from '../repository';
+import { compareBytes, listFiles, listMarkdownFiles, RepositoryDefect } from '../repository';
+import { findRepository, type Repository } from '../registry';
 
 /** `wiki index`: rewrites `wiki/index/` from the repository's projects, pages and commands. */
 export const wikiIndexParser = object({ kind: constant('wiki index') });
@@ -291,8 +285,8 @@ function removeEmptyDirectories(root: string, directory: string): void {
 /**
  * Runs `wiki index` against the repository found from `context.cwd`: writes every missing or
  * stale file, removes every file under `wiki/index/` it did not generate, and returns 0. A defect
- * in the repository's inputs, or a repository whose `puni.json` declares a kind other than
- * `code`, writes nothing, prints one `error: ` line to `stderr` and returns 1.
+ * in the repository's inputs, or a repository whose `puni.json` declares a `this-repo-type`
+ * other than `system-state`, writes nothing, prints one `error: ` line to `stderr` and returns 1.
  */
 export function runWikiIndex(context: WikiIndexContext): 0 | 1 {
   let repository: Repository;
@@ -303,10 +297,10 @@ export function runWikiIndex(context: WikiIndexContext): 0 | 1 {
     context.stderr(`error: ${cause.message}\n`);
     return 1;
   }
-  if (repository.kind !== 'code') {
+  if (repository.type !== 'system-state') {
     const file = join(repository.root, 'puni.json');
     context.stderr(
-      `error: wiki index needs a code repository; ${file} declares kind ${repository.kind}\n`,
+      `error: wiki index needs the system-state repository; ${file} declares this-repo-type ${repository.type}\n`,
     );
     return 1;
   }

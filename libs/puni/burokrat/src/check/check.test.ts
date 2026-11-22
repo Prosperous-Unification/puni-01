@@ -5,10 +5,10 @@ import { agentsWordBudget, indexWordBudget, readmeWordBudget } from '../budgets'
 import {
   fixtureCommands,
   makeRepository,
+  removeFixture,
   runGit,
   writeProject,
   writeRepositoryFile,
-  fixtureCounterparts,
 } from '../repository-fixture';
 import { indexFile } from '../wiki/wiki-index';
 import { runCheck } from './check';
@@ -22,6 +22,7 @@ import {
 } from './entry-rules';
 import type { Finding, Rule } from './finding';
 import { repositoryScope } from './scope';
+import { readRegistry } from '../registry';
 import { confineRecordsName, forbidDates } from './history-rules';
 import {
   limitIndexWords,
@@ -39,13 +40,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeFixture(root);
 });
 
 function judge(rule: Rule): Finding[] {
   return rule({
     root,
-    counterpart: fixtureCounterparts.code,
+    registry: readRegistry(root),
     commands: fixtureCommands,
     scope: repositoryScope,
   });
@@ -353,7 +354,7 @@ describe('runCheck', () => {
   test('a clean repository prints one ok line and exits 0', () => {
     expect(runIn(root)).toEqual({
       code: 0,
-      printed: `ok: code, ${String(codeRules.length)} rules, no findings.\n`,
+      printed: `ok: system-state, ${String(codeRules.length)} rules, no findings.\n`,
     });
   });
 
@@ -365,7 +366,7 @@ describe('runCheck', () => {
       printed: [
         'agents.index AGENTS.md: does not name wiki/index/index.md',
         'readme.exists README.md: is missing',
-        `fail: code, ${String(codeRules.length)} rules, 2 findings.`,
+        `fail: system-state, ${String(codeRules.length)} rules, 2 findings.`,
         '',
       ].join('\n'),
     });
@@ -380,16 +381,12 @@ describe('runCheck', () => {
     );
   });
 
-  test('an invalid puni.json is a repository.kind finding', () => {
-    writeRepositoryFile(
-      root,
-      'puni.json',
-      JSON.stringify({ 'puni-repo-kind': 'library', 'puni-repo-counterpart': 'acme/demo-records' }),
-    );
+  test('an invalid puni.json is a repository.config finding', () => {
+    writeRepositoryFile(root, 'puni.json', JSON.stringify({ 'all-repos': [] }));
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
-      `repository.kind puni.json: ${join(root, 'puni.json')} has puni-repo-kind "library"; expected one of code, records\nfail: no repository, 1 finding.\n`,
+      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array\nfail: no repository, 1 finding.\n`,
     );
   });
 });

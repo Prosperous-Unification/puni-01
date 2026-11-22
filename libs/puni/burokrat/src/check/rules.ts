@@ -21,7 +21,7 @@ import {
   judgeRecordsLayout,
   judgeSupersession,
 } from './records-rules';
-import type { RepositoryKind } from '../repository';
+import type { RepositoryType } from '../registry';
 
 const repositoryLevel = (judge: LeveledRule['judge']): LeveledRule => ({
   level: 'repository',
@@ -50,7 +50,7 @@ export const codeRules: readonly LeveledRule[] = [
   projectLevel(requireReadFirst),
 ];
 
-/** The rules for a `records` repository, which is judged whole. */
+/** The rules for the `system-records` repository, which is judged whole. */
 export const recordsRules: readonly LeveledRule[] = [
   agentsExists,
   claudeLinksAgents,
@@ -62,8 +62,8 @@ export const recordsRules: readonly LeveledRule[] = [
   judgeSupersession,
 ].map(repositoryLevel);
 
-/** The rule set `puni burokrat check` applies to each repository kind. */
-export const ruleSets: Readonly<Record<RepositoryKind, readonly LeveledRule[]>> = {
-  code: codeRules,
-  records: recordsRules,
+/** The rule set `puni burokrat check` applies to each repository type. */
+export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> = {
+  'system-state': codeRules,
+  'system-records': recordsRules,
 };

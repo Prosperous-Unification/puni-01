@@ -4,15 +4,16 @@ import { join } from 'node:path';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from '../budgets';
 import {
   fixtureCommands,
-  formatFixtureConfig,
-  makeRecordsRepository,
+  formatFixtureRegistry,
   makeRepository,
+  removeFixture,
   regenerateIndex,
   runGit,
   writeProject,
   writeRepositoryFile,
 } from '../repository-fixture';
 import { indexFile } from '../wiki/wiki-index';
+import type { RepositoryType } from '../registry';
 import { runCheck } from './check';
 import { codeRules } from './rules';
 import { findOwner, listProjects, listScopeFiles, ownsPath, visibleFiles } from './scope';
@@ -35,7 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeFixture(root);
 });
 
 interface Run {
@@ -45,11 +46,11 @@ interface Run {
   readonly errors: string;
 }
 
-function runIn(project?: string): Run {
+function runIn(project?: string, repo?: RepositoryType): Run {
   let printed = '';
   let errors = '';
   const code = runCheck(
-    { project },
+    { project, repo },
     {
       cwd: root,
       commands: fixtureCommands,
@@ -127,7 +128,7 @@ describe('the union of every project check is the whole check', () => {
   test('the seeds break every code rule', () => {
     const broken = new Set<string>();
     for (const [, seed] of seeds) {
-      rmSync(root, { recursive: true, force: true });
+      removeFixture(root);
       root = makeRepository();
       writeProject(root, 'libs/two', 'two', {
         readWhen: 'changing two',
@@ -200,11 +201,11 @@ describe('runCheck --project', () => {
     expect(runIn('two')).toEqual({
       code: 0,
       findings: [],
-      summary: `ok: code, project two, ${String(projectRules)} rules, no findings.`,
+      summary: `ok: system-state, project two, ${String(projectRules)} rules, no findings.`,
       errors: '',
     });
     expect(runIn('workspace').summary).toBe(
-      `ok: code, project workspace, ${String(codeRules.length)} rules, no findings.`,
+      `ok: system-state, project workspace, ${String(codeRules.length)} rules, no findings.`,
     );
   });
 
@@ -217,15 +218,18 @@ describe('runCheck --project', () => {
     });
   });
 
-  test('--project in a records repository is refused with exit 2', () => {
-    rmSync(root, { recursive: true, force: true });
-    root = makeRecordsRepository();
-    expect(runIn('workspace')).toEqual({
+  test('--project with --repo system-records is refused with exit 2', () => {
+    expect(runIn('workspace', 'system-records')).toEqual({
       code: 2,
       findings: [],
       summary: '',
-      errors: 'error: --project needs a code repository; this one is records\n',
+      errors:
+        'error: --project needs the system-state repository; system-records is judged whole\n',
     });
+  });
+
+  test('--repo system-state is the default spelled out', () => {
+    expect(runIn('two', 'system-state')).toEqual(runIn('two'));
   });
 
   test('without a root project --project is a repository.projects finding', () => {
@@ -244,7 +248,7 @@ describe('runCheck --project', () => {
   });
 
   test('git failing is reported, not a pass', () => {
-    writeFileSync(join(root, 'puni.json'), formatFixtureConfig('code'));
+    writeFileSync(join(root, 'puni.json'), formatFixtureRegistry('system-state'));
     rmSync(join(root, '.git'), { recursive: true });
     const run = runIn('two');
     expect(run.code).toBe(1);

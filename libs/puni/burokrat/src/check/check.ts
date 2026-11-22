@@ -1,19 +1,30 @@
-import { constant, message, object, option, optional, string } from '@optique/core';
-import { compareBytes, findRepository, RepositoryDefect } from '../repository';
+import { choice, constant, message, object, option, optional, string } from '@optique/core';
+import {
+  findRepository,
+  type RepositoryType,
+  repositoryTypes,
+  resolveRepository,
+} from '../registry';
+import { compareBytes, RepositoryDefect } from '../repository';
 import type { CommandBrief } from '../wiki/wiki-index';
 import { formatFinding, type LeveledRule } from './finding';
 import { ruleSets } from './rules';
 import { type CheckScope, isRepositoryLevel, listProjects, repositoryScope } from './scope';
 
 /**
- * `check [--project NAME]`: judges the whole repository against the rule set of its kind, or,
- * with `--project`, one project of a `code` repository.
+ * `check [--repo TYPE] [--project NAME]`: judges one repository of the project against the rule
+ * set of its type, or, with `--project`, one project of the `system-state` repository.
  */
 export const checkParser = object({
   kind: constant('check'),
+  repo: optional(
+    option('--repo', choice(repositoryTypes, { metavar: 'TYPE' }), {
+      description: message`Judge the repository of this type (default: the one holding puni.json).`,
+    }),
+  ),
   project: optional(
     option('--project', string({ metavar: 'NAME' }), {
-      description: message`Judge only what this project owns (code repositories).`,
+      description: message`Judge only what this project owns (system-state only).`,
     }),
   ),
 });
@@ -63,36 +74,43 @@ function resolveProjectScope(root: string, name: string): CheckScope {
 }
 
 /**
- * Runs `check` against the repository found from `context.cwd`, applying the rule set its
- * `puni.json` kind selects from {@link ruleSets}. Without `project` it judges the whole
- * repository; with it, only what that project owns, so that the union of every project's
- * findings is the whole repository's.
+ * Runs `check`. The repository holding the nearest `puni.json` at or above `context.cwd` is
+ * found as the type that file declares; `repo` names the type to judge instead, resolved through
+ * the registry to the checkout beside it. The judged type selects its rule set from
+ * {@link ruleSets}. Without `project` the whole repository is judged; with it, only what that
+ * project of the `system-state` repository owns, so that the union of every project's findings
+ * is the whole repository's.
  *
- * Prints each finding as `<rule-id> <path>: <message>`, sorted, then a summary naming the kind
+ * Prints each finding as `<rule-id> <path>: <message>`, sorted, then a summary naming the type
  * and scope, and returns 1; with no finding it prints one `ok` line and returns 0. A missing or
- * invalid `puni.json` or project list is a finding. A `project` that names no project, or any
- * `project` in a `records` repository, prints one `error: ` line to `stderr` and returns 2: the
- * command line is wrong, so nothing was judged.
+ * invalid `puni.json`, a type's missing checkout, or an unlisted project root is a finding. A
+ * `project` that names no project, or any `project` when the judged repository is not
+ * `system-state`, prints one `error: ` line to `stderr` and returns 2: the command line is wrong,
+ * so nothing was judged.
  */
 export function runCheck(
-  request: { readonly project?: string | undefined },
+  request: { readonly repo?: RepositoryType | undefined; readonly project?: string | undefined },
   context: CheckContext,
 ): 0 | 1 | 2 {
   let lines: string[];
   let summary = 'no repository';
   try {
-    const { root, kind, counterpart } = findRepository(context.cwd);
-    summary = kind;
-    if (request.project !== undefined && kind !== 'code') {
-      throw new ProjectRefusal(`--project needs a code repository; this one is ${kind}`);
+    const found = findRepository(context.cwd);
+    const type = request.repo ?? found.type;
+    if (request.project !== undefined && type !== 'system-state') {
+      throw new ProjectRefusal(
+        `--project needs the system-state repository; ${type} is judged whole`,
+      );
     }
+    summary = type;
+    const { root, registry } = resolveRepository(found, type);
     const scope =
       request.project === undefined ? repositoryScope : resolveProjectScope(root, request.project);
-    const rules = selectRules(ruleSets[kind], scope);
+    const rules = selectRules(ruleSets[type], scope);
     const scopeName = scope.kind === 'repository' ? '' : `project ${scope.project.name}, `;
-    summary = `${kind}, ${scopeName}${String(rules.length)} rules`;
+    summary = `${type}, ${scopeName}${String(rules.length)} rules`;
     lines = rules
-      .flatMap((rule) => rule.judge({ root, counterpart, commands: context.commands, scope }))
+      .flatMap((rule) => rule.judge({ root, registry, commands: context.commands, scope }))
       .map(formatFinding)
       .sort(compareBytes);
   } catch (cause) {
