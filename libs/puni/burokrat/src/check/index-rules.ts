@@ -1,8 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { countWords, indexWordBudget } from '../budgets';
-import { compareIndex, indexFile, readIndexSources, renderIndex } from '../wiki/wiki-index';
+import { listFiles } from '../repository';
+import {
+  compareIndex,
+  indexFile,
+  readIndexSources,
+  readProjectDefects,
+  renderIndex,
+  type SourceDefect,
+} from '../wiki/wiki-index';
 import type { Finding, RepositoryReading } from './finding';
+import { type CheckScope, ownsPath } from './scope';
 
 /**
  * `wiki/index/` is exactly what `puni burokrat wiki index` would write. While its inputs have
@@ -39,10 +48,26 @@ export function limitIndexWords({ root }: RepositoryReading): Finding[] {
   return [{ rule: 'index.words', path: indexFile, message }];
 }
 
+/**
+ * The index-source defects `scope` judges. The whole repository and the root project read every
+ * source and keep those the scope owns; another project reads only the `project.json` files in
+ * its own directory, and only when it is indexed (under `apps/` or `libs/`).
+ */
+function readScopeDefects(root: string, scope: CheckScope): readonly SourceDefect[] {
+  if (scope.kind === 'repository' || scope.project.directory === '.') {
+    return readIndexSources(root).defects.filter((defect) => ownsPath(scope, defect.path));
+  }
+  const { directory } = scope.project;
+  if (!/^(apps|libs)\//u.test(directory) || !existsSync(join(root, directory))) return [];
+  return listFiles(root, directory)
+    .filter((path) => posix.basename(path) === 'project.json' && ownsPath(scope, path))
+    .flatMap((path) => readProjectDefects(root, path));
+}
+
 /** Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`. */
-export function requireReadWhen({ root }: RepositoryReading): Finding[] {
-  return readIndexSources(root)
-    .defects.filter((defect) => defect.topic === 'read-when')
+export function requireReadWhen({ root, scope }: RepositoryReading): Finding[] {
+  return readScopeDefects(root, scope)
+    .filter((defect) => defect.topic === 'read-when')
     .map((defect) => ({ rule: 'index.read-when', path: defect.path, message: defect.message }));
 }
 
@@ -50,8 +75,8 @@ export function requireReadWhen({ root }: RepositoryReading): Finding[] {
  * Every project's `metadata.readFirst` is a relative path inside the project naming an existing
  * regular file: the file its index line links to.
  */
-export function requireReadFirst({ root }: RepositoryReading): Finding[] {
-  return readIndexSources(root)
-    .defects.filter((defect) => defect.topic === 'read-first')
+export function requireReadFirst({ root, scope }: RepositoryReading): Finding[] {
+  return readScopeDefects(root, scope)
+    .filter((defect) => defect.topic === 'read-first')
     .map((defect) => ({ rule: 'index.read-first', path: defect.path, message: defect.message }));
 }

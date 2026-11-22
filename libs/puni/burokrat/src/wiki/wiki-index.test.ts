@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { findRepositoryRoot } from '../repository';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   fixtureCommands,
   makeRepository,
   writeProject,
   writeRepositoryFile,
+  formatFixtureRegistry,
+  removeFixture,
 } from '../repository-fixture';
 import { indexFile, readIndexSources, renderIndex, runWikiIndex } from './wiki-index';
 
@@ -39,19 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-describe('findRepositoryRoot', () => {
-  test('walks up to the nearest nx.json', () => {
-    mkdirSync(join(root, 'apps/one/src'), { recursive: true });
-    expect(findRepositoryRoot(join(root, 'apps/one/src'))).toBe(resolve(root));
-  });
-
-  test('throws when no directory above has an nx.json', () => {
-    rmSync(join(root, 'nx.json'));
-    expect(() => findRepositoryRoot(root)).toThrow(/no nx\.json/u);
-  });
+  removeFixture(root);
 });
 
 describe('renderIndex', () => {
@@ -202,10 +191,21 @@ describe('runWikiIndex', () => {
     expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
   });
 
-  test('no nx.json prints one error line and exits 1', () => {
-    rmSync(join(root, 'nx.json'));
+  test('no puni.json prints one error line and exits 1', () => {
+    rmSync(join(root, 'puni.json'));
     const run = runIndex();
     expect(run.code).toBe(1);
-    expect(run.stderr).toMatch(/^error: no nx\.json in [^\n]+\n$/u);
+    expect(run.stderr).toMatch(/^error: no puni\.json in [^\n]+\n$/u);
+  });
+
+  test('a puni.json declaring another repository type is refused with one error line and exit 1', () => {
+    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry('system-records'));
+    const before = readFileSync(join(root, indexFile), 'utf8');
+    expect(runIndex()).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: `error: wiki index needs the system-state repository; ${join(root, 'puni.json')} declares this-repo-type system-records\n`,
+    });
+    expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
   });
 });

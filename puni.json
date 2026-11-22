@@ -1,0 +1,16 @@
+{
+  "this-repo-type": "system-state",
+  "all-repos": [
+    {
+      "type": "system-state",
+      "remote": { "type": "github", "url": "https://github.com/Prosperous-Unification/puni-01" }
+    },
+    {
+      "type": "system-records",
+      "remote": {
+        "type": "github",
+        "url": "https://github.com/Prosperous-Unification/puni-01-records"
+      }
+    }
+  ]
+}

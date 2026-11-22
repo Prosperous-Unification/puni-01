@@ -1,11 +1,33 @@
-import { constant, object } from '@optique/core';
-import { compareBytes, findRepositoryRoot, RepositoryDefect } from '../repository';
+import { choice, constant, message, object, option, optional, string } from '@optique/core';
+import {
+  findRepository,
+  type RepositoryType,
+  repositoryTypes,
+  resolveRepository,
+} from '../registry';
+import { compareBytes, RepositoryDefect } from '../repository';
 import type { CommandBrief } from '../wiki/wiki-index';
-import { formatFinding } from './finding';
-import { rules } from './rules';
+import { formatFinding, type LeveledRule } from './finding';
+import { ruleSets } from './rules';
+import { type CheckScope, isRepositoryLevel, listProjects, repositoryScope } from './scope';
 
-/** `check`: judges the repository against every rule in {@link rules}. Takes no flags. */
-export const checkParser = object({ kind: constant('check') });
+/**
+ * `check [--repo TYPE] [--project NAME]`: judges one repository of the project against the rule
+ * set of its type, or, with `--project`, one project of the `system-state` repository.
+ */
+export const checkParser = object({
+  kind: constant('check'),
+  repo: optional(
+    option('--repo', choice(repositoryTypes, { metavar: 'TYPE' }), {
+      description: message`Judge the repository of this type (default: the one holding puni.json).`,
+    }),
+  ),
+  project: optional(
+    option('--project', string({ metavar: 'NAME' }), {
+      description: message`Judge only what this project owns (system-state only).`,
+    }),
+  ),
+});
 
 /** What `check` needs from the app that composes it. */
 export interface CheckContext {
@@ -14,30 +36,96 @@ export interface CheckContext {
   /** Every command of the composed CLI, for the generated index. */
   readonly commands: readonly CommandBrief[];
   readonly stdout: (text: string) => void;
+  readonly stderr: (text: string) => void;
+}
+
+/** A command line that names no project of the repository: refused like a usage error. */
+class ProjectRefusal extends Error {
+  override readonly name = 'ProjectRefusal';
+}
+
+/** The rules `scope` runs: every rule for a repository-level scope, else the project-level ones. */
+function selectRules(rules: readonly LeveledRule[], scope: CheckScope): readonly LeveledRule[] {
+  return isRepositoryLevel(scope) ? rules : rules.filter((rule) => rule.level === 'project');
 }
 
 /**
- * Runs `check` against the repository found from `context.cwd`. Prints each finding as
- * `<rule-id> <path>: <message>`, sorted, then a summary line, and returns 1; with no finding it
- * prints one `ok` line and returns 0. A missing `nx.json` is a `repository.root` finding.
+ * The scope `--project` names in the repository at `root`.
+ *
+ * @throws ProjectRefusal when no project has that name.
+ * @throws RepositoryDefect (`repository.projects`) when the root has no project, which must own
+ *   every file no other project owns, or when projects cannot be listed.
  */
-export function runCheck(context: CheckContext): 0 | 1 {
+function resolveProjectScope(root: string, name: string): CheckScope {
+  const projects = listProjects(root);
+  if (!projects.some((project) => project.directory === '.')) {
+    throw new RepositoryDefect(
+      'repository.projects',
+      'project.json',
+      'is missing: --project needs a root project that owns every file no other project owns',
+    );
+  }
+  const project = projects.find((candidate) => candidate.name === name);
+  if (project === undefined) {
+    const names = projects.map((candidate) => candidate.name).join(', ');
+    throw new ProjectRefusal(`no project named ${name}; the projects are ${names}`);
+  }
+  return { kind: 'project', project, projects };
+}
+
+/**
+ * Runs `check`. The repository holding the nearest `puni.json` at or above `context.cwd` is
+ * found as the type that file declares; `repo` names the type to judge instead, resolved through
+ * the registry to the checkout beside it. The judged type selects its rule set from
+ * {@link ruleSets}. Without `project` the whole repository is judged; with it, only what that
+ * project of the `system-state` repository owns, so that the union of every project's findings
+ * is the whole repository's.
+ *
+ * Prints each finding as `<rule-id> <path>: <message>`, sorted, then a summary naming the type
+ * and scope, and returns 1; with no finding it prints one `ok` line and returns 0. A missing or
+ * invalid `puni.json`, a type's missing checkout, or an unlisted project root is a finding. A
+ * `project` that names no project, or any `project` when the judged repository is not
+ * `system-state`, prints one `error: ` line to `stderr` and returns 2: the command line is wrong,
+ * so nothing was judged.
+ */
+export function runCheck(
+  request: { readonly repo?: RepositoryType | undefined; readonly project?: string | undefined },
+  context: CheckContext,
+): 0 | 1 | 2 {
   let lines: string[];
+  let summary = 'no repository';
   try {
-    const root = findRepositoryRoot(context.cwd);
+    const found = findRepository(context.cwd);
+    const type = request.repo ?? found.type;
+    if (request.project !== undefined && type !== 'system-state') {
+      throw new ProjectRefusal(
+        `--project needs the system-state repository; ${type} is judged whole`,
+      );
+    }
+    summary = type;
+    const { root, registry } = resolveRepository(found, type);
+    const scope =
+      request.project === undefined ? repositoryScope : resolveProjectScope(root, request.project);
+    const rules = selectRules(ruleSets[type], scope);
+    const scopeName = scope.kind === 'repository' ? '' : `project ${scope.project.name}, `;
+    summary = `${type}, ${scopeName}${String(rules.length)} rules`;
     lines = rules
-      .flatMap((rule) => rule({ root, commands: context.commands }))
+      .flatMap((rule) => rule.judge({ root, registry, commands: context.commands, scope }))
       .map(formatFinding)
       .sort(compareBytes);
   } catch (cause) {
+    if (cause instanceof ProjectRefusal) {
+      context.stderr(`error: ${cause.message}\n`);
+      return 2;
+    }
     if (!(cause instanceof RepositoryDefect)) throw cause;
-    lines = [formatFinding({ rule: 'repository.root', path: '.', message: cause.message })];
+    lines = [formatFinding({ rule: cause.rule, path: cause.path, message: cause.message })];
   }
   if (lines.length === 0) {
-    context.stdout(`ok: ${String(rules.length)} rules, no findings.\n`);
+    context.stdout(`ok: ${summary}, no findings.\n`);
     return 0;
   }
   const noun = lines.length === 1 ? 'finding' : 'findings';
-  context.stdout(`${lines.join('\n')}\n${String(lines.length)} ${noun}.\n`);
+  context.stdout(`${lines.join('\n')}\nfail: ${summary}, ${String(lines.length)} ${noun}.\n`);
   return 1;
 }

@@ -16,8 +16,8 @@ function collect(run: (stdout: (text: string) => void) => unknown): string {
 function runIn(
   cwd: string,
   command: PuniCommand,
-): { code: 0 | 1; printed: string; errors: string } {
-  let code: 0 | 1 = 0;
+): { code: 0 | 1 | 2; printed: string; errors: string } {
+  let code: 0 | 1 | 2 = 0;
   let errors = '';
   const printed = collect((stdout) => {
     code = runCommand(command, {
@@ -36,7 +36,19 @@ const repositories: string[] = [];
 function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-cli-'));
   repositories.push(root);
-  writeFileSync(join(root, 'nx.json'), '{}');
+  writeFileSync(
+    join(root, 'puni.json'),
+    JSON.stringify({
+      'this-repo-type': 'system-state',
+      'all-repos': [
+        { type: 'system-state', remote: { type: 'github', url: 'https://github.com/acme/demo' } },
+        {
+          type: 'system-records',
+          remote: { type: 'github', url: 'https://github.com/acme/demo-records' },
+        },
+      ],
+    }),
+  );
   mkdirSync(join(root, 'apps/one/src'), { recursive: true });
   writeFileSync(join(root, 'apps/one/src/main.ts'), 'export {};\n');
   mkdirSync(join(root, 'libs'));
@@ -100,9 +112,28 @@ describe('runCommand', () => {
 
   test('check judges with the live command tree and exits 1 on findings', () => {
     const root = makeRepository();
-    const run = runIn(root, { group: 'burokrat', request: { kind: 'check' } });
+    const run = runIn(root, {
+      group: 'burokrat',
+      request: { kind: 'check', repo: undefined, project: undefined },
+    });
     expect(run.code).toBe(1);
     expect(run.printed).toContain('agents.exists AGENTS.md: is missing\n');
     expect(run.printed).toContain('index.current wiki/index/index.md: is missing');
+  });
+
+  test('check --project naming no project exits 2 with one error line', () => {
+    const root = makeRepository();
+    writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
+    expect(Bun.spawnSync(['git', 'init', '-q'], { cwd: root }).exitCode).toBe(0);
+    expect(
+      runIn(root, {
+        group: 'burokrat',
+        request: { kind: 'check', repo: undefined, project: 'nope' },
+      }),
+    ).toEqual({
+      code: 2,
+      printed: '',
+      errors: 'error: no project named nope; the projects are workspace, one\n',
+    });
   });
 });

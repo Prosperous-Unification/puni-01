@@ -51,12 +51,17 @@ describe('readInvocation', () => {
   });
 
   test.each([
-    ['b wiki index', 'wiki index'],
-    ['bur check', 'check'],
-  ] as const)('%s selects %s', (line, kind) => {
+    ['b wiki index', { kind: 'wiki index' }],
+    ['bur check', { kind: 'check', repo: undefined, project: undefined }],
+    ['b check --project puni-dash', { kind: 'check', repo: undefined, project: 'puni-dash' }],
+    [
+      'b check --repo system-records',
+      { kind: 'check', repo: 'system-records', project: undefined },
+    ],
+  ] as const)('%s selects %j', (line, request) => {
     expect(readInvocation(line.split(' '), () => undefined)).toEqual({
       kind: 'command',
-      command: { group: 'burokrat', request: { kind } },
+      command: { group: 'burokrat', request },
     });
   });
 
@@ -74,7 +79,9 @@ describe('readInvocation', () => {
 
   test('b --help shows that a bare burokrat is valid and lists check and wiki', () => {
     const help = readPrinted(['b', '--help']);
-    expect(help).toContain('Usage: puni burokrat [(check | wiki [index])]\n');
+    expect(help).toContain(
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] | wiki [index])]\n',
+    );
     expect(readListedNames(help)).toEqual(['check', 'wiki']);
   });
 
@@ -110,6 +117,7 @@ describe('readInvocation', () => {
     ['d --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
     ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
+    ['b check --project', '`--project` requires `NAME`.'],
     [
       'completion',
       'Missing shell name for completion. Generate shell completion script or provide completions.',

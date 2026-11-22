@@ -5,6 +5,7 @@ import { agentsWordBudget, indexWordBudget, readmeWordBudget } from '../budgets'
 import {
   fixtureCommands,
   makeRepository,
+  removeFixture,
   runGit,
   writeProject,
   writeRepositoryFile,
@@ -20,6 +21,8 @@ import {
   readmeWords,
 } from './entry-rules';
 import type { Finding, Rule } from './finding';
+import { repositoryScope } from './scope';
+import { readRegistry } from '../registry';
 import { confineRecordsName, forbidDates } from './history-rules';
 import {
   limitIndexWords,
@@ -28,7 +31,7 @@ import {
   requireReadWhen,
 } from './index-rules';
 import { resolveLinks } from './link-rules';
-import { rules } from './rules';
+import { codeRules } from './rules';
 
 let root = '';
 
@@ -37,11 +40,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeFixture(root);
 });
 
 function judge(rule: Rule): Finding[] {
-  return rule({ root, commands: fixtureCommands });
+  return rule({
+    root,
+    registry: readRegistry(root),
+    commands: fixtureCommands,
+    scope: repositoryScope,
+  });
 }
 
 function words(count: number): string {
@@ -51,9 +59,12 @@ function words(count: number): string {
 const recordsName = ['demo', 'records'].join('-');
 
 describe('every rule holds on the fixture repository', () => {
-  test.each(rules.map((rule) => [rule.name, rule] as const))('%s', (_name, rule) => {
-    expect(judge(rule)).toEqual([]);
-  });
+  test.each(codeRules.map((rule) => [rule.judge.name, rule.judge] as const))(
+    '%s',
+    (_name, rule) => {
+      expect(judge(rule)).toEqual([]);
+    },
+  );
 });
 
 const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
@@ -175,14 +186,6 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     },
   ],
   [
-    'package.json without a name',
-    confineRecordsName,
-    () => {
-      writeRepositoryFile(root, 'package.json', '{}');
-    },
-    { rule: 'history.records', path: 'package.json', message: 'package.json has no name' },
-  ],
-  [
     'a broken link',
     resolveLinks,
     () => {
@@ -299,8 +302,17 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
-  test('an untracked file naming the records repository is not judged', () => {
+  test('an untracked file naming the records repository is judged as if it were staged', () => {
     writeRepositoryFile(root, 'notes.txt', `see ${recordsName}\n`);
+    const untracked = judge(confineRecordsName);
+    runGit(root, ['add', 'notes.txt']);
+    expect(untracked).toHaveLength(1);
+    expect(judge(confineRecordsName)).toEqual(untracked);
+  });
+
+  test('an ignored file naming the records repository is not judged', () => {
+    writeRepositoryFile(root, '.gitignore', 'scratch/\n');
+    writeRepositoryFile(root, 'scratch/notes.txt', `see ${recordsName}\n`);
     expect(judge(confineRecordsName)).toEqual([]);
   });
 
@@ -321,22 +333,28 @@ describe('rule boundaries', () => {
 });
 
 describe('runCheck', () => {
-  function runIn(cwd: string): { code: 0 | 1; printed: string } {
+  function runIn(cwd: string): { code: 0 | 1 | 2; printed: string } {
     let printed = '';
-    const code = runCheck({
-      cwd,
-      commands: fixtureCommands,
-      stdout: (text) => {
-        printed += text;
+    const code = runCheck(
+      {},
+      {
+        cwd,
+        stderr: (text) => {
+          throw new Error(`unexpected stderr: ${text}`);
+        },
+        commands: fixtureCommands,
+        stdout: (text) => {
+          printed += text;
+        },
       },
-    });
+    );
     return { code, printed };
   }
 
   test('a clean repository prints one ok line and exits 0', () => {
     expect(runIn(root)).toEqual({
       code: 0,
-      printed: `ok: ${String(rules.length)} rules, no findings.\n`,
+      printed: `ok: system-state, ${String(codeRules.length)} rules, no findings.\n`,
     });
   });
 
@@ -348,16 +366,27 @@ describe('runCheck', () => {
       printed: [
         'agents.index AGENTS.md: does not name wiki/index/index.md',
         'readme.exists README.md: is missing',
-        '2 findings.',
+        `fail: system-state, ${String(codeRules.length)} rules, 2 findings.`,
         '',
       ].join('\n'),
     });
   });
 
-  test('no nx.json is a repository.root finding', () => {
-    rmSync(join(root, 'nx.json'));
+  test('no puni.json is a repository.root finding', () => {
+    rmSync(join(root, 'puni.json'));
     const run = runIn(root);
     expect(run.code).toBe(1);
-    expect(run.printed).toMatch(/^repository\.root \.: no nx\.json in [^\n]+\n1 finding\.\n$/u);
+    expect(run.printed).toMatch(
+      /^repository\.root \.: no puni\.json in [^\n]+\nfail: no repository, 1 finding\.\n$/u,
+    );
+  });
+
+  test('an invalid puni.json is a repository.config finding', () => {
+    writeRepositoryFile(root, 'puni.json', JSON.stringify({ 'all-repos': [] }));
+    const run = runIn(root);
+    expect(run.code).toBe(1);
+    expect(run.printed).toBe(
+      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array\nfail: no repository, 1 finding.\n`,
+    );
   });
 });

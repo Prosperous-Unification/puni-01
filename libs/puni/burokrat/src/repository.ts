@@ -1,28 +1,20 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { dirname, join, posix, resolve } from 'node:path';
+import { join, posix } from 'node:path';
 
 /**
- * Something wrong with the repository's own inputs, such as a missing `nx.json` or a project
- * without `readWhen`. Commands report it as one line, never as a stack trace.
+ * Something wrong with the repository's own inputs, such as a missing `puni.json` or a project
+ * without `readWhen`. Commands report it as one line, never as a stack trace. `rule` and `path`
+ * place it as a `check` finding.
  */
 export class RepositoryDefect extends Error {
   override readonly name = 'RepositoryDefect';
-}
 
-/**
- * The nearest directory at or above `cwd` that holds an `nx.json`.
- *
- * @throws RepositoryDefect when no such directory exists up to the filesystem root.
- */
-export function findRepositoryRoot(cwd: string): string {
-  let directory = resolve(cwd);
-  for (;;) {
-    if (existsSync(join(directory, 'nx.json'))) return directory;
-    const parent = dirname(directory);
-    if (parent === directory) {
-      throw new RepositoryDefect(`no nx.json in ${cwd} or any directory above it`);
-    }
-    directory = parent;
+  constructor(
+    readonly rule: string,
+    readonly path: string,
+    message: string,
+  ) {
+    super(message);
   }
 }
 
