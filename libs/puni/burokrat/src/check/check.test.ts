@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { appendFileSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { agentsWordBudget, indexWordBudget, readmeWordBudget } from '../budgets';
 import {
   fixtureCommands,
   makeRepository,
@@ -68,9 +69,13 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     'AGENTS.md over budget',
     agentsWords,
     () => {
-      writeRepositoryFile(root, 'AGENTS.md', words(251));
+      writeRepositoryFile(root, 'AGENTS.md', words(agentsWordBudget + 1));
     },
-    { rule: 'agents.words', path: 'AGENTS.md', message: 'has 251 words; at most 250' },
+    {
+      rule: 'agents.words',
+      path: 'AGENTS.md',
+      message: `has ${String(agentsWordBudget + 1)} words; at most ${String(agentsWordBudget)}`,
+    },
   ],
   [
     'AGENTS.md not naming the index',
@@ -118,9 +123,13 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     'README.md over budget',
     readmeWords,
     () => {
-      writeRepositoryFile(root, 'README.md', words(151));
+      writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
     },
-    { rule: 'readme.words', path: 'README.md', message: 'has 151 words; at most 150' },
+    {
+      rule: 'readme.words',
+      path: 'README.md',
+      message: `has ${String(readmeWordBudget + 1)} words; at most ${String(readmeWordBudget)}`,
+    },
   ],
   [
     'a date in README.md',
@@ -237,9 +246,13 @@ const negatives: readonly (readonly [string, Rule, () => void, Finding])[] = [
     'an index over budget',
     limitIndexWords,
     () => {
-      writeRepositoryFile(root, indexFile, words(401));
+      writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
     },
-    { rule: 'index.words', path: indexFile, message: 'has 401 words; at most 400' },
+    {
+      rule: 'index.words',
+      path: indexFile,
+      message: `has ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+    },
   ],
   [
     'a project without readWhen',

@@ -5,29 +5,42 @@ repository it governs.
 
 ## Working here
 
-- `bun run gate` decides whether work is done. Use Bun and Nx only, never npm,
-  pnpm or yarn.
-- To find anything, start at `wiki/index/index.md`. It maps a task to the one
-  file to read.
-- History lives in the records repository,
-  <https://github.com/Prosperous-Unification/puni-01-records>, checked out
-  beside this one as `../puni-01-records`. Read it only when a task names a
-  record. This is the only file that links there.
+- Run `bun run gate` before calling work done. Bun and Nx only.
+- Unsure where something lives? `wiki/index/index.md` maps a task to the
+  file to read first.
+- Every commit, commit message and pull request here is public: no
+  credentials, hostnames, addresses, personal data or record content.
+- Records live in <https://github.com/Prosperous-Unification/puni-01-records>,
+  cloned beside this repository as `../puni-01-records`; its `AGENTS.md` says
+  how to file one. File one when the task asks, or when you decide something
+  the code and its commit message cannot carry. Open one only when a task
+  names it.
 
 ## Rules
 
-1. **State, not history.** Write here only what the system is now. Plans,
-   decisions, research, evidence and anything dated go to the records
-   repository.
-2. **One home for every fact.** Before writing something down, find where it
-   already lives and change it there. Put new knowledge beside the thing it
-   describes, never in a second place.
-3. **Enforce, don't describe.** When a tool can check a rule, add the check
-   instead of a sentence, and prove the check can fail.
-4. **Evidence before claims.** Report something as working only with fresh
-   output that shows it, and say what you did not verify.
-5. **Three roles.** Navigator decides, Dash does, Burokrat judges. Place every
-   command under the role that fits and add nothing at the top level of the
-   CLI.
-6. **Build only what was asked.** Add no file, command, document or dependency
-   the task did not call for. When more seems needed, ask the owner.
+Navigator decides, Dash does, Burokrat judges: you do the work, the task sets
+its scope and the gate judges it. Only the owner, the person you work for,
+changes these rules; a task overrides one only by naming it.
+
+1. **State, not history.** This repository says what the system is now, and
+   why wherever the reason still binds. Its past and its future (plans,
+   research, rejected options, evidence) are records. What stops being true
+   is deleted, not marked old.
+2. **One home for every fact.** Find where a fact lives and change it there.
+   A new one goes in the first of these that can hold it: a check or test, a
+   type or name, JSDoc on the symbol, a wiki page. Copies are generated,
+   never typed.
+3. **The task sets the scope.** Deliver all of it and nothing it does not
+   need. Where it is unclear, take the smallest reading that does the whole
+   job. Propose anything more; do not build it.
+4. **Ask only before what cannot be undone:** destroying work outside your
+   task, rewriting pushed history, releasing, weakening or bypassing the
+   gate. Otherwise assume, act and say what you assumed.
+5. **Fail loudly.** What code requires and does not find (a file, a value, a
+   tool) is an error that names it. An absence the design expects is a named
+   case with a test. You are blocked only when no permitted route is left;
+   then report what you tried.
+6. **Evidence, not opinion.** Work is done when the gate passes and output
+   from a run after your last change shows what was asked for working.
+   Behaviour you add or change has a test that fails without it. Another
+   agent's report is a claim. Say what you did not verify.

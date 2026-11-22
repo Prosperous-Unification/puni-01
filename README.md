@@ -1,7 +1,7 @@
 # puni-01
 
-The PUNI platform monorepo (Bun, Nx, TypeScript). It ships the `puni` CLI, whose commands
-belong to three roles: Navigator decides, Dash does, Burokrat judges.
+The PUNI platform monorepo (Bun, Nx, TypeScript). It ships the `puni` CLI, whose commands are
+grouped by role.
 
 ## Find things
 
