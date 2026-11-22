@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { recordDirectories, recordKinds } from './records-schema';
+import { repositoryCounterpartKey, repositoryKindKey, type RepositoryKind } from './repository';
 import { indexFile, readIndexSources, renderIndex, type CommandBrief } from './wiki/wiki-index';
 
 /** The command tree fixture repositories are indexed with. */
@@ -57,13 +58,24 @@ export function runGit(root: string, args: readonly string[]): void {
   if (child.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${child.stderr.toString()}`);
 }
 
+/** The counterpart each fixture repository declares: `demo` pairs with `demo-records`. */
+export const fixtureCounterparts = { code: 'acme/demo-records', records: 'acme/demo' } as const;
+
+/** The text of a valid `puni.json` for a fixture repository of `kind`. */
+export function formatFixtureConfig(kind: RepositoryKind): string {
+  return JSON.stringify({
+    [repositoryKindKey]: kind,
+    [repositoryCounterpartKey]: fixtureCounterparts[kind],
+  });
+}
+
 /**
  * A fresh temporary repository named `demo` that passes every rule: entry files, one project,
  * a generated index, and every file staged in a real git repository.
  */
 export function makeRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-burokrat-'));
-  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'code' }));
+  writeRepositoryFile(root, 'puni.json', formatFixtureConfig('code'));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',
@@ -118,7 +130,7 @@ export function writeRecord(
  */
 export function makeRecordsRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'puni-records-'));
-  writeRepositoryFile(root, 'puni.json', JSON.stringify({ kind: 'records' }));
+  writeRepositoryFile(root, 'puni.json', formatFixtureConfig('records'));
   writeRepositoryFile(root, 'AGENTS.md', '# demo records\n\nSee [the plans](nav/plans).\n');
   symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
   writeRecord(
