@@ -47,15 +47,18 @@ export const limitIndexWords: Rule = {
   },
 };
 
-/** Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`. */
+/**
+ * Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`.
+ * The root project judges every source: its check reads every `project.json`.
+ */
 export const requireReadWhen: Rule = {
   id: 'index.read-when',
   remedy:
     'give it a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words (a page holds it as front matter with a title)',
-  judge: ({ files, scope, wikiIndex }) =>
+  judge: ({ files, wikiIndex }) =>
     wikiIndex
-      .readScopeDefects(files, scope)
-      .filter((defect) => defect.topic === 'read-when')
+      .readSources(files)
+      .defects.filter((defect) => defect.topic === 'read-when')
       .map(({ path, message }) => ({ path, message })),
 };
 
@@ -66,9 +69,9 @@ export const requireReadWhen: Rule = {
 export const requireReadFirst: Rule = {
   id: 'index.read-first',
   remedy: 'set metadata.readFirst to the path, relative to the project, of the file to read first',
-  judge: ({ files, scope, wikiIndex }) =>
+  judge: ({ files, wikiIndex }) =>
     wikiIndex
-      .readScopeDefects(files, scope)
-      .filter((defect) => defect.topic === 'read-first')
+      .readSources(files)
+      .defects.filter((defect) => defect.topic === 'read-first')
       .map(({ path, message }) => ({ path, message })),
 };

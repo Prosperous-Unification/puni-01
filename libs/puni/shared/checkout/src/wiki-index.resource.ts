@@ -3,7 +3,7 @@ import { compareBytes } from './byte-order';
 import type { CheckoutFiles, WikiIndexResource } from './contract';
 import { parseFrontMatter } from './front-matter';
 import type { IndexSources, ReadWhenEntry, SourceDefect } from './index-sources';
-import { ownsPath, repositoryScope } from './ownership';
+import { repositoryScope } from './ownership';
 import { judgeReadWhen } from './read-when';
 import { indexDirectory } from './render-index';
 
@@ -151,20 +151,6 @@ function listGenerated(files: CheckoutFiles): string[] {
 export function createWikiIndex(): WikiIndexResource {
   return {
     readSources,
-    readScopeDefects(files, scope) {
-      if (scope.kind === 'repository' || scope.project.directory === '.') {
-        return readSources(files).defects.filter((defect) => ownsPath(scope, defect.path));
-      }
-      const { directory } = scope.project;
-      if (!/^(apps|libs)\//u.test(directory) || !files.exists(directory)) return [];
-      const listing = files.listVisible(scope);
-      if ('failure' in listing)
-        return [{ topic: 'read-when', path: '.', message: listing.failure }];
-      return listing.files
-        .filter((path) => posix.basename(path) === 'project.json' && !isBelowNodeModules(path))
-        .flatMap((path) => readProject(files, path))
-        .flatMap((reading) => ('defect' in reading ? [reading.defect] : []));
-    },
     compare(files, expected) {
       const present = listGenerated(files);
       const expectedPaths = [...expected.keys()].sort(compareBytes);

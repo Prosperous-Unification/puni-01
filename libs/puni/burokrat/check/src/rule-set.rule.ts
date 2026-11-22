@@ -33,8 +33,8 @@ const at =
 
 /**
  * The rules for a `system-state` repository. The generated index is judged only whole; entry
- * files and the index budget are repository-level; the per-project index rules and the per-file
- * rules are project-level.
+ * files, the index budget and the index sources (every `project.json`, which the root project's
+ * check reads) are repository-level; the per-file and per-project rules are project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
@@ -47,13 +47,13 @@ export const codeRules: readonly LeveledRule[] = [
     limitIndexWords,
     matchRecordsLocation,
     requireCiGate,
+    requireReadWhen,
+    requireReadFirst,
   ].map(at('repository')),
   ...[
     forbidDates,
     confineRecordsName,
     resolveLinks,
-    requireReadWhen,
-    requireReadFirst,
     forbidPlaintextSecrets,
     requireProjectTargets,
     judgeDocPaths,

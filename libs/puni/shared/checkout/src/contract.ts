@@ -1,5 +1,5 @@
 import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
-import type { IndexDrift, IndexSources, SourceDefect } from './index-sources';
+import type { IndexDrift, IndexSources } from './index-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
@@ -113,12 +113,6 @@ export interface WikiIndexResource {
    * Never throws for a defect in them; each one is returned, sorted by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
-  /**
-   * The index-source defects `scope` judges. The whole repository and the root project read every
-   * source and keep those the scope owns; another project reads only the `project.json` files it
-   * owns, and only when it is indexed (under `apps/` or `libs/`).
-   */
-  readScopeDefects(files: CheckoutFiles, scope: CheckScope): readonly SourceDefect[];
   /** How the committed `wiki/index/` differs from `expected`. */
   compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
   /**
