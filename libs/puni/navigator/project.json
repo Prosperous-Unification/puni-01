@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-navigator",
+  "projectType": "library",
+  "sourceRoot": "libs/puni/navigator/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bun test src", "cwd": "libs/puni/navigator" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx eslint libs/puni/navigator/src" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx tsc --noEmit -p libs/puni/navigator/tsconfig.json" }
+    }
+  }
+}

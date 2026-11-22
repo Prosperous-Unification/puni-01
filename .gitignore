@@ -1,0 +1,17 @@
+node_modules/
+# The trailing slash above matches a directory only; this line also covers a symlink.
+node_modules
+dist/
+coverage/
+.nx/
+*.tsbuildinfo
+
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+.env
+.env.local
+
+.DS_Store
+.idea/

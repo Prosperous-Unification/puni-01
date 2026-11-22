@@ -1,0 +1,5 @@
+dist/
+.nx/
+coverage/
+node_modules/
+CLAUDE.md

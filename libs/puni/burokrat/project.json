@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat",
+  "projectType": "library",
+  "sourceRoot": "libs/puni/burokrat/src",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bun test src", "cwd": "libs/puni/burokrat" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx eslint libs/puni/burokrat/src" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx tsc --noEmit -p libs/puni/burokrat/tsconfig.json" }
+    }
+  }
+}

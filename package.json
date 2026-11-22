@@ -1,0 +1,31 @@
+{
+  "name": "puni-01",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "puni": "bun apps/puni/cli/src/entrypoint.ts",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "format": "nx format:write --all",
+    "format:check": "nx format:check --all",
+    "gate": "nx format:check --all && nx run-many -t lint typecheck test build"
+  },
+  "dependencies": {
+    "@optique/core": "1.4.0",
+    "@optique/run": "1.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "bun-types": "^1.4.2",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "10.1.8",
+    "lefthook": "^2.1.12",
+    "nx": "23.2.1",
+    "prettier": "^3.9.6",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "^8.69.0"
+  }
+}

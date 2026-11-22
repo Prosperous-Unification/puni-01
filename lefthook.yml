@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      run: bunx prettier --check {staged_files}
+      glob: '*.{ts,js,json,md,yml,yaml}'
+      exclude:
+        - CLAUDE.md
+    lint:
+      run: bunx eslint {staged_files}
+      glob: '*.{ts,js}'

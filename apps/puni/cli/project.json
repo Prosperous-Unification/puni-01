@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-cli",
+  "projectType": "application",
+  "sourceRoot": "apps/puni/cli/src",
+  "implicitDependencies": ["puni-navigator", "puni-dash", "puni-burokrat"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bun test src", "cwd": "apps/puni/cli" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx eslint apps/puni/cli/src" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "bunx tsc --noEmit -p apps/puni/cli/tsconfig.json" }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/puni/cli"],
+      "options": {
+        "command": "bun build apps/puni/cli/src/entrypoint.ts --target bun --outfile dist/apps/puni/cli/puni.js"
+      }
+    }
+  }
+}
