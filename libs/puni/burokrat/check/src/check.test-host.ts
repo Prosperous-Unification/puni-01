@@ -1,11 +1,12 @@
 import { type CheckScope, checkoutModule, repositoryScope } from '@puni/shared-checkout';
 import type { CommandBrief, CommandExitCode } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
-import { fixtureCommands, nodeHost } from '@puni/shared-testing';
+import { nodeHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { CheckRequest } from './contract';
 import type { Finding, Rule } from './finding';
 import { burokratCheckModule } from './module';
+import { fixtureCommands } from './repository-pair.test-host';
 
 /** One run of the check command: its exit code and what it printed. */
 export interface CheckRun {

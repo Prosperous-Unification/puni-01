@@ -10,17 +10,7 @@ import {
   recordTopicLimit,
   requiredRecordKeys,
 } from '@puni/shared-records';
-import {
-  describeRecord,
-  formatFixtureRegistry,
-  makeRecordsRepository,
-  removeFixture,
-  runGit,
-  supersededRecord,
-  supersedingRecord,
-  writeRecord,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
+import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import type { CheckRequest } from './contract';
 import type { Finding, Rule } from './finding';
@@ -31,6 +21,14 @@ import {
   judgeRecordsLayout,
   judgeSupersession,
 } from './rules/records.rule';
+import {
+  describeRecord,
+  formatFixtureRegistry,
+  makeRecordsRepository,
+  supersededRecord,
+  supersedingRecord,
+  writeRecord,
+} from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;

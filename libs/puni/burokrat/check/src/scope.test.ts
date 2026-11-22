@@ -2,18 +2,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { appendFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findOwner, indexFile, ownsPath, type RepositoryType } from '@puni/shared-checkout';
+import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
+import { type CheckHost, openCheckHost } from './check.test-host';
+import { codeRules } from './rule-set.rule';
 import {
   formatFixtureRegistry,
   makeRepository,
   regenerateIndex,
-  removeFixture,
-  runGit,
-  writeProject,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
-import { type CheckHost, openCheckHost } from './check.test-host';
-import { codeRules } from './rule-set.rule';
+} from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -176,7 +173,9 @@ describe('project ownership', () => {
     if (two === undefined) throw new Error('two is not a project');
     const scope = { kind: 'project', project: two, projects } as const;
     const listing = openFiles().listVisible(scope);
-    expect(listing).toEqual({ files: ['libs/two/project.json', 'libs/two/src/index.ts'] });
+    expect(listing).toEqual({
+      files: ['libs/two/project.json', 'libs/two/src/index.ts', 'libs/two/tsconfig.json'],
+    });
     expect(ownsPath(scope, 'libs/two/inner/src/index.ts')).toBe(false);
   });
 

@@ -36,6 +36,7 @@ export {
 export { judgeReadWhen, readWhenWordBudget } from './read-when';
 export {
   allReposKey,
+  formatRegistry,
   githubUrlPattern,
   nameRepository,
   parseRegistry,

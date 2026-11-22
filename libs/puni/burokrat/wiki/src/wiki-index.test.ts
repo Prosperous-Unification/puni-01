@@ -2,17 +2,10 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { checkoutModule, type IndexSources, indexFile, renderIndex } from '@puni/shared-checkout';
-import {
-  fixtureCommands,
-  formatFixtureRegistry,
-  makeRepository,
-  nodeHost,
-  removeFixture,
-  writeProject,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
+import { nodeHost, removeFixture, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { burokratWikiModule } from './module';
+import { fixtureCommands, formatFixtureRegistry, makeRepository } from './wiki.test-host';
 
 let root = '';
 
@@ -55,8 +48,8 @@ function render(): Map<string, string> {
   return renderIndex(sources.entries, fixtureCommands);
 }
 
-beforeEach(async () => {
-  root = await makeRepository();
+beforeEach(() => {
+  root = makeRepository();
 });
 
 afterEach(() => {

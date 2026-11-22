@@ -2,13 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { appendFileSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { indexFile } from '@puni/shared-checkout';
-import {
-  makeRepository,
-  removeFixture,
-  runGit,
-  writeProject,
-  writeRepositoryFile,
-} from '@puni/shared-testing';
+import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import type { Finding, Rule } from './finding';
@@ -29,6 +23,7 @@ import {
   requireReadWhen,
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
+import { makeRepository } from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;

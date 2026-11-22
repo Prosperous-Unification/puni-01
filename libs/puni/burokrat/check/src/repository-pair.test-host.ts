@@ -1,48 +1,23 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, posix } from 'node:path';
+import { join, posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
 import {
-  allReposKey,
   checkoutModule,
+  formatRegistry,
   indexFile,
   renderIndex,
   type RepositoryType,
-  repositoryTypes,
-  thisRepoTypeKey,
 } from '@puni/shared-checkout';
 import { recordDirectories, recordKinds } from '@puni/shared-records';
+import { nodeHost, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
-import { nodeHost } from './node-host';
 
 /** The command tree fixture repositories are indexed with. */
 export const fixtureCommands: readonly CommandBrief[] = [
   { path: 'demo dash', brief: 'Do it.' },
   { path: 'demo burokrat', brief: 'Judge.' },
 ];
-
-/** Writes `content` at `path` under `root`, creating parent directories. */
-export function writeRepositoryFile(root: string, path: string, content: string): void {
-  mkdirSync(dirname(join(root, path)), { recursive: true });
-  writeFileSync(join(root, path), content);
-}
-
-/** Project metadata as a fixture writes it; an undefined field is left out of the JSON. */
-export interface FixtureMetadata {
-  readonly readWhen?: string | undefined;
-  readonly readFirst?: string | undefined;
-}
-
-/** Writes a `project.json` with `metadata`, and a `src/index.ts` for `readFirst` to name. */
-export function writeProject(
-  root: string,
-  directory: string,
-  name: string,
-  metadata: FixtureMetadata,
-): void {
-  writeRepositoryFile(root, `${directory}/project.json`, JSON.stringify({ name, metadata }));
-  writeRepositoryFile(root, `${directory}/src/index.ts`, 'export {};\n');
-}
 
 /**
  * Rewrites `wiki/index/index.md` of the git repository at `root` from its sources, read through
@@ -68,16 +43,6 @@ export async function regenerateIndex(root: string): Promise<void> {
   }
 }
 
-/**
- * Runs git in `root`.
- *
- * @throws Error when git exits non-zero.
- */
-export function runGit(root: string, args: readonly string[]): void {
-  const child = Bun.spawnSync(['git', ...args], { cwd: root, stdout: 'pipe', stderr: 'pipe' });
-  if (child.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${child.stderr.toString()}`);
-}
-
 /** The remote URL of each fixture repository; their last segments name the checkouts. */
 export const fixtureRemotes: Readonly<Record<RepositoryType, string>> = {
   'system-state': 'https://github.com/acme/demo',
@@ -86,13 +51,7 @@ export const fixtureRemotes: Readonly<Record<RepositoryType, string>> = {
 
 /** The text of a valid `puni.json` for the fixture repository of `thisType`. */
 export function formatFixtureRegistry(thisType: RepositoryType): string {
-  return JSON.stringify({
-    [thisRepoTypeKey]: thisType,
-    [allReposKey]: repositoryTypes.map((type) => ({
-      type,
-      remote: { type: 'github', url: fixtureRemotes[type] },
-    })),
-  });
+  return formatRegistry(thisType, fixtureRemotes);
 }
 
 /**
@@ -155,7 +114,7 @@ export interface RepositoryPair {
 
 /**
  * A fresh pair in one temporary directory: `demo` (system-state) and `demo-records`
- * (system-records), each passing every rule of its type. {@link removeFixture} deletes both.
+ * (system-records), each passing every rule of its type. `removeFixture` deletes both.
  */
 export async function makeRepositoryPair(): Promise<RepositoryPair> {
   const parent = mkdtempSync(join(tmpdir(), 'puni-pair-'));
@@ -173,11 +132,6 @@ export async function makeRepository(): Promise<string> {
 /** The records repository of a fresh {@link makeRepositoryPair}. */
 export async function makeRecordsRepository(): Promise<string> {
   return (await makeRepositoryPair()).records;
-}
-
-/** Deletes the pair holding `root`, a repository from {@link makeRepositoryPair}. */
-export function removeFixture(root: string): void {
-  rmSync(dirname(root), { recursive: true, force: true });
 }
 
 /** Front matter for a fixture record: every required key, valid for `path`, then `extra`. */

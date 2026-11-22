@@ -10,21 +10,9 @@ export {
 } from './memory-host';
 export { nodeHost } from './node-host';
 export {
-  describeRecord,
   type FixtureMetadata,
-  fixtureCommands,
-  fixtureRemotes,
-  formatFixtureRegistry,
-  makeRecordsRepository,
-  makeRepository,
-  makeRepositoryPair,
-  regenerateIndex,
   removeFixture,
-  type RepositoryPair,
   runGit,
-  supersededRecord,
-  supersedingRecord,
   writeProject,
-  writeRecord,
   writeRepositoryFile,
-} from './repository-pair';
+} from './repository-files';
