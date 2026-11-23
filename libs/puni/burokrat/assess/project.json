@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat-assess",
+  "projectType": "library",
+  "tags": ["scope:burokrat", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that assesses the outcomes of work and what they cost",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/burokrat/assess/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

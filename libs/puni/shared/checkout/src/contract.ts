@@ -124,8 +124,9 @@ export interface ProjectScopeResource {
 export interface WikiIndexResource {
   /**
    * Reads every Nx project (`project.json` under `apps/` and `libs/`) and every authored page
-   * (Markdown under `wiki/` outside `wiki/index/`) that is visible and not below `node_modules`.
-   * A defect in them is no failure; each one is returned, sorted by path.
+   * (Markdown under `wiki/` outside `wiki/index/`) that is visible and not below `node_modules`;
+   * a project's entry carries its scope. A defect in them is no failure; each one is returned,
+   * sorted by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
   /**

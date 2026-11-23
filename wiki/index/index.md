@@ -5,31 +5,19 @@
 ## Read when
 
 - adding a command or a command group: [Adding a command](../adding-a-command.md)
-- adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
-- changing how a command line is parsed, how help is printed, or what a command handler receives and returns: [puni-shared-command](../../libs/puni/shared/command/src/command.ts)
-- changing how a plan is filed in the records repository: [puni-navigator-plan](../../libs/puni/navigator/plan/src/plan-filing.feature.ts)
-- changing how a repository is located, its files listed, its projects scoped or its wiki index sourced: [puni-shared-checkout](../../libs/puni/shared/checkout/src/contract.ts)
-- changing how commands are parsed, dispatched, printed or mapped to exit codes: [puni-cli](../../apps/puni/cli/src/root-parser.ts)
-- changing how failures are modelled, turned into findings, or reported with a reference and exit code 3: [puni-shared-failures](../../libs/puni/shared/failures/src/report-failure.ts)
-- changing how nodes are listed, reached over SSH, or asked for their k3s cluster: [puni-dash-ops](../../libs/puni/dash/ops/src/node-shell.feature.ts)
-- changing how the file system, git, child processes or the clock are reached on this machine: [puni-shared-adapters](../../libs/puni/shared/adapters/src/index.ts)
-- changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
-- changing the records schema or how record files are listed, read and filed: [puni-shared-records](../../libs/puni/shared/records/src/contract.ts)
-- changing what the code may ask of the file system, git, child processes or the clock: [puni-shared-ports](../../libs/puni/shared/ports/src/index.ts)
 - deciding where new code goes, or which kind a file is: [Architecture](../architecture.md)
 - the gate fails, or a finding names a rule you do not know: [When the gate fails](../gate-failures.md)
-- writing a test that needs a memory host or a real repository pair: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)
 
 ## Commands
 
 - `puni burokrat`: Judge: decide whether it was done right.
-- `puni burokrat check`: Judge the repository against its rules.
-- `puni burokrat wiki`: Generate the wiki index.
-- `puni burokrat wiki index`: Write the generated wiki index.
 - `puni dash`: Execute and operate: do it.
-- `puni dash ops`: Reach the nodes of the inventory.
-- `puni dash ops k3s`: Run kubectl on the node that runs the k3s server.
-- `puni dash ops ssh`: Open a shell on a node, or run a command there.
 - `puni navigator`: Plan: decide what to do.
-- `puni navigator plan`: File plans in the records repository.
-- `puni navigator plan add`: File a plan in the records repository.
+
+## Partitions
+
+- [app](app.md): the projects tagged `scope:app`
+- [burokrat](burokrat.md): the projects tagged `scope:burokrat` and the commands below `puni burokrat`
+- [dash](dash.md): the projects tagged `scope:dash` and the commands below `puni dash`
+- [navigator](navigator.md): the projects tagged `scope:navigator` and the commands below `puni navigator`
+- [shared](shared.md): the projects tagged `scope:shared`

@@ -1,4 +1,11 @@
-import { countWords, indexFile, renderIndex, sourceDefectRemedies } from '@puni/shared-checkout';
+import {
+  countWords,
+  indexDirectory,
+  renderIndex,
+  repositoryScope,
+  type SourceDefect,
+  sourceDefectRemedies,
+} from '@puni/shared-checkout';
 import { indexWordBudget } from '../budgets';
 import type { Rule } from '../finding';
 
@@ -20,8 +27,8 @@ export const matchGeneratedIndex: Rule = {
       return [
         {
           path: 'wiki/index',
-          message: `cannot be generated: ${count} index.read-when or index.read-first findings`,
-          remedy: `fix the index.read-when and index.read-first findings, then run \`${writeIndex}\``,
+          message: `cannot be generated: ${count} index.read-when, index.read-first or index.scope findings`,
+          remedy: `fix the index.read-when, index.read-first and index.scope findings, then run \`${writeIndex}\``,
         },
       ];
     }
@@ -34,22 +41,34 @@ export const matchGeneratedIndex: Rule = {
   },
 };
 
-/** The committed index stays within {@link indexWordBudget}; a missing one is `index.current`'s. */
+/**
+ * Every committed file of `wiki/index/` stays within {@link indexWordBudget}, each judged alone;
+ * a missing one is `index.current`'s.
+ */
 export const limitIndexWords: Rule = {
   id: 'index.words',
-  remedy: `shorten the readWhen of projects and the read-when of pages until ${indexFile} holds at most ${String(indexWordBudget)} words, then run \`${writeIndex}\``,
-  judge({ files }) {
-    if (!files.exists(indexFile)) return [];
-    const words = countWords(files.readText(indexFile));
-    if (words <= indexWordBudget) return [];
-    return [
-      {
-        path: indexFile,
-        message: `has ${String(words)} words; at most ${String(indexWordBudget)}`,
-      },
-    ];
-  },
+  remedy: `shorten the readWhen of projects, the read-when of pages and the command briefs until each file of ${indexDirectory}/ holds at most ${String(indexWordBudget)} words, then run \`${writeIndex}\``,
+  judge: ({ files }) =>
+    files
+      .listVisible(repositoryScope)
+      .filter((path) => path.startsWith(`${indexDirectory}/`))
+      .flatMap((path) => {
+        const words = countWords(files.readText(path));
+        if (words <= indexWordBudget) return [];
+        return [
+          { path, message: `has ${String(words)} words; at most ${String(indexWordBudget)}` },
+        ];
+      }),
 };
+
+/** The index source defects of `topic`, as findings. */
+function judgeSources(topic: SourceDefect['topic']): Rule['judge'] {
+  return ({ files, wikiIndex }) =>
+    wikiIndex
+      .readSources(files)
+      .defects.filter((defect) => defect.topic === topic)
+      .map(({ path, message }) => ({ path, message }));
+}
 
 /**
  * Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`.
@@ -58,11 +77,7 @@ export const limitIndexWords: Rule = {
 export const requireReadWhen: Rule = {
   id: 'index.read-when',
   remedy: sourceDefectRemedies['read-when'],
-  judge: ({ files, wikiIndex }) =>
-    wikiIndex
-      .readSources(files)
-      .defects.filter((defect) => defect.topic === 'read-when')
-      .map(({ path, message }) => ({ path, message })),
+  judge: judgeSources('read-when'),
 };
 
 /**
@@ -72,9 +87,12 @@ export const requireReadWhen: Rule = {
 export const requireReadFirst: Rule = {
   id: 'index.read-first',
   remedy: sourceDefectRemedies['read-first'],
-  judge: ({ files, wikiIndex }) =>
-    wikiIndex
-      .readSources(files)
-      .defects.filter((defect) => defect.topic === 'read-first')
-      .map(({ path, message }) => ({ path, message })),
+  judge: judgeSources('read-first'),
+};
+
+/** Every project has exactly one `scope:<name>` tag, naming the index partition that lists it. */
+export const requireScope: Rule = {
+  id: 'index.scope',
+  remedy: sourceDefectRemedies.scope,
+  judge: judgeSources('scope'),
 };

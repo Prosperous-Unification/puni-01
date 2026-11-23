@@ -16,6 +16,7 @@ import {
   matchGeneratedIndex,
   requireReadFirst,
   requireReadWhen,
+  requireScope,
 } from './rules/index.rule';
 import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
 import {
@@ -58,6 +59,7 @@ export const codeRules: readonly LeveledRule[] = [
     requireIndexSync,
     requireReadWhen,
     requireReadFirst,
+    requireScope,
   ].map(at('repository')),
   ...[
     forbidDates,

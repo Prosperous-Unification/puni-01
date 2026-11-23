@@ -1,0 +1,1 @@
+export { resourcesParser } from './group';

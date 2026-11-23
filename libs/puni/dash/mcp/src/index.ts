@@ -1,0 +1,1 @@
+export { mcpParser } from './group';

@@ -57,7 +57,7 @@ describe('entrypoint', () => {
   test('a bare group prints its help on stdout and exits 0', () => {
     const run = runPuni(['n']);
     expect(run).toEqual({ code: 0, stdout: runPuni(['navigator', '--help']).stdout, stderr: '' });
-    expect(run.stdout).toContain('Usage: puni navigator [plan ');
+    expect(run.stdout).toContain('Usage: puni navigator [(plan ');
   });
 
   test('--version prints the version line and exits 0', () => {
@@ -304,7 +304,14 @@ describe('entrypoint', () => {
     test('wiki index writes the system-state index through the registry', () => {
       expect(runPuni(['burokrat', 'wiki', 'index'], join(state, 'apps'))).toEqual({
         code: 0,
-        stdout: 'wrote: wiki/index/index.md\n',
+        stdout: [
+          'wrote: wiki/index/app.md',
+          'wrote: wiki/index/burokrat.md',
+          'wrote: wiki/index/dash.md',
+          'wrote: wiki/index/index.md',
+          'wrote: wiki/index/navigator.md',
+          '',
+        ].join('\n'),
         stderr: '',
       });
     });

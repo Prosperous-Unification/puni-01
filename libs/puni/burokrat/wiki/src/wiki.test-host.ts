@@ -1,14 +1,17 @@
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatRegistry, indexFile, renderIndex } from '@puni/shared-checkout';
+import { formatRegistry, renderIndex } from '@puni/shared-checkout';
 import type { CommandBrief } from '@puni/shared-command';
 import { fixtureRemotes, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 
 /** The command tree the fixture repository is indexed with. */
 export const fixtureCommands: readonly CommandBrief[] = [
   { path: 'demo dash', brief: 'Do it.' },
+  { path: 'demo dash ops', brief: 'Operate.' },
+  { path: 'demo dash ops ssh', brief: 'Reach a node.' },
   { path: 'demo burokrat', brief: 'Judge.' },
+  { path: 'demo burokrat check', brief: 'Check.' },
 ];
 
 /**
@@ -26,11 +29,11 @@ export function makeRepository(): string {
   });
   mkdirSync(join(root, 'libs'));
   const entries = [
-    { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing the one app' },
+    { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing the one app', scope: 'app' },
   ];
-  const rendered = renderIndex(entries, fixtureCommands).get(indexFile);
-  if (rendered === undefined) throw new Error(`${indexFile} was not rendered`);
-  writeRepositoryFile(root, indexFile, rendered);
+  for (const [path, text] of renderIndex(entries, fixtureCommands)) {
+    writeRepositoryFile(root, path, text);
+  }
   runGit(root, ['init', '-q']);
   runGit(root, ['add', '-A']);
   return root;

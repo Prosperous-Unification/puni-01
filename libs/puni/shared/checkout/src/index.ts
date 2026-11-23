@@ -16,7 +16,7 @@ export {
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
-export { type IndexSources, sourceDefectRemedies } from './index-sources';
+export { type IndexSources, type SourceDefect, sourceDefectRemedies } from './index-sources';
 export { describeValue, isRecord, parseJson, type ParsedJson, requireOnlyKeys } from './json';
 export { checkoutModule } from './module';
 export {

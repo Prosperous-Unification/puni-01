@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-dash-release",
+  "projectType": "library",
+  "tags": ["scope:dash", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that plans or runs a release of a product",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/dash/release/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

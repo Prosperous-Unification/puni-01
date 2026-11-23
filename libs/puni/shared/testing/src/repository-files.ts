@@ -24,14 +24,16 @@ export interface FixtureMetadata {
 }
 
 /**
- * Writes a library `project.json` named `name` with `metadata` and the targets every project
- * carries, a `tsconfig.json` including `src`, and a `src/index.ts` for `readFirst` to name.
+ * Writes a library `project.json` named `name` with `metadata`, the tag `scope:<scope>` and the
+ * targets every project carries, a `tsconfig.json` including `src`, and a `src/index.ts` for
+ * `readFirst` to name.
  */
 export function writeProject(
   root: string,
   directory: string,
   name: string,
   metadata: FixtureMetadata,
+  scope = 'app',
 ): void {
   const run = (command: string) => ({ executor: 'nx:run-commands', options: { command } });
   const targets = {
@@ -42,7 +44,7 @@ export function writeProject(
   writeRepositoryFile(
     root,
     `${directory}/project.json`,
-    JSON.stringify({ name, projectType: 'library', metadata, targets }),
+    JSON.stringify({ name, projectType: 'library', tags: [`scope:${scope}`], metadata, targets }),
   );
   writeRepositoryFile(root, `${directory}/tsconfig.json`, JSON.stringify({ include: ['src'] }));
   writeRepositoryFile(root, `${directory}/src/index.ts`, 'export {};\n');

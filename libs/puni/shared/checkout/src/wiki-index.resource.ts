@@ -38,9 +38,35 @@ function judgeReadFirst(
   return kind === 'file' ? undefined : 'must name a regular file';
 }
 
+/** A partition name: it names the file `wiki/index/<name>.md`, so never `index`. */
+const scopePattern = /^[a-z][a-z0-9-]*$/u;
+
 /**
- * Reads one `project.json`: its `name`, `metadata.readWhen` and `metadata.readFirst`. Returns the
- * project's index entry, or one defect per invalid field.
+ * The `<name>` of the one `scope:<name>` tag of the project `name`, or why it has none: no tag,
+ * several, or a name {@link scopePattern} refuses or that is `index`.
+ */
+function readScope(
+  name: string,
+  tags: unknown,
+): { readonly scope: string } | { readonly problem: string } {
+  const listed: readonly unknown[] = Array.isArray(tags) ? tags : [];
+  const scopes = listed.flatMap((tag) =>
+    typeof tag === 'string' && tag.startsWith('scope:') ? [tag.slice('scope:'.length)] : [],
+  );
+  const [scope, ...others] = scopes;
+  if (scope === undefined) return { problem: `project ${name} has no scope:<name> tag` };
+  if (others.length > 0) {
+    return { problem: `project ${name} has ${String(scopes.length)} scope tags; one is allowed` };
+  }
+  if (!scopePattern.test(scope) || scope === 'index') {
+    return { problem: `project ${name} tag scope:${scope} cannot name an index partition` };
+  }
+  return { scope };
+}
+
+/**
+ * Reads one `project.json`: its `name`, `metadata.readWhen`, `metadata.readFirst` and scope tag.
+ * Returns the project's index entry, or one defect per invalid field.
  */
 function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
   const { path, directory } = file;
@@ -67,10 +93,20 @@ function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
     const message = `project ${name} metadata.readFirst ${readFirstProblem}`;
     defects.push({ defect: { topic: 'read-first', path, message } });
   }
-  if (defects.length > 0 || typeof readWhen !== 'string' || typeof readFirst !== 'string') {
+  const scope = readScope(name, file.json['tags']);
+  if ('problem' in scope) {
+    defects.push({ defect: { topic: 'scope', path, message: scope.problem } });
+  }
+  if (
+    defects.length > 0 ||
+    typeof readWhen !== 'string' ||
+    typeof readFirst !== 'string' ||
+    !('scope' in scope)
+  ) {
     return defects;
   }
-  return [{ entry: { name, path: posix.join(directory, readFirst), readWhen } }];
+  const entryPath = posix.join(directory, readFirst);
+  return [{ entry: { name, path: entryPath, readWhen, scope: scope.scope } }];
 }
 
 /**

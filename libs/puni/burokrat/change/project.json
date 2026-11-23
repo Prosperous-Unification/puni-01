@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat-change",
+  "projectType": "library",
+  "tags": ["scope:burokrat", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that archives a finished change",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/burokrat/change/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

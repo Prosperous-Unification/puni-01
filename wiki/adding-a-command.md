@@ -13,7 +13,8 @@ them before writing yours.
 
 ## A leaf in an existing group
 
-In the group's library:
+In the group's library (the first leaf of a group with none also adds the files that step 3 of
+[a new group library](#a-new-group-library) lists for a group with leaves, and step 5 there):
 
 1. `contract.ts`: the request type `{ readonly kind: '<sub-group> <leaf>'; … }`, any new
    capability, and the command key in the `…Exports` interface: `<role><Group><Leaf>Command`.
@@ -23,7 +24,8 @@ In the group's library:
 3. The work goes in a `.feature.ts` with its rules and resources, failures in `failures.ts`. A leaf
    that only prints needs none.
 4. `group.ts`: add `command('<leaf>', <leaf>Parser, { brief })` to the sub-group's `or(…)`, adding
-   the `or` if it held one leaf. The brief, one sentence in Optique's `message` template, is the
+   the `or` if it held one leaf; the first leaf replaces the `constant` parser with
+   `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan` does. The brief, one sentence in Optique's `message` template, is the
    leaf's line in help and the index. If the new leaf makes the group's brief or its library's
    `readWhen` untrue, rewrite them.
 5. `module.ts`: register each service in a `withServices` after those it uses; add the command key
@@ -52,7 +54,7 @@ Tests, one per seam:
 
 Then:
 
-12. `bun run fix` regenerates `wiki/index/index.md` and formats.
+12. `bun run fix` regenerates `wiki/index/` and formats.
 13. `bun run gate` must exit 0.
 
 ## A new group library
@@ -61,18 +63,23 @@ Then:
    `libs/puni/dash/ops`: name `puni-<role>-<group>`, tags `scope:<role>` and `type:group`, the
    targets `test`, `lint`, `typecheck` and `puni-bur-check` as empty objects, and `metadata`:
    - `readWhen` completes "Read this when …": lower-case start, no full stop, at most 20 words. It
-     is the library's index line, and the index holds at most 400 words.
-   - `readFirst`: the path, relative to the project, of the file to read first.
+     is the library's line in `wiki/index/<role>.md`, which holds at most 400 words. While the
+     group has no leaves it says what the group is for: "adding a command that …".
+   - `readFirst`: the path, relative to the project, of the file to read first: the group's
+     `group.ts` until the group has a feature.
 2. `tsconfig.base.json`: the alias `@puni/<role>-<group>` for its `index.ts` in `paths`.
-3. Its source: `contract.ts` with requests, capabilities, `…Requirements` and `…Exports`;
-   `failures.ts` when needed; the commands and features of steps 1–3 above; `group.ts` exporting
-   `<group>Parser` when leaves sit below the group (a group that is itself the leaf exports its
-   command's parser instead); `module.ts` labelled with the project name; `module.check.ts`; and
-   `index.ts`, exporting only the `…Exports` type, the parser and the module.
+3. Its source: `group.ts` exporting `<group>Parser` (a group that is itself the leaf exports its
+   command's parser instead) and `index.ts`, exporting only the `…Exports` type, the parser and
+   the module. A group with no leaves yet has only these two, its parser `constant` of the help
+   request, and a `group.test.ts` that the bare group parses to it. With leaves it adds
+   `contract.ts` with requests, capabilities, `…Requirements` and `…Exports`; `failures.ts` when
+   needed; the commands and features of steps 1–3 above; `module.ts` labelled with the project
+   name; and `module.check.ts`.
 4. `root-parser.ts`: `command('<group>', <group>Parser, { brief })` in the role's parser, inside an
    `or(…)` once the role has two groups; then step 6 per leaf.
-5. `composition.ts`: the module in the last `withInstalledModules`. A requirement no module
-   provides belongs in a shared library.
-6. `main.ts`: the `…Exports` type in `CommandExports`, then step 7 per leaf.
+5. `composition.ts`, once it has a module: the module in the last `withInstalledModules`. A
+   requirement no module provides belongs in a shared library.
+6. `main.ts`, once it has leaves: the `…Exports` type in `CommandExports`, then step 7 per leaf.
+   A bare group needs no case: `runPuni` prints the help of every help request.
 7. Tests as in steps 8–11, and the bare group in `main.test.ts`'s `a bare %s prints its help`.
 8. `bun run fix`, then `bun run gate`.

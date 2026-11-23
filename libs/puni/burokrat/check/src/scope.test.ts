@@ -113,6 +113,13 @@ const seeds: readonly (readonly [string, () => void])[] = [
         'See [up](../../../apps/one/x.md) on 2031-04-06.\n',
       );
       writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
+      writeProject(
+        root,
+        'libs/three',
+        'three',
+        { readWhen: 'changing three', readFirst: 'src/index.ts' },
+        'Three',
+      );
       writeRepositoryFile(root, 'libs/two/src/key.ts', `${credentialSamples[0]?.[1] ?? ''}\n`);
       writeRepositoryFile(root, 'libs/two/hosts.txt', `${forbiddenAddress}\n`);
       writeRepositoryFile(root, 'apps/one/src/head.ts', '// The one app.\n\nexport const a = 1;\n');
@@ -195,6 +202,7 @@ describe('every project check, the cross-project check and the whole-level rules
         'index.current',
         'index.read-first',
         'index.read-when',
+        'index.scope',
         'index.words',
         'links.resolve',
         'readme.exists',
