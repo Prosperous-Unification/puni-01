@@ -126,6 +126,11 @@ const dynamicImport = {
   selector: 'ImportExpression',
   message: 'only apps/puni/cli/src/entrypoint.ts imports dynamically',
 };
+/** A local `export { … }` list: it would export declarations `jsdoc/require-jsdoc` never sees. */
+const localExportList = {
+  selector: 'ExportNamedDeclaration[source=null][declaration=null]',
+  message: 'export each declaration where it is declared, or re-export with `export … from`',
+};
 
 /**
  * Library boundaries by Nx tag, written on the importing side. A role library depends only on
@@ -207,6 +212,7 @@ function libraryRuntime(kind) {
     'no-restricted-syntax': [
       'error',
       dynamicImport,
+      localExportList,
       ...(reachesRuntime ? [] : [metaRequire]),
       ...(readsNoClock ? clock.syntax : []),
     ],
@@ -320,7 +326,7 @@ export default tseslint.config(
     rules: {
       ...restrictImports(intoLibraryFiles, testFiles),
       'no-restricted-properties': ['error', processExit],
-      'no-restricted-syntax': ['error', dynamicImport],
+      'no-restricted-syntax': ['error', dynamicImport, localExportList],
       ...moduleBoundaries({ testing: false }),
     },
   },

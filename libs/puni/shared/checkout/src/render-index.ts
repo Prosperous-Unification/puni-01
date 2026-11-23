@@ -54,16 +54,21 @@ function describe(purpose: string): string {
 /**
  * The index file's "Read when": the pages at the wiki root, then one `###` subsection per
  * {@link wikiSections} entry in its order, saying what its pages are for and listing them; a
- * section without pages is left out, and the whole is nothing when there are no pages.
+ * section without pages is left out, and the whole is nothing when there are no pages. A page in
+ * no section is refused: the sources never hold one, since reading it is a `section` defect.
+ *
+ * @throws Error when a page lies outside the wiki root and every section.
  */
 function renderPages(pages: readonly ReadWhenEntry[]): string[] {
+  const places = pages.map((page) => {
+    const place = placePage(page.path);
+    if (place.kind === 'unplaced') {
+      throw new Error(`${page.path} lies in no section; readSources reports it as a defect`);
+    }
+    return { page, directory: place.kind === 'section' ? place.section.directory : undefined };
+  });
   const inSection = (directory: string | undefined) =>
-    pages.filter((page) => {
-      const place = placePage(page.path);
-      return place.kind === 'section'
-        ? place.section.directory === directory
-        : directory === undefined;
-    });
+    places.filter((place) => place.directory === directory).map(({ page }) => page);
   const subsections = wikiSections.flatMap(({ directory, heading, purpose }) => {
     const lines = listReadWhen(indexFile, inSection(directory));
     return renderSection(

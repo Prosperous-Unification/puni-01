@@ -1,3 +1,4 @@
+import { throws } from 'node:assert/strict';
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   chmodSync,
@@ -129,13 +130,13 @@ describe('renderIndex', () => {
             '',
             '### Concepts',
             '',
-            'What every library obeys and why, where no check, type or JSDoc can say it.',
+            'What the whole repository obeys and why, where no check, type or JSDoc can say it.',
             '',
             '- placing code: [Layers](../concepts/layers.md)',
             '',
             '### How to',
             '',
-            'A task that edits several libraries, as ordered steps.',
+            'A task that spans the repository, as ordered steps.',
             '',
             '- building: [Build](../how-to/build.md)',
             '- deploying: [Deploy](../how-to/deploy.md)',
@@ -226,6 +227,14 @@ describe('renderIndex', () => {
     );
     expect(targets).toHaveLength(5);
     expect(targets.filter((target) => !existsSync(target))).toEqual([]);
+  });
+
+  test('a page in no section is refused, not listed', () => {
+    throws(
+      () =>
+        renderIndex([{ name: 'Deploy', path: 'wiki/ops/deploy.md', readWhen: 'deploying' }], []),
+      /^Error: wiki\/ops\/deploy\.md lies in no section; readSources reports it as a defect$/u,
+    );
   });
 
   test('output is deterministic, LF-only and free of the root path', () => {

@@ -18,12 +18,12 @@ export const wikiSections: readonly WikiSection[] = [
   {
     directory: 'concepts',
     heading: 'Concepts',
-    purpose: 'what every library obeys and why, where no check, type or JSDoc can say it',
+    purpose: 'what the whole repository obeys and why, where no check, type or JSDoc can say it',
   },
   {
     directory: 'how-to',
     heading: 'How to',
-    purpose: 'a task that edits several libraries, as ordered steps',
+    purpose: 'a task that spans the repository, as ordered steps',
   },
 ];
 

@@ -31,13 +31,15 @@ export function listSymbolNames(text: string): string[] {
 /**
  * Every symbol name the documentation's code names (see {@link listSymbolNames}) is a word of
  * some source file of the repository, so a step that names a function, type, key or variable
- * goes stale loudly when the code renames or removes it. It reads every source file, so it runs
- * only when the whole repository is judged, never in a cached project check.
+ * goes stale loudly when the code renames or removes it. Any project's source may hold a symbol,
+ * so a cached project check, whose reach is `within-project`, judges none; the cross-project run
+ * and the whole check, which read every file, judge them all.
  */
 export const judgeDocSymbols: Rule = {
   id: 'docs.symbols',
   remedy: 'name the symbol as the code now spells it, or remove it',
-  judge({ files }) {
+  judge({ files, references }) {
+    if (references.kind === 'within-project') return [];
     const visible = files.listVisible(repositoryScope);
     const words = new Set<string>();
     for (const path of visible) {

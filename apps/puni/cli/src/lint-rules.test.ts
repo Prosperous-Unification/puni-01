@@ -169,6 +169,24 @@ const refused: readonly (readonly [string, string, string, string])[] = [
     'jsdoc/require-jsdoc',
   ],
   [
+    'a local export list in a library file',
+    `${check}/x.ts`,
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
+    'a local export list in a rule',
+    `${check}/x.rule.ts`,
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
+    'a local export list in the app',
+    'apps/puni/cli/src/main.ts',
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
     'a test using toThrow',
     `${check}/x.test.ts`,
     'expect(() => 1).toThrow();',
@@ -197,6 +215,7 @@ const allowed: readonly (readonly [string, string, string])[] = [
     'libs/puni/shared/adapters/src/x.repository.ts',
     '/** A. */\nexport const a = Date.now();',
   ],
+  ['a re-export from another module', `${check}/x.ts`, "export { a } from './y';"],
   [
     'an exported declaration of a test without JSDoc',
     `${check}/x.test-host.ts`,

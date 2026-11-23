@@ -22,9 +22,8 @@ The first leaf of a group with none also adds what step 3 of
    `create<Leaf>Command`, a factory destructuring what it uses and returning a `Command` whose
    `run(request, io)` writes through `io` and returns the exit code. JSDoc says every outcome.
 3. The work goes in a `.feature.ts` with its rules and resources, failures in `failures.ts`. A leaf
-   that only prints needs none. A leaf that files a record needs none either: its
-   `<leaf>.command.ts` names a `RecordAddLeaf` and builds its parser and factory with
-   `recordAddParser` and `createRecordAddCommand` of `@puni/shared-records`, as `plan add` does.
+   that only prints needs none; a leaf that files a record builds on `@puni/shared-records`, as
+   `plan add` does.
 4. `group.ts`: add `command('<leaf>', <leaf>Parser, { brief })` to the sub-group's `or(…)`, adding
    the `or` if it held one leaf; the first leaf replaces the `constant` parser with
    `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan`
@@ -40,8 +39,8 @@ The first leaf of a group with none also adds what step 3 of
 
 In `apps/puni/cli/src`:
 
-6. `root-parser.ts`: a `Leaf` member of kind `'<role> <sub-group> <leaf>'`, its `handlerKeys`
-   entry, and a case in the role's `select…Leaf`.
+6. `root-parser.ts`: what the JSDoc of `puniParser` asks of a new leaf, its kind being its
+   words after the program, as `'dash ops ssh'` and `'burokrat check'` are.
 7. `main.ts`: the kind's case in the `switch` of `runPuni`.
 
 ## Tests

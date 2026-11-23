@@ -5,15 +5,15 @@ read-when: the gate fails, a finding names a rule you do not know, or you change
 
 # The gate
 
-Nx owns the task graph: affected projects, caching, formatting, ESLint under `lint`, and the sync
-generator keeping `wiki/index/` current. Burokrat judges what no tool knows: `puni burokrat
-check` applies the rules of
+Nx owns the task graph: affected projects, caching, ESLint under `lint`, and the sync generator
+keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool knows:
+`puni burokrat check` applies the rules of
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
-per project and which only on the whole repository. The `gate` and `gate:affected` scripts of
-[package.json](../package.json) order it all: `bun run gate` judges everything, and
-`bun run gate:affected` only what a change affects, through the cached `puni-bur-check` and
-`puni-bur-links` targets. The rules that read the whole repository (`index.current`,
-`docs.symbols`) run only in `bun run gate`, which CI runs.
+per project, which across projects and which only on the whole repository. The `gate` and
+`gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
+everything, and `bun run gate:affected` only what a change affects, through the cached
+`puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull
+request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) says.
 
 ## When it fails
 
@@ -21,7 +21,7 @@ per project and which only on the whole repository. The `gate` and `gate:affecte
 
 - **`nx sync:check`** names a stale or hand-made file under `wiki/index/`: run `bun run fix`. If
   the generator itself fails, fix what its message names; never remove it from `nx.json` as Nx
-  suggests (the `nx.sync` rule restores it).
+  suggests (the `nx.sync` rule refuses its absence).
 - **`bun fmt --check`**: run `bun run fix`.
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word

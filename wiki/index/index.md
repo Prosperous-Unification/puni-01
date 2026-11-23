@@ -8,7 +8,7 @@
 
 ### Concepts
 
-What every library obeys and why, where no check, type or JSDoc can say it.
+What the whole repository obeys and why, where no check, type or JSDoc can say it.
 
 - deciding how code reports something going wrong, or which exit code a command returns: [Failures](../concepts/failures.md)
 - deciding which kind a new file is, or what a file of a kind may import: [File kinds](../concepts/kinds.md)
@@ -18,7 +18,7 @@ What every library obeys and why, where no check, type or JSDoc can say it.
 
 ### How to
 
-A task that edits several libraries, as ordered steps.
+A task that spans the repository, as ordered steps.
 
 - adding a command group that has no library yet: [Adding a group](../how-to/add-a-group.md)
 - adding a leaf command to a group that already has a library: [Adding a command](../how-to/add-a-command.md)

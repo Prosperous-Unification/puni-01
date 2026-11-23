@@ -770,6 +770,24 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
+  test('docs.words holds a page of exactly the budget and judges only wiki pages', () => {
+    writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget));
+    writeRepositoryFile(root, 'README.md', words(pageWordBudget + 1));
+    expect(judge(limitPageWords)).toEqual([]);
+  });
+
+  test('docs.symbols accepts a symbol only a JSON, YAML or shell file holds', () => {
+    writeRepositoryFile(root, 'config/settings.json', '{ "retryLimit": 3 }\n');
+    writeRepositoryFile(root, 'config/ci.yml', 'cacheKey: x\n');
+    writeRepositoryFile(root, 'bin/run.sh', 'PUNI_HOME=/x\n');
+    writeRepositoryFile(
+      root,
+      'wiki/how-to/deploy.md',
+      '---\ntitle: Deploy\nread-when: deploying\n---\n\nSet `retryLimit`, `cacheKey` and `PUNI_HOME`.\n',
+    );
+    expect(judge(judgeDocSymbols)).toEqual([]);
+  });
+
   test('a repository without nx.json holds no workspace: nx.sync and ci.gate judge nothing', () => {
     rmSync(join(root, 'nx.json'));
     rmSync(join(root, '.github'), { recursive: true });
@@ -1003,7 +1021,7 @@ describe('a link target the file system cannot describe is missing, not a crash'
     writeFileSync(join(root, 'wiki/index'), 'x\n');
     expect(runCheck({ project: 'one' })).toEqual({
       code: 0,
-      stdout: 'ok: system-state, project one, 10 rules, no findings.\n',
+      stdout: 'ok: system-state, project one, 11 rules, no findings.\n',
     });
   });
 });

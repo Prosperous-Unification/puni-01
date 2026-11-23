@@ -18,13 +18,9 @@ code already shows, a copy of a fact that has a home, or history.
 
 ## Where it goes
 
-A fact has one home, the first of these that can hold it:
-
-1. **A check or test**: the gate enforces it, and its message carries the remedy.
-2. **A type or name**: the compiler or the reader's eye carries it.
-3. **JSDoc on the symbol**: what a library offers and why. A fact that changes when exactly one
-   library changes belongs here. `jsdoc/require-jsdoc` gives every export a comment.
-4. **A wiki page**: only what spans libraries.
+AGENTS.md rule 2 orders the homes of a fact. Between its last two: a fact that changes when
+exactly one library changes is JSDoc on that library's symbols, which `jsdoc/require-jsdoc`
+gives every export; only what spans libraries is a wiki page.
 
 ## How an agent finds it
 
@@ -50,10 +46,9 @@ A page links to the symbol, test or config entry that holds a fact rather than r
 
 ## How it stays true
 
-The gate judges the documentation as it judges code: links and backticked paths resolve
-(`links.resolve`, `docs.paths`), commands and scripts exist (`docs.commands`), backticked
-symbols are spelled as the code spells them (`docs.symbols`), each page has a section, a
-`read-when` and a budget (`index.section`, `index.read-when`, `docs.words`), and the index is
-current (`index.current`). What no check can judge is the change's: a change that makes a line
-untrue rewrites or deletes it in the same commit, as
+The gate judges the documentation as it judges code: the `docs`, `links` and `index` rules of
+[rule-set.rule.ts](../../libs/puni/burokrat/check/src/rule-set.rule.ts) resolve its links and
+paths, its commands and the symbols it names, and hold each page to a section, a `read-when`
+and its budget. What no check can judge is the change's: a change that makes a line untrue
+rewrites or deletes it in the same commit, as
 [documenting a change](../how-to/document-a-change.md) says.
