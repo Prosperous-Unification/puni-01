@@ -1,7 +1,15 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
 import type { FileSystem } from '@puni/shared-ports';
@@ -15,7 +23,13 @@ const tree: MemoryTree = {
   loop: { symlink: 'loop' },
   empty: { directory: true },
   'deep/b.md': 'b',
+  'text/lines.txt': 'one\n\ntwo\nlast',
+  'text/ended.txt': 'one\n',
+  'text/empty.txt': '',
 };
+
+/** When `a.md` was last modified, in every implementation. */
+const modifiedAt = new Date('2026-11-22T10:00:00.000Z');
 
 /** A file system holding {@link tree} below `root`. */
 interface Subject {
@@ -39,6 +53,7 @@ function writeNodeTree(): Subject {
     else if ('symlink' in node) symlinkSync(node.symlink, absolute);
     else mkdirSync(absolute);
   }
+  utimesSync(join(root, 'a.md'), modifiedAt, modifiedAt);
   return { fileSystem: createNodeFileSystem(), root };
 }
 
@@ -47,7 +62,10 @@ function writeMemoryTree(): Subject {
   const rooted = Object.fromEntries(
     Object.entries(tree).map(([path, node]) => [`${root}/${path}`, node]),
   );
-  return { fileSystem: createMemoryFileSystem(rooted), root };
+  return {
+    fileSystem: createMemoryFileSystem(rooted, { modified: { [`${root}/a.md`]: modifiedAt } }),
+    root,
+  };
 }
 
 const subjects: readonly (readonly [string, () => Subject])[] = [
@@ -112,7 +130,32 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
       { name: 'empty', kind: 'directory' },
       { name: 'link', kind: 'symlink' },
       { name: 'loop', kind: 'symlink' },
+      { name: 'text', kind: 'directory' },
     ]);
+  });
+
+  test.each([
+    ['text/lines.txt', ['one', '', 'two', 'last']],
+    ['text/ended.txt', ['one']],
+    ['text/empty.txt', []],
+    ['link', ['a']],
+  ] as const)('reads the lines of %s without their newlines', (path, lines) => {
+    expect([...fileSystem.readLines(at(path))]).toEqual([...lines]);
+  });
+
+  test('reading the lines of a missing file throws ENOENT on the first line taken', () => {
+    const lines = fileSystem.readLines(at('nothing'));
+    throws(() => [...lines], { code: 'ENOENT' });
+  });
+
+  test('reads when a file was last modified, through a symlink; a missing one is ENOENT', () => {
+    expect(fileSystem.readModifiedTime(at('a.md'))).toEqual(modifiedAt);
+    expect(fileSystem.readModifiedTime(at('link'))).toEqual(modifiedAt);
+    throws(() => fileSystem.readModifiedTime(at('nothing')), { code: 'ENOENT' });
+  });
+
+  test('names an absolute home directory', () => {
+    expect(fileSystem.homeDirectory()).toStartWith('/');
   });
 
   test('writes, makes directories and removes a whole directory', () => {
@@ -139,6 +182,21 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     }
     expect(fileSystem.readText(at('a.md'))).toBe('a');
     fileSystem.remove(at('made'));
+  });
+});
+
+describe('the node adapter where the memory fake cannot follow', () => {
+  const { fileSystem, root } = writeNodeTree();
+
+  test('the home directory is the one the operating system names', () => {
+    expect(fileSystem.homeDirectory()).toBe(homedir());
+  });
+
+  test('a line longer than one read, a character split between reads, and many lines are whole', () => {
+    const long = 'é'.repeat(700_000);
+    const many = Array.from({ length: 50_000 }, (_unused, index) => `line ${String(index)}`);
+    writeFileSync(join(root, 'big.txt'), `${long}\nx${long}\n${many.join('\n')}`);
+    expect([...fileSystem.readLines(join(root, 'big.txt'))]).toEqual([long, `x${long}`, ...many]);
   });
 });
 

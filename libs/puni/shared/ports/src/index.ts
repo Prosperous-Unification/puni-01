@@ -2,9 +2,12 @@ export type { Clock } from './clock.port';
 export type { DirectoryEntry, FileSystem, PathKind } from './file-system.port';
 export type {
   Git,
+  GitAncestry,
   GitBranches,
   GitChange,
   GitListing,
+  GitMerge,
+  GitMerges,
   GitText,
   GitWorktree,
   GitWorktrees,
