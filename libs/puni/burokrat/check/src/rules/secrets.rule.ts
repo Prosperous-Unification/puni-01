@@ -78,48 +78,87 @@ function isAllowedAddress(octets: readonly number[]): boolean {
   );
 }
 
+/**
+ * The private ranges, as each range's first address and prefix length: RFC 1918's `10/8`,
+ * `172.16/12` and `192.168/16`, and RFC 6598's shared `100.64/10`, which tailnets address their
+ * devices from.
+ */
+const privateRanges: readonly { readonly first: readonly number[]; readonly prefix: number }[] = [
+  { first: [10, 0, 0, 0], prefix: 8 },
+  { first: [172, 16, 0, 0], prefix: 12 },
+  { first: [192, 168, 0, 0], prefix: 16 },
+  { first: [100, 64, 0, 0], prefix: 10 },
+];
+
+/** The address `octets` as one unsigned 32-bit number. */
+function toAddressNumber(octets: readonly number[]): number {
+  return octets.reduce((value, octet) => value * 256 + octet, 0);
+}
+
+/** Whether the address `octets` lies in one of {@link privateRanges}. */
+function isPrivateAddress(octets: readonly number[]): boolean {
+  const address = toAddressNumber(octets);
+  return privateRanges.some(({ first, prefix }) => {
+    const size = 2 ** (32 - prefix);
+    return Math.floor(address / size) === Math.floor(toAddressNumber(first) / size);
+  });
+}
+
 /** Four dotted numbers, not inside a longer dotted run or a word. */
 const dottedQuad = /(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)/gu;
 
-/** Whether `line` holds an IPv4 address literal that may not be written down. */
-function holdsAddress(line: string): boolean {
+/**
+ * Whether `line` holds an IPv4 address literal that may not be written down; a private one may
+ * when `privateAllowed`.
+ */
+function holdsAddress(line: string, privateAllowed: boolean): boolean {
   return [...line.matchAll(dottedQuad)].some((match) => {
     const octets = match.slice(1, 5).map(Number);
-    return octets.every((octet) => octet <= 255) && !isAllowedAddress(octets);
+    return (
+      octets.every((octet) => octet <= 255) &&
+      !isAllowedAddress(octets) &&
+      !(privateAllowed && isPrivateAddress(octets))
+    );
   });
 }
 
 /**
  * No visible text file the scope owns holds an IPv4 address literal, except loopback
  * (`127.0.0.0/8`), `0.0.0.0`, `255.255.255.255` and the documentation ranges `192.0.2.0/24`,
- * `198.51.100.0/24` and `203.0.113.0/24`; a file holding a NUL byte is binary and not read. The
- * finding names the line, never the address. `remedy` says where the address belongs instead.
+ * `198.51.100.0/24` and `203.0.113.0/24`, and a {@link privateRanges} address in a file whose
+ * repository-relative path `allowsPrivate` accepts; a file holding a NUL byte is binary and not
+ * read. The finding names the line, never the address. `remedy` says where the address belongs
+ * instead.
  */
-function forbidAddresses(remedy: string): Rule {
+function forbidAddresses(remedy: string, allowsPrivate: (path: string) => boolean): Rule {
   return {
     id: 'secrets.addresses',
     remedy,
     judge({ files, scope }) {
-      return listTextLines(files, scope).flatMap(({ path, lines }) =>
-        lines.flatMap((line, index): Breach[] =>
-          holdsAddress(line)
+      return listTextLines(files, scope).flatMap(({ path, lines }) => {
+        const privateAllowed = allowsPrivate(path);
+        return lines.flatMap((line, index): Breach[] =>
+          holdsAddress(line, privateAllowed)
             ? [{ path, message: `line ${String(index + 1)} holds an IPv4 address` }]
             : [],
-        ),
-      );
+        );
+      });
     },
   };
 }
 
-/** No address in a system-state repository, by `forbidAddresses`. */
+/** No address in a system-state repository, private or public, by `forbidAddresses`. */
 export const forbidStateAddresses = forbidAddresses(
-  "move the address to the operator's SSH configuration or the records repository and name the host by its SSH alias; a test uses 192.0.2.0/24",
+  "move a private address to the records repository's dash/ and a public one to the operator's SSH configuration, and name the host by its SSH alias; a test uses 192.0.2.0/24",
+  () => false,
 );
 
 /**
- * No address in a records repository, by `forbidAddresses`: the operator's SSH configuration is
- * the one place left for it.
+ * No address in a records repository, by `forbidAddresses`, but a private one in a file under
+ * `dash/`, which holds the state running the servers needs: `nav/` and `bur/` stay address-free,
+ * and the operator's SSH configuration is the one place left for a public address.
  */
 export const forbidRecordsAddresses = forbidAddresses(
-  "move the address to the operator's SSH configuration and name the host by its SSH alias",
+  "write a private address only under dash/, move a public one to the operator's SSH configuration, and name the host by its SSH alias",
+  (path) => path.startsWith('dash/'),
 );

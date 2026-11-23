@@ -33,7 +33,7 @@ import {
   writeRecord,
 } from './repository-pair.test-host';
 import { forbidPlaintextSecrets, forbidRecordsAddresses } from './rules/secrets.rule';
-import { credentialSamples, forbiddenAddress } from './secrets.test-host';
+import { credentialSamples } from './secrets.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -399,6 +399,57 @@ describe('supersession cycles', () => {
   });
 });
 
+/** An IPv4 address built from `octets` when the tests run, so no file here holds the literal. */
+function dotted(...octets: readonly number[]): string {
+  return octets.join('.');
+}
+
+/** A public address, which no records file may hold. */
+const publicAddress = dotted(8, 8, 4, 4);
+
+describe('secrets.addresses in a records repository', () => {
+  function findAddressLines(path: string, address: string): Judged[] {
+    writeRepositoryFile(root, path, `host\n${address}\n`);
+    return judge(forbidRecordsAddresses);
+  }
+
+  test.each([
+    ['10/8', dotted(10, 20, 30, 40)],
+    ['172.16/12', dotted(172, 31, 255, 1)],
+    ['192.168/16', dotted(192, 168, 1, 7)],
+    ['100.64/10', dotted(100, 127, 0, 9)],
+  ])('a private address in %s under dash/ passes', (_range, address) => {
+    expect(findAddressLines('dash/ops/nodes.json', address)).toEqual([]);
+  });
+
+  test.each([
+    publicAddress,
+    dotted(11, 0, 0, 1),
+    dotted(172, 15, 255, 1),
+    dotted(172, 32, 0, 1),
+    dotted(192, 169, 0, 1),
+    dotted(100, 63, 255, 1),
+    dotted(100, 128, 0, 1),
+  ])('the public address %s under dash/ is found', (address) => {
+    expect(findAddressLines('dash/ops/nodes.json', address)).toEqual([
+      {
+        rule: 'secrets.addresses',
+        path: 'dash/ops/nodes.json',
+        message: 'line 2 holds an IPv4 address',
+      },
+    ]);
+  });
+
+  test.each(['nav/plans/2031-04-07-a-plan.md', 'bur/adr/2031-04-07-x.md', 'AGENTS.md'])(
+    'a private address in %s is found',
+    (path) => {
+      expect(findAddressLines(path, dotted(10, 20, 30, 40))).toEqual([
+        { rule: 'secrets.addresses', path, message: 'line 2 holds an IPv4 address' },
+      ]);
+    },
+  );
+});
+
 describe('the check command on a records repository', () => {
   function runIn(
     cwd: string,
@@ -527,7 +578,7 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
   [
     forbidRecordsAddresses,
     () => {
-      writeRepositoryFile(root, 'dash/ops/nodes.json', `{"address": "${forbiddenAddress}"}\n`);
+      writeRepositoryFile(root, 'dash/ops/nodes.json', `{"address": "${publicAddress}"}\n`);
     },
   ],
 ];
