@@ -1,9 +1,21 @@
 ---
-title: When the gate fails
-read-when: the gate fails, or a finding names a rule you do not know
+title: The gate
+read-when: the gate fails, a finding names a rule you do not know, or you change what the gate runs
 ---
 
-# When the gate fails
+# The gate
+
+Nx owns the task graph: affected projects, caching, formatting, ESLint under `lint`, and the sync
+generator keeping `wiki/index/` current. Burokrat judges what no tool knows: `puni burokrat
+check` applies the rules of
+[rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
+per project and which only on the whole repository. The `gate` and `gate:affected` scripts of
+[package.json](../package.json) order it all: `bun run gate` judges everything, and
+`bun run gate:affected` only what a change affects, through the cached `puni-bur-check` and
+`puni-bur-links` targets. The rules that read the whole repository (`index.current`,
+`docs.symbols`) run only in `bun run gate`, which CI runs.
+
+## When it fails
 
 `bun run gate` runs its steps in order and stops at the first that fails.
 

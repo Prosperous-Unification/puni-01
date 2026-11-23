@@ -17,7 +17,9 @@ import {
   requireReadFirst,
   requireReadWhen,
   requireScope,
+  requireSection,
 } from './rules/index.rule';
+import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
 import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
@@ -39,7 +41,8 @@ const at =
   (rule: Rule): LeveledRule => ({ level, rule });
 
 /**
- * The rules for a `system-state` repository. The generated index is judged only whole; entry
+ * The rules for a `system-state` repository. The generated index, and the symbols documentation
+ * names (which any source file may hold), are judged only whole; entry
  * files, the index budget, `nx.json` and the index sources (every `project.json`, which the root
  * project's check reads) are repository-level; the per-file and per-project rules are
  * project-level.
@@ -60,6 +63,7 @@ export const codeRules: readonly LeveledRule[] = [
     requireReadWhen,
     requireReadFirst,
     requireScope,
+    requireSection,
   ].map(at('repository')),
   ...[
     forbidDates,
@@ -71,8 +75,10 @@ export const codeRules: readonly LeveledRule[] = [
     requireProjectTargets,
     judgeDocPaths,
     judgeDocCommands,
+    limitPageWords,
   ].map(at('project')),
   at('whole')(matchGeneratedIndex),
+  at('whole')(judgeDocSymbols),
 ];
 
 /** The rules for the `system-records` repository, which is judged whole. */

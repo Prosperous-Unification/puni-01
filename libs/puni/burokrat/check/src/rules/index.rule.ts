@@ -27,8 +27,8 @@ export const matchGeneratedIndex: Rule = {
       return [
         {
           path: 'wiki/index',
-          message: `cannot be generated: ${count} index.read-when, index.read-first or index.scope findings`,
-          remedy: `fix the index.read-when, index.read-first and index.scope findings, then run \`${writeIndex}\``,
+          message: `cannot be generated: ${count} index.read-when, index.read-first, index.scope or index.section findings`,
+          remedy: `fix the index.read-when, index.read-first, index.scope and index.section findings, then run \`${writeIndex}\``,
         },
       ];
     }
@@ -95,4 +95,14 @@ export const requireScope: Rule = {
   id: 'index.scope',
   remedy: sourceDefectRemedies.scope,
   judge: judgeSources('scope'),
+};
+
+/**
+ * Every authored page lies directly in `wiki/` or in one of the sections `wikiSections` names, so
+ * the index can list it under its section and a reader knows what kind of page it is.
+ */
+export const requireSection: Rule = {
+  id: 'index.section',
+  remedy: sourceDefectRemedies.section,
+  judge: judgeSources('section'),
 };

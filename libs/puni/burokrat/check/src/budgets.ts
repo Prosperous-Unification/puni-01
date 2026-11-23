@@ -6,3 +6,6 @@ export const readmeWordBudget = 150;
 
 /** The most whitespace-separated words each generated file of `wiki/index/` may hold. */
 export const indexWordBudget = 400;
+
+/** The most whitespace-separated words each authored page under `wiki/` may hold. */
+export const pageWordBudget = 500;

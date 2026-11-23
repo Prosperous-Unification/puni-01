@@ -4,9 +4,26 @@
 
 ## Read when
 
-- adding a command or a command group: [Adding a command](../adding-a-command.md)
-- deciding where new code goes, or which kind a file is: [Architecture](../architecture.md)
-- the gate fails, or a finding names a rule you do not know: [When the gate fails](../gate-failures.md)
+- the gate fails, a finding names a rule you do not know, or you change what the gate runs: [The gate](../gate.md)
+
+### Concepts
+
+What every library obeys and why, where no check, type or JSDoc can say it.
+
+- deciding how code reports something going wrong, or which exit code a command returns: [Failures](../concepts/failures.md)
+- deciding which kind a new file is, or what a file of a kind may import: [File kinds](../concepts/kinds.md)
+- deciding which library new code belongs in, or what one library may import of another: [Libraries](../concepts/libraries.md)
+- giving a library services, or deciding what it requires and exports: [Dependency injection](../concepts/dependency-injection.md)
+- writing documentation, or deciding where a fact, a reason or a procedure belongs: [Documentation](../concepts/documentation.md)
+
+### How to
+
+A task that edits several libraries, as ordered steps.
+
+- adding a command group that has no library yet: [Adding a group](../how-to/add-a-group.md)
+- adding a leaf command to a group that already has a library: [Adding a command](../how-to/add-a-command.md)
+- deciding which test proves a change, or how a test reaches a module and the host: [Writing a test](../how-to/write-a-test.md)
+- finishing a change that adds, renames or removes something an agent would need to know: [Documenting a change](../how-to/document-a-change.md)
 
 ## Commands
 

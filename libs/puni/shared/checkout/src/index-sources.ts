@@ -1,10 +1,12 @@
+import { wikiSections } from './wiki-sections';
+
 /**
  * One input of the index that is missing or invalid, named by its repository path. `topic` says
  * which check reports it: `read-first` for a project's `readFirst`, `scope` for its scope tag,
- * `read-when` for the rest.
+ * `section` for a page outside the wiki root and its sections, `read-when` for the rest.
  */
 export interface SourceDefect {
-  readonly topic: 'read-when' | 'read-first' | 'scope';
+  readonly topic: 'read-when' | 'read-first' | 'scope' | 'section';
   readonly path: string;
   readonly message: string;
 }
@@ -17,6 +19,9 @@ export const sourceDefectRemedies: Readonly<Record<SourceDefect['topic'], string
     'set metadata.readFirst to the path, relative to the project, of the file to read first',
   scope:
     'give the project exactly one tag scope:<name>, <name> lower-case letters, digits and hyphens and not index: the index partition that lists it',
+  section: `move the page to wiki/ or to the section its content is: ${wikiSections
+    .map(({ directory, purpose }) => `wiki/${directory}/ for ${purpose}`)
+    .join('; ')}`,
 };
 
 /**

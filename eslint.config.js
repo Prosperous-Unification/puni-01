@@ -294,6 +294,27 @@ export default tseslint.config(
   },
   { files: ['**/*.ts'], rules: { 'jsdoc/no-types': 'error' } },
   {
+    // A library documents itself: every declaration a production file exports carries the JSDoc
+    // that says what it is, so the reader of a `readFirst` file learns the library from it.
+    files: ['**/*.ts'],
+    ignores: tests,
+    rules: {
+      'jsdoc/require-jsdoc': [
+        'error',
+        {
+          publicOnly: true,
+          require: { FunctionDeclaration: true, ClassDeclaration: true },
+          contexts: [
+            'TSInterfaceDeclaration',
+            'TSTypeAliasDeclaration',
+            'TSEnumDeclaration',
+            'ExportNamedDeclaration > VariableDeclaration',
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.ts'],
     plugins: { '@nx': nx },
     rules: {
