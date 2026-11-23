@@ -238,6 +238,44 @@ describe('entrypoint', () => {
         expect(readFileSync(join(ownReports, written), 'utf8')).toContain('main failed to load');
       });
 
+      test('an error whose message and stack are getters is reported with its name, message and stack, redacted', () => {
+        const preload = join(parent, 'getter-error.ts');
+        const main = [
+          'class Hidden extends Error {',
+          '  constructor() { super(); Reflect.deleteProperty(this, "stack"); }',
+          `  get message() { return 'module x not found, ${token}'; }`,
+          "  get stack() { return 'Hidden: module x not found\\n    at hidden.ts:1:1'; }",
+          '}',
+          "Object.defineProperty(Hidden.prototype, 'name', { value: 'Hidden' });",
+          'export async function runProcess() { throw new Hidden(); }',
+        ].join('\n');
+        writeFileSync(
+          preload,
+          [
+            "import { plugin } from 'bun';",
+            'plugin({',
+            "  name: 'getter-error',",
+            '  setup(build) {',
+            `    build.onLoad({ filter: /[\\/]main\\.ts$/ }, () => ({ loader: 'ts', contents: ${JSON.stringify(main)} }));`,
+            '  },',
+            '});',
+            '',
+          ].join('\n'),
+        );
+        const run = runPuni(['--version'], state, { TMPDIR: reports }, ['--preload', preload]);
+        expect([run.code, run.stdout]).toEqual([3, '']);
+        expect(run.stderr).toMatch(line);
+        const [written = ''] = readdirSync(ownReports);
+        const text = readFileSync(join(ownReports, written), 'utf8');
+        expect(JSON.parse(text)).toMatchObject({
+          message: 'module x not found, [redacted]',
+          as_json: { name: 'Hidden' },
+          stack: ['Hidden: module x not found', '    at hidden.ts:1:1'],
+        });
+        expect(text).toContain('"constructor_name":"Hidden"');
+        expect(text).not.toContain(token);
+      });
+
       test.each([
         ['an unhandled rejection', 'void Promise.reject(new Error("stray failure"));'],
         ['an uncaught exception', 'throw new Error("stray failure");'],

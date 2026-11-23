@@ -9,14 +9,16 @@
   },
   "sourceRoot": "apps/puni/cli/src",
   "targets": {
-    "test": {},
+    "test": {
+      "dependsOn": ["build"]
+    },
     "lint": {},
     "typecheck": {},
     "build": {
       "executor": "nx:run-commands",
       "outputs": ["{workspaceRoot}/dist/apps/puni/cli"],
       "options": {
-        "command": "bun build apps/puni/cli/src/entrypoint.ts --target bun --outfile dist/apps/puni/cli/puni.js"
+        "command": "bun build apps/puni/cli/src/entrypoint.ts --target bun --packages external --outfile dist/apps/puni/cli/puni.js"
       }
     },
     "puni-bur-check": {}
