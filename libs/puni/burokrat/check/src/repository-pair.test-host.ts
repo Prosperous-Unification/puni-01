@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
-import { checkoutModule, formatRegistry, indexFile, renderIndex } from '@puni/shared-checkout';
+import { checkoutModule, formatRegistry, indexDirectory, renderIndex } from '@puni/shared-checkout';
 import { recordDirectories, recordKinds } from '@puni/shared-records';
 import {
   fixtureRemotes,
@@ -45,9 +45,10 @@ export async function regenerateIndex(root: string): Promise<void> {
     const sources = container.resolve('checkoutWikiIndex').readSources(files);
     if (sources.defects.length > 0)
       throw new Error(`fixture defects: ${JSON.stringify(sources.defects)}`);
-    const rendered = renderIndex(sources.entries, fixtureCommands).get(indexFile);
-    if (rendered === undefined) throw new Error(`${indexFile} was not rendered`);
-    writeRepositoryFile(root, indexFile, rendered);
+    rmSync(join(root, indexDirectory), { recursive: true, force: true });
+    for (const [path, text] of renderIndex(sources.entries, fixtureCommands)) {
+      writeRepositoryFile(root, path, text);
+    }
   } finally {
     await container.close();
   }

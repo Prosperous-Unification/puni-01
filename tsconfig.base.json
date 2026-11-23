@@ -30,8 +30,22 @@
       "@puni/shared-testing": ["./libs/puni/shared/testing/src/index.ts"],
       "@puni/burokrat-check": ["./libs/puni/burokrat/check/src/index.ts"],
       "@puni/burokrat-wiki": ["./libs/puni/burokrat/wiki/src/index.ts"],
+      "@puni/burokrat-repo": ["./libs/puni/burokrat/repo/src/index.ts"],
+      "@puni/burokrat-adr": ["./libs/puni/burokrat/adr/src/index.ts"],
+      "@puni/burokrat-change": ["./libs/puni/burokrat/change/src/index.ts"],
+      "@puni/burokrat-assess": ["./libs/puni/burokrat/assess/src/index.ts"],
       "@puni/dash-ops": ["./libs/puni/dash/ops/src/index.ts"],
+      "@puni/dash-run": ["./libs/puni/dash/run/src/index.ts"],
+      "@puni/dash-progress": ["./libs/puni/dash/progress/src/index.ts"],
+      "@puni/dash-resources": ["./libs/puni/dash/resources/src/index.ts"],
+      "@puni/dash-release": ["./libs/puni/dash/release/src/index.ts"],
+      "@puni/dash-admission": ["./libs/puni/dash/admission/src/index.ts"],
+      "@puni/dash-authority": ["./libs/puni/dash/authority/src/index.ts"],
+      "@puni/dash-mcp": ["./libs/puni/dash/mcp/src/index.ts"],
+      "@puni/dash-pool": ["./libs/puni/dash/pool/src/index.ts"],
       "@puni/navigator-plan": ["./libs/puni/navigator/plan/src/index.ts"],
+      "@puni/navigator-research": ["./libs/puni/navigator/research/src/index.ts"],
+      "@puni/navigator-progress": ["./libs/puni/navigator/progress/src/index.ts"],
       "@puni/nx-sync": ["./tools/nx-sync/src/wiki-index.cjs"]
     }
   }

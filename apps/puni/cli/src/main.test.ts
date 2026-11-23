@@ -79,28 +79,50 @@ describe('runPuni', () => {
     },
   );
 
-  test.each(['burokrat', 'burokrat wiki', 'dash ops', 'navigator plan'])(
-    'a bare %s prints its help and exits 0',
-    (line) => {
-      const path = line.split(' ');
-      expect(runIn('.', path)).toEqual({
-        code: 0,
-        printed: collect((stdout) => readInvocation([...path, '--help'], stdout)),
-        errors: '',
-      });
-    },
-  );
-
-  test('wiki index writes the live command tree into the one index file', () => {
-    const root = makeRepository();
-    expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
+  test.each([
+    'burokrat',
+    'burokrat wiki',
+    'dash ops',
+    'navigator plan',
+    'navigator research',
+    'navigator progress',
+    'dash run',
+    'dash progress',
+    'dash resources',
+    'dash release',
+    'dash admission',
+    'dash authority',
+    'dash mcp',
+    'dash pool',
+    'burokrat repo',
+    'burokrat adr',
+    'burokrat change',
+    'burokrat assess',
+  ])('a bare %s prints its help and exits 0', (line) => {
+    const path = line.split(' ');
+    expect(runIn('.', path)).toEqual({
       code: 0,
-      printed: 'wrote: wiki/index/index.md\n',
+      printed: collect((stdout) => readInvocation([...path, '--help'], stdout)),
       errors: '',
     });
-    const index = readFileSync(join(root, 'wiki/index/index.md'), 'utf8');
-    expect(index).toContain('- changing one: [one](../../apps/one/src/index.ts)\n');
-    expect(index).toContain('- `puni burokrat check`: ');
+  });
+
+  test('wiki index partitions the live command tree by role, projects by scope', () => {
+    const root = makeRepository();
+    const written = ['app', 'burokrat', 'dash', 'index', 'navigator'];
+    expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
+      code: 0,
+      printed: written.map((name) => `wrote: wiki/index/${name}.md\n`).join(''),
+      errors: '',
+    });
+    const read = (name: string) => readFileSync(join(root, `wiki/index/${name}.md`), 'utf8');
+    expect(read('index')).toContain('- `puni burokrat`: ');
+    expect(read('index')).not.toContain('- `puni burokrat check`: ');
+    expect(read('index')).toContain('- [dash](dash.md): ');
+    expect(read('app')).toContain('- changing one: [one](../../apps/one/src/index.ts)\n');
+    expect(read('burokrat')).toContain('- `puni burokrat check`: ');
+    expect(read('dash')).toContain('- `puni dash release`: ');
+    expect(read('navigator')).toContain('- `puni navigator research`: ');
   });
 
   test('wiki index refuses defective inputs with one error line and exit 1', () => {
@@ -109,7 +131,7 @@ describe('runPuni', () => {
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 1,
       printed: '',
-      errors: `error: apps/one/project.json: project one has no metadata.readWhen; fix: ${sourceDefectRemedies['read-when']}; apps/one/project.json: project one metadata.readFirst is missing; fix: ${sourceDefectRemedies['read-first']}\n`,
+      errors: `error: apps/one/project.json: project one has no metadata.readWhen; fix: ${sourceDefectRemedies['read-when']}; apps/one/project.json: project one metadata.readFirst is missing; fix: ${sourceDefectRemedies['read-first']}; apps/one/project.json: project one has no scope:<name> tag; fix: ${sourceDefectRemedies.scope}\n`,
     });
   });
 

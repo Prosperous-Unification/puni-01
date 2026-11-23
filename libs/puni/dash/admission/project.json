@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-dash-admission",
+  "projectType": "library",
+  "tags": ["scope:dash", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that submits a candidate for admission or runs its admission checks",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/dash/admission/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

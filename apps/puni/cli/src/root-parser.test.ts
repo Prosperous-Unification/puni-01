@@ -118,8 +118,11 @@ describe('readInvocation', () => {
   test.each([
     ['d ops', ['ssh', 'k3s']],
     ['n plan', ['add']],
-    ['d', ['ops']],
-    ['n', ['plan']],
+    [
+      'd',
+      ['ops', 'run', 'progress', 'resources', 'release', 'admission', 'authority', 'mcp', 'pool'],
+    ],
+    ['n', ['plan', 'research', 'progress']],
   ])('%s --help lists %j', (line, names) => {
     expect(readListedNames(readPrinted([...line.split(' '), '--help']))).toEqual(names);
   });
@@ -136,12 +139,12 @@ describe('readInvocation', () => {
     );
   });
 
-  test('b --help shows that a bare burokrat is valid and lists check and wiki', () => {
+  test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]])]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo | adr | change | assess)]\n',
     );
-    expect(readListedNames(help)).toEqual(['check', 'wiki']);
+    expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });
 
   test.each(['--help', 'help', ''])(
@@ -175,6 +178,9 @@ describe('readInvocation', () => {
     ['--bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['d --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
+    ['d release plan', 'Unexpected option or subcommand: `plan`.'],
+    ['n research add', 'Unexpected option or subcommand: `add`.'],
+    ['b adr --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
     ['b check --project', '`--project` requires `NAME`.'],
     ['d ops k3s', 'Expected a `KUBECTL_ARG`, but too few arguments.'],
@@ -199,6 +205,11 @@ describe('listCommands', () => {
       { path: 'puni navigator', brief: 'Plan: decide what to do.' },
       { path: 'puni navigator plan', brief: 'File plans in the records repository.' },
       { path: 'puni navigator plan add', brief: 'File a plan in the records repository.' },
+      { path: 'puni navigator research', brief: 'File research in the records repository.' },
+      {
+        path: 'puni navigator progress',
+        brief: 'Admit progress receipts and turn them into WBS commands.',
+      },
       { path: 'puni dash', brief: 'Execute and operate: do it.' },
       { path: 'puni dash ops', brief: 'Reach the nodes of the inventory.' },
       {
@@ -209,10 +220,34 @@ describe('listCommands', () => {
         path: 'puni dash ops k3s',
         brief: 'Run kubectl on the node that runs the k3s server.',
       },
+      { path: 'puni dash run', brief: 'Run commands and log each run.' },
+      { path: 'puni dash progress', brief: 'Record operator progress as receipts.' },
+      {
+        path: 'puni dash resources',
+        brief: 'Manage disposable directories and worktrees, and the commands run in them.',
+      },
+      { path: 'puni dash release', brief: 'Plan and run releases of a product.' },
+      {
+        path: 'puni dash admission',
+        brief: 'Submit candidates for admission and run their checks.',
+      },
+      {
+        path: 'puni dash authority',
+        brief: 'Create, inspect and repair the authority of a repository.',
+      },
+      { path: 'puni dash mcp', brief: 'Issue credentials for the WBS MCP server.' },
+      { path: 'puni dash pool', brief: 'Store the keys of agent pools.' },
       { path: 'puni burokrat', brief: 'Judge: decide whether it was done right.' },
       { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
       { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
       { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
+      { path: 'puni burokrat repo', brief: 'Set up repositories for puni to govern.' },
+      { path: 'puni burokrat adr', brief: 'File architecture decision records.' },
+      { path: 'puni burokrat change', brief: 'Archive finished changes.' },
+      {
+        path: 'puni burokrat assess',
+        brief: 'Assess the outcomes of work and what they cost.',
+      },
     ]);
   });
 });

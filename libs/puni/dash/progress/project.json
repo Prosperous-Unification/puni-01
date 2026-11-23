@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-dash-progress",
+  "projectType": "library",
+  "tags": ["scope:dash", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that records operator progress as a receipt",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/dash/progress/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

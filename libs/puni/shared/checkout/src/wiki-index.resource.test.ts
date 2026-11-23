@@ -20,8 +20,12 @@ import { indexFile } from './render-index';
 
 const track = closeAfterEach();
 
-const project = (name: string, readWhen: string, readFirst = 'src/index.ts') =>
-  JSON.stringify({ name, metadata: { readWhen, readFirst } });
+const project = (
+  name: string,
+  readWhen: string,
+  readFirst = 'src/index.ts',
+  tags: unknown = ['scope:app', 'type:app'],
+) => JSON.stringify({ name, tags, metadata: { readWhen, readFirst } });
 
 /** The sources of a valid index: one project under `apps/`, an empty `libs/` and one page. */
 const sources: MemoryTree = {
@@ -51,7 +55,7 @@ describe('readSources', () => {
     const { files, wikiIndex } = openMemory(sources);
     expect(wikiIndex.readSources(files)).toEqual({
       entries: [
-        { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one' },
+        { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one', scope: 'app' },
         { name: 'Deploy', path: 'wiki/deploy.md', readWhen: 'deploying' },
       ],
       defects: [],
@@ -68,6 +72,24 @@ describe('readSources', () => {
     expect(defects).toHaveLength(1);
     expect(defects[0]).toMatchObject({ topic: 'read-when', path: 'libs/two/project.json' });
     expect(defects[0]?.message).toMatch(message);
+  });
+
+  test.each([
+    [null, 'project one has no scope:<name> tag'],
+    [['type:app'], 'project one has no scope:<name> tag'],
+    [['scope:app', 'scope:dash'], 'project one has 2 scope tags; one is allowed'],
+    [['scope:index'], 'project one tag scope:index cannot name an index partition'],
+    [['scope:Dash'], 'project one tag scope:Dash cannot name an index partition'],
+    [['scope:../x'], 'project one tag scope:../x cannot name an index partition'],
+  ])('a project tagged %j is a scope defect: %s', (tags, message) => {
+    const { files, wikiIndex } = openMemory({
+      ...sources,
+      '/r/apps/one/project.json': project('one', 'changing one', 'src/index.ts', tags),
+    });
+    expect(wikiIndex.readSources(files)).toEqual({
+      entries: [{ name: 'Deploy', path: 'wiki/deploy.md', readWhen: 'deploying' }],
+      defects: [{ topic: 'scope', path: 'apps/one/project.json', message }],
+    });
   });
 
   test('a project below node_modules and the generated index are no sources', () => {
@@ -148,7 +170,9 @@ describe('a path git ignores is invisible', () => {
       const files = container.resolve('checkoutFiles').open(root, 'system-state');
       const wikiIndex = container.resolve('checkoutWikiIndex');
       expect(wikiIndex.readSources(files)).toEqual({
-        entries: [{ name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one' }],
+        entries: [
+          { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one', scope: 'app' },
+        ],
         defects: [],
       });
       const expected = new Map([[indexFile, 'fresh']]);

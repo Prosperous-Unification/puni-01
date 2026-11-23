@@ -37,6 +37,7 @@ import {
   matchGeneratedIndex,
   requireReadFirst,
   requireReadWhen,
+  requireScope,
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
@@ -256,9 +257,9 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'index.current',
       path: 'wiki/index',
-      message: 'cannot be generated: 2 index.read-when or index.read-first findings',
+      message: 'cannot be generated: 2 index.read-when, index.read-first or index.scope findings',
       remedy:
-        'fix the index.read-when and index.read-first findings, then run `bun run puni burokrat wiki index`',
+        'fix the index.read-when, index.read-first and index.scope findings, then run `bun run puni burokrat wiki index`',
     },
   ],
   [
@@ -271,6 +272,38 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.words',
       path: indexFile,
       message: `has ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+    },
+  ],
+  [
+    'an index partition over budget, the index file within it',
+    limitIndexWords,
+    () => {
+      writeRepositoryFile(root, 'wiki/index/app.md', words(indexWordBudget + 1));
+    },
+    {
+      rule: 'index.words',
+      path: 'wiki/index/app.md',
+      message: `has ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+    },
+  ],
+  [
+    'a project without a scope tag',
+    requireScope,
+    () => {
+      writeRepositoryFile(
+        root,
+        'libs/two/project.json',
+        JSON.stringify({
+          name: 'two',
+          metadata: { readWhen: 'adding to two', readFirst: 'src/index.ts' },
+        }),
+      );
+      writeRepositoryFile(root, 'libs/two/src/index.ts', 'export {};\n');
+    },
+    {
+      rule: 'index.scope',
+      path: 'libs/two/project.json',
+      message: 'project two has no scope:<name> tag',
     },
   ],
   [

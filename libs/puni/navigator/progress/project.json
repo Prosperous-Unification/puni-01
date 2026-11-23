@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-navigator-progress",
+  "projectType": "library",
+  "tags": ["scope:navigator", "type:group"],
+  "metadata": {
+    "readWhen": "adding a command that admits a progress receipt or turns it into WBS commands",
+    "readFirst": "src/group.ts"
+  },
+  "sourceRoot": "libs/puni/navigator/progress/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

@@ -35,7 +35,9 @@ in its requirements, as `records.resource.ts` does, and prints only through a co
 - **shared**: `libs/puni/shared/*` (`scope:shared`); of these only `adapters` (the host
   services), `checkout` and `records` have a `module.ts`.
 - **group**: one library per command group at `libs/puni/<role>/<group>` (`scope:<role>`,
-  `type:group`); the roles are navigator, dash and burokrat.
+  `type:group`); the roles are navigator, dash and burokrat. Every planned group has its library;
+  one with no leaves yet holds only `group.ts`, whose parser accepts the bare group as a help
+  request, and `index.ts`.
 
 A library imports another only through its `@puni/*` alias in `tsconfig.base.json`. Group and
 shared libraries but testing import only shared libraries, never the adapters, and the testing library only
@@ -78,7 +80,10 @@ and sets exit code 3. Nothing calls `process.exit`.
 ## Nx and Burokrat
 
 Nx owns the task graph: affected projects, caching, target defaults in [nx.json](../nx.json),
-formatting, ESLint under `lint`, and the sync generator keeping `wiki/index/index.md` current.
+formatting, ESLint under `lint`, and the sync generator keeping `wiki/index/` current. The index
+is partitioned: `index.md` lists the pages, the three roles and one line per partition, and
+`<scope>.md` lists the projects tagged `scope:<scope>` and, for a role, its commands. Each file
+holds at most 400 words.
 Burokrat judges what no tool knows: `puni burokrat check` applies the rules in
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), each finding printed as
 `<rule> <path>: <message>; fix: <remedy>`. Repository- and project-level rules run per project as

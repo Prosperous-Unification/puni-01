@@ -1,0 +1,1 @@
+export { researchParser } from './group';

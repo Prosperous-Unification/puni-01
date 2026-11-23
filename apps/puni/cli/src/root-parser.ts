@@ -8,10 +8,24 @@ import {
   optional,
   or,
 } from '@optique/core';
+import { adrParser } from '@puni/burokrat-adr';
+import { assessParser } from '@puni/burokrat-assess';
+import { changeParser } from '@puni/burokrat-change';
 import { checkParser } from '@puni/burokrat-check';
+import { repoParser } from '@puni/burokrat-repo';
 import { wikiParser } from '@puni/burokrat-wiki';
+import { admissionParser } from '@puni/dash-admission';
+import { authorityParser } from '@puni/dash-authority';
+import { mcpParser } from '@puni/dash-mcp';
 import { opsParser } from '@puni/dash-ops';
+import { poolParser } from '@puni/dash-pool';
+import { progressParser as dashProgressParser } from '@puni/dash-progress';
+import { releaseParser } from '@puni/dash-release';
+import { resourcesParser } from '@puni/dash-resources';
+import { runParser } from '@puni/dash-run';
 import { planParser } from '@puni/navigator-plan';
+import { progressParser as navigatorProgressParser } from '@puni/navigator-progress';
+import { researchParser } from '@puni/navigator-research';
 import type { CliProgram, HelpRequest } from '@puni/shared-command';
 import cliPackage from '../package.json' with { type: 'json' };
 
@@ -22,7 +36,17 @@ const groupHelp: HelpRequest = { kind: 'help', path: [] };
  * do. A bare group or sub-group yields a help request, as in {@link burokratParser}.
  */
 export const navigatorParser = map(
-  optional(command('plan', planParser, { brief: message`File plans in the records repository.` })),
+  optional(
+    or(
+      command('plan', planParser, { brief: message`File plans in the records repository.` }),
+      command('research', researchParser, {
+        brief: message`File research in the records repository.`,
+      }),
+      command('progress', navigatorProgressParser, {
+        brief: message`Admit progress receipts and turn them into WBS commands.`,
+      }),
+    ),
+  ),
   (leaf) => leaf ?? groupHelp,
 );
 
@@ -31,7 +55,27 @@ export const navigatorParser = map(
  * was decided. A bare group or sub-group yields a help request, as in {@link burokratParser}.
  */
 export const dashParser = map(
-  optional(command('ops', opsParser, { brief: message`Reach the nodes of the inventory.` })),
+  optional(
+    or(
+      command('ops', opsParser, { brief: message`Reach the nodes of the inventory.` }),
+      command('run', runParser, { brief: message`Run commands and log each run.` }),
+      command('progress', dashProgressParser, {
+        brief: message`Record operator progress as receipts.`,
+      }),
+      command('resources', resourcesParser, {
+        brief: message`Manage disposable directories and worktrees, and the commands run in them.`,
+      }),
+      command('release', releaseParser, { brief: message`Plan and run releases of a product.` }),
+      command('admission', admissionParser, {
+        brief: message`Submit candidates for admission and run their checks.`,
+      }),
+      command('authority', authorityParser, {
+        brief: message`Create, inspect and repair the authority of a repository.`,
+      }),
+      command('mcp', mcpParser, { brief: message`Issue credentials for the WBS MCP server.` }),
+      command('pool', poolParser, { brief: message`Store the keys of agent pools.` }),
+    ),
+  ),
   (leaf) => leaf ?? groupHelp,
 );
 
@@ -51,6 +95,12 @@ export const burokratParser = map(
         brief: message`Judge the repository against its rules.`,
       }),
       command('wiki', wikiParser, { brief: message`Generate the wiki index.` }),
+      command('repo', repoParser, { brief: message`Set up repositories for puni to govern.` }),
+      command('adr', adrParser, { brief: message`File architecture decision records.` }),
+      command('change', changeParser, { brief: message`Archive finished changes.` }),
+      command('assess', assessParser, {
+        brief: message`Assess the outcomes of work and what they cost.`,
+      }),
     ),
   ),
   (leaf) => leaf ?? groupHelp,
