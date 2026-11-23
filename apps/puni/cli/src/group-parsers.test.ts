@@ -63,6 +63,18 @@ describe('burokratParser', () => {
       'adr add --summary S --body-file b.md --topics a --title T',
       { kind: 'adr add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
     ],
+    [
+      'assess outcomes --since 2026-11-22T00:00:00Z --until 2026-11-24T00:00:00Z --json',
+      {
+        kind: 'assess outcomes',
+        since: '2026-11-22T00:00:00Z',
+        until: '2026-11-24T00:00:00Z',
+        rateCard: undefined,
+        claudeProjects: [],
+        codexSessions: [],
+        json: true,
+      },
+    ],
   ] as const)('%s parses to its leaf', (line, value) => {
     expect(parse(burokratParser, line.split(' '))).toEqual({ success: true, value });
   });
@@ -86,6 +98,9 @@ describe('burokratParser', () => {
     'adr stray',
     'change archive',
     'assess outcomes',
+    'assess outcomes --since 2026-11-22T00:00:00Z',
+    'assess outcomes --until 2026-11-24T00:00:00Z --since',
+    'assess stray',
   ])('%s is refused', (line) => {
     expect(parse(burokratParser, line.split(' ')).success).toBe(false);
   });

@@ -6,6 +6,7 @@ import {
   UsageRefused,
 } from '@puni/shared-command';
 import type { AdrExports } from '@puni/burokrat-adr';
+import type { AssessExports } from '@puni/burokrat-assess';
 import type { CheckExports } from '@puni/burokrat-check';
 import type { RepoExports } from '@puni/burokrat-repo';
 import type { WikiExports } from '@puni/burokrat-wiki';
@@ -25,7 +26,8 @@ type CommandExports = PlanExports &
   CheckExports &
   WikiExports &
   RepoExports &
-  AdrExports;
+  AdrExports &
+  AssessExports;
 
 /** What `runPuni` needs of a container: the command services by their keys. */
 export interface CommandContainer {
@@ -101,6 +103,8 @@ export function runPuni(
     case 'burokrat repo init':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat adr add':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat assess outcomes':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
   }
 }

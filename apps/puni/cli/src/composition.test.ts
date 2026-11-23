@@ -6,6 +6,7 @@ import { type CommandContainer, runPuni } from './main';
 
 const exportedKeys = [
   'burokratAdrAddCommand',
+  'burokratAssessOutcomesCommand',
   'burokratCheckCommand',
   'burokratRepoInitCommand',
   'burokratWikiIndexCommand',
