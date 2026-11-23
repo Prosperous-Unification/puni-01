@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:dash", "type:group"],
   "metadata": {
-    "readWhen": "adding a command that runs a command and logs the run",
-    "readFirst": "src/group.ts"
+    "readWhen": "changing the run log command: its options and the body a new run record starts with",
+    "readFirst": "src/run-log.command.ts"
   },
   "sourceRoot": "libs/puni/dash/run/src",
   "targets": {

@@ -10,6 +10,8 @@ import type { CheckExports } from '@puni/burokrat-check';
 import type { RepoExports } from '@puni/burokrat-repo';
 import type { WikiExports } from '@puni/burokrat-wiki';
 import type { OpsExports } from '@puni/dash-ops';
+import type { ResourcesExports } from '@puni/dash-resources';
+import type { RunExports } from '@puni/dash-run';
 import type { PlanExports } from '@puni/navigator-plan';
 import type { ResearchExports } from '@puni/navigator-research';
 import { createPuniContainer } from './composition';
@@ -18,6 +20,8 @@ import { handlerKeys, type Leaf, puniProgram, selectLeaf } from './root-parser';
 type CommandExports = PlanExports &
   ResearchExports &
   OpsExports &
+  RunExports &
+  ResourcesExports &
   CheckExports &
   WikiExports &
   RepoExports &
@@ -79,6 +83,16 @@ export function runPuni(
     case 'dash ops ssh':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'dash ops k3s':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash run log':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash resources create':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash resources list':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash resources exec':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'dash resources remove':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat check':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);

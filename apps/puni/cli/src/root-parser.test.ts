@@ -224,11 +224,28 @@ describe('listCommands', () => {
         path: 'puni dash ops k3s',
         brief: 'Run kubectl on the node that runs the k3s server.',
       },
-      { path: 'puni dash run', brief: 'Run commands and log each run.' },
+      { path: 'puni dash run', brief: 'Record runs and their outcomes.' },
+      {
+        path: 'puni dash run log',
+        brief: "Record a run's outcome as an assessment in the records repository.",
+      },
       { path: 'puni dash progress', brief: 'Record operator progress as receipts.' },
       {
         path: 'puni dash resources',
-        brief: 'Manage disposable directories and worktrees, and the commands run in them.',
+        brief: 'Manage disposable worktrees and the commands run in them.',
+      },
+      {
+        path: 'puni dash resources create',
+        brief: 'Create a disposable worktree of the system-state repository.',
+      },
+      {
+        path: 'puni dash resources list',
+        brief: 'List the disposable worktrees and whether each is clean.',
+      },
+      { path: 'puni dash resources exec', brief: 'Run a command in a disposable worktree.' },
+      {
+        path: 'puni dash resources remove',
+        brief: 'Remove a disposable worktree and its branch.',
       },
       { path: 'puni dash release', brief: 'Plan and run releases of a product.' },
       {

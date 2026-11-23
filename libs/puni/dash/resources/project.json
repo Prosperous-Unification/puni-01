@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:dash", "type:group"],
   "metadata": {
-    "readWhen": "adding a command that creates, runs in, inspects or cleans up a disposable directory or worktree",
-    "readFirst": "src/group.ts"
+    "readWhen": "changing the disposable worktrees of the system-state repository: creating, listing, running in or removing them",
+    "readFirst": "src/resources.feature.ts"
   },
   "sourceRoot": "libs/puni/dash/resources/src",
   "targets": {

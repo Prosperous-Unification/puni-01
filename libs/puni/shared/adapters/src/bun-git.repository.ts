@@ -1,4 +1,13 @@
-import type { Git, GitListing, GitText, ProcessRunner } from '@puni/shared-ports';
+import type {
+  Git,
+  GitBranches,
+  GitChange,
+  GitListing,
+  GitText,
+  GitWorktree,
+  GitWorktrees,
+  ProcessRunner,
+} from '@puni/shared-ports';
 
 type GitRun = { readonly stdout: string } | { readonly failure: string };
 
@@ -9,7 +18,11 @@ type GitRun = { readonly stdout: string } | { readonly failure: string };
  * `git ls-files -z --cached --others --exclude-standard`, refused while
  * `git ls-files --unmerged` lists anything; staged files are
  * `git diff --cached --name-only -z --diff-filter=ACMR`, read with `git cat-file blob :<path>`; the
- * `HEAD` commit is `git rev-parse --short --verify HEAD`.
+ * `HEAD` commit is `git rev-parse --short --verify HEAD`. Worktrees are
+ * `git worktree list --porcelain -z`; branches `git for-each-ref` over `refs/heads/<prefix>`,
+ * `--no-merged=HEAD` for unmerged ones; changed files `git status --porcelain -z
+ * --untracked-files=all`; the changes are `git worktree add -b`, `git worktree remove [--force]`
+ * and `git branch -d` or `-D`.
  */
 export function createBunGit({ processRunner }: { processRunner: ProcessRunner }): Git {
   const run = (root: string, args: readonly string[]): GitRun => {
@@ -22,6 +35,10 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
     return { stdout: outcome.stdout };
   };
   const split = (stdout: string): string[] => stdout.split('\0').filter((path) => path !== '');
+  const change = (root: string, args: readonly string[]): GitChange => {
+    const outcome = run(root, args);
+    return 'failure' in outcome ? outcome : { changed: true };
+  };
   return {
     listVisibleFiles(root): GitListing {
       const unmerged = run(root, ['ls-files', '-z', '--unmerged']);
@@ -45,5 +62,55 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
       const head = run(root, ['rev-parse', '--short', '--verify', 'HEAD']);
       return 'failure' in head ? head : { text: head.stdout.trim() };
     },
+    listWorktrees(root): GitWorktrees {
+      const listed = run(root, ['worktree', 'list', '--porcelain', '-z']);
+      if ('failure' in listed) return listed;
+      const worktrees: GitWorktree[] = [];
+      for (const field of split(listed.stdout)) {
+        if (field.startsWith('worktree '))
+          worktrees.push({ path: field.slice('worktree '.length) });
+        const last = worktrees.at(-1);
+        if (field.startsWith('branch refs/heads/') && last !== undefined) {
+          worktrees[worktrees.length - 1] = {
+            ...last,
+            branch: field.slice('branch refs/heads/'.length),
+          };
+        }
+      }
+      return { worktrees };
+    },
+    listBranches(root, prefix, filter): GitBranches {
+      const listed = run(root, [
+        'for-each-ref',
+        '--format=%(refname:lstrip=2)',
+        ...(filter === 'unmerged' ? ['--no-merged=HEAD'] : []),
+        `refs/heads/${prefix}`,
+      ]);
+      if ('failure' in listed) return listed;
+      return {
+        branches: listed.stdout
+          .split('\n')
+          .filter((name) => name !== '')
+          .sort(),
+      };
+    },
+    listChangedFiles(root): GitListing {
+      const status = run(root, ['status', '--porcelain', '-z', '--untracked-files=all']);
+      if ('failure' in status) return status;
+      const files: string[] = [];
+      const fields = split(status.stdout);
+      for (let index = 0; index < fields.length; index += 1) {
+        const field = fields[index] ?? '';
+        files.push(field.slice(3));
+        // A rename or copy is followed by the field of its original path.
+        if (/^(?:[RC].|.[RC])/u.test(field)) index += 1;
+      }
+      return { files };
+    },
+    addWorktree: (root, path, branch, from) =>
+      change(root, ['worktree', 'add', '-q', '-b', branch, path, from]),
+    removeWorktree: (root, path, force) =>
+      change(root, ['worktree', 'remove', ...(force ? ['--force'] : []), path]),
+    deleteBranch: (root, branch, force) => change(root, ['branch', force ? '-D' : '-d', branch]),
   };
 }

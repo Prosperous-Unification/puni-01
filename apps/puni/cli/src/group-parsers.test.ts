@@ -151,6 +151,19 @@ describe('dashParser', () => {
     ],
     ['ops k3s get --help', { kind: 'ops k3s', args: ['get', '--help'] }],
     ['ops k3s -- -n x get', { kind: 'ops k3s', args: ['-n', 'x', 'get'] }],
+    [
+      'run log --title T --topics a,b --summary S',
+      { kind: 'run log', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+    ],
+    ['resources create --name p', { kind: 'resources create', name: 'p', from: 'HEAD' }],
+    ['resources create --from v1 --name p', { kind: 'resources create', name: 'p', from: 'v1' }],
+    ['resources list', { kind: 'resources list' }],
+    [
+      'resources exec p -- git status --short',
+      { kind: 'resources exec', name: 'p', command: ['git', 'status', '--short'] },
+    ],
+    ['resources remove p', { kind: 'resources remove', name: 'p', force: false }],
+    ['resources remove p --force', { kind: 'resources remove', name: 'p', force: true }],
   ] as const)('%j parses to %j', (line, value) => {
     expect(parse(dashParser, line.split(' ').filter(Boolean))).toEqual({ success: true, value });
   });
@@ -163,8 +176,14 @@ describe('dashParser', () => {
     'ops k3s',
     'ops k3s -n x get',
     'run log',
+    'run log --title T --topics a',
+    'run start',
     'progress record',
     'resources init',
+    'resources create',
+    'resources list x',
+    'resources remove',
+    'resources remove p --hard',
     'release plan',
     'admission submit',
     'authority inspect',

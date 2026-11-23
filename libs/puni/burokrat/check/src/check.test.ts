@@ -441,6 +441,30 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     { rule: 'docs.paths', path: 'README.md', message: 'names the missing path bin/deploy.sh' },
   ],
   [
+    'a backticked path git ignores, though it exists on this disk',
+    judgeDocPaths,
+    () => {
+      writeRepositoryFile(root, '.gitignore', 'dist/\n');
+      writeRepositoryFile(root, 'dist/cli.js', 'built\n');
+      appendFileSync(join(root, 'README.md'), 'Run `dist/cli.js`.\n');
+    },
+    { rule: 'docs.paths', path: 'README.md', message: 'names the missing path dist/cli.js' },
+  ],
+  [
+    'a link to a file git ignores, though it exists on this disk',
+    resolveLinks,
+    () => {
+      writeRepositoryFile(root, '.gitignore', 'dist/\n');
+      writeRepositoryFile(root, 'dist/notes.md', 'built\n');
+      writeRepositoryFile(root, 'wiki/ops/built.md', 'See [notes](../../dist/notes.md).\n');
+    },
+    {
+      rule: 'links.resolve',
+      path: 'wiki/ops/built.md',
+      message: 'links to missing ../../dist/notes.md',
+    },
+  ],
+  [
     'a bun run naming no script',
     judgeDocCommands,
     () => {

@@ -32,9 +32,37 @@ function writeReport(reference: string, text: string): { path: string } | { lost
 }
 
 /**
+ * What the reporter is handed for `caught`. Reports inspect without running getters, so an
+ * `Error` whose `message` or `stack` is not its own plain value (Bun's `ResolveMessage` and
+ * `BuildMessage` read both through prototype getters) would be reported as `[not-inspected]`:
+ * such an error is read here, once, into a plain `Error` carrying its name, message and stack,
+ * with the original as its `cause`. Any other value, and an error whose fields are plain, is
+ * handed over as it is, keeping an application exception's occurrence id; so is an error whose
+ * getter throws.
+ */
+function readReportable(caught: unknown): unknown {
+  if (!(caught instanceof Error)) return caught;
+  const plain = (key: 'message' | 'stack'): boolean => {
+    const field = Object.getOwnPropertyDescriptor(caught, key);
+    return field !== undefined && 'value' in field;
+  };
+  if (plain('message') && plain('stack')) return caught;
+  try {
+    const snapshot = new Error(caught.message, { cause: caught });
+    snapshot.name = caught.name;
+    snapshot.stack = caught.stack ?? `${caught.name}: ${caught.message}`;
+    return snapshot;
+  } catch {
+    // A getter that throws leaves the error as it is: the report still names its constructor.
+    return caught;
+  }
+}
+
+/**
  * The one catch-all of `puni`, around loading and running `main.ts` and for any failure outside
  * that path (an unhandled rejection or an uncaught exception): it is reported and the exit code
- * is 3. The report records what the command line selected, never its arguments. The diagnostic
+ * is 3. An error is reported with its name, message and stack ({@link readReportable}),
+ * through the same redaction as everything else. The report records what the command line selected, never its arguments. The diagnostic
  * report goes to `<os tmpdir>/puni-failures-<uid>/<occurrence id>.json`, or inline on stderr
  * when `PUNI_FAILURE_REPORT=stderr`; stderr always ends with one
  * `error: unexpected failure, reference <id>, report <where>` line. A report that cannot be made
@@ -42,7 +70,7 @@ function writeReport(reference: string, text: string): { path: string } | { lost
  */
 function exitOnUnexpectedFailure(caught: unknown): void {
   process.exitCode = unexpectedFailureExitCode;
-  const reporting = reportFailure(caught, { command: selected });
+  const reporting = reportFailure(readReportable(caught), { command: selected });
   const line = (reference: string, where: string): void => {
     process.stderr.write(`error: unexpected failure, reference ${reference}, report ${where}\n`);
   };

@@ -118,6 +118,7 @@ function openCheckout(
     },
     describe,
     exists: (path) => fileSystem.exists(absolute(path)),
+    isShown: (path) => isShownIn(listGit(), path, (shown) => describe(shown) === 'file'),
     readLinkTarget: (path) => fileSystem.readLink(absolute(path)),
     listVisible: (scope) =>
       listGit().filter((path) => ownsPath(scope, path) && describe(path) === 'file'),
@@ -163,12 +164,29 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
       }
       return staged.text;
     },
+    isShown: (path) => isShownIn(listStaged(), path, () => true),
     listVisible: (scope) => listStaged().filter((path) => ownsPath(scope, path)),
     listVisibleEntries: () => listStaged().map((path) => ({ path, kind: 'file' })),
     write: readOnly,
     remove: readOnly,
     removeEmptyDirectories: readOnly,
   };
+}
+
+/**
+ * Whether `path`, repository-relative with no trailing slash, is one of `listed` or a directory
+ * above one, counting only listed paths `present` accepts.
+ */
+function isShownIn(
+  listed: readonly string[],
+  path: string,
+  present: (listedPath: string) => boolean,
+): boolean {
+  const target = path.replace(/\/+$/u, '');
+  if (target === '' || target === '.') return true;
+  return listed.some(
+    (shown) => (shown === target || shown.startsWith(`${target}/`)) && present(shown),
+  );
 }
 
 /** Refuses `root` unless it is `place`, as {@link CheckoutFilesResource.create} says. */

@@ -34,6 +34,10 @@ in its requirements, as `records.resource.ts` does, and prints only through a co
 
 - **app**: `apps/puni/cli` (`scope:app`), only `entrypoint.ts`, `main.ts`, `root-parser.ts`,
   `composition.ts` and `composition.check.ts`.
+  Its `build` target bundles the app's own code into one file under the ignored build directory and leaves
+  packages to `node_modules`, because configurable-tree-traversal's ESM entry requires its
+  CommonJS file at run time; its `test` target depends on `build`, so `bundle.test.ts` runs the
+  bundle the gate built.
 - **shared**: `libs/puni/shared/*` (`scope:shared`); of these only `adapters` (the host
   services), `checkout` and `records` have a `module.ts`.
 - **group**: one library per command group at `libs/puni/<role>/<group>` (`scope:<role>`,
@@ -72,7 +76,7 @@ feature maps it to a finding or outcome with `findDefect`. Exit codes:
 - 2: the command line is refused, or names something the repository lacks.
 - 3: an unexpected failure.
 
-A pass-through command (`dash ops ssh`) returns the remote exit code once `ssh` started. Expected
+A pass-through command (`dash ops ssh`, `dash resources exec`) returns its command's exit code once it started. Expected
 failures print one `error:` line on stderr. Anything else propagates to
 [entrypoint.ts](../apps/puni/cli/src/entrypoint.ts), the one catch-all: it writes a bounded,
 redacted report to `<os tmpdir>/puni-failures-<uid>/<reference>.json` (to stderr when

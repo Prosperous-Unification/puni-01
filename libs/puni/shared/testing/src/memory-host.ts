@@ -5,8 +5,11 @@ import type {
   DirectoryEntry,
   FileSystem,
   Git,
+  GitBranches,
+  GitChange,
   GitListing,
   GitText,
+  GitWorktree,
   PathKind,
   ProcessOutcome,
   ProcessRunner,
@@ -36,6 +39,15 @@ export interface MemoryHostOptions {
   readonly attached?: Readonly<Record<string, number>>;
   /** The abbreviated `HEAD` commit of each repository by its absolute root; any other has none. */
   readonly heads?: Readonly<Record<string, string>>;
+  /**
+   * The files `git status` shows changed in each worktree, by its absolute path; read at each
+   * call, so a test may change it after the host is made. Any other worktree is clean.
+   */
+  readonly changed?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * The branches holding a commit `HEAD` lacks; read at each call. Any other branch is merged.
+   */
+  readonly unmerged?: readonly string[];
   /** The instant the clock always reads; {@link fixedInstant} when not given. */
   readonly now?: Date;
 }
@@ -133,15 +145,66 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
 
 /**
  * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, and
- * holds `staged` in its index, or fails every listing with `failure`.
+ * holds `staged` in its index, or fails every listing with `failure`. Each repository starts
+ * with one worktree, its root on the branch `main`; added worktrees are directories of
+ * `fileSystem`, their changes and unmerged branches as `history` says.
  */
 export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
   staged: MemoryStaged = {},
   heads: Readonly<Record<string, string>> = {},
+  history: Pick<MemoryHostOptions, 'changed' | 'unmerged'> = {},
 ): Git {
+  const repositories = new Map<string, { worktrees: GitWorktree[]; branches: Set<string> }>();
+  const open = (root: string) => {
+    for (const repository of repositories.values()) {
+      if (repository.worktrees.some((worktree) => worktree.path === root)) return repository;
+    }
+    const created = { worktrees: [{ path: root, branch: 'main' }], branches: new Set(['main']) };
+    repositories.set(root, created);
+    return created;
+  };
+  const changedIn = (path: string): readonly string[] => history.changed?.[path] ?? [];
+  const isUnmerged = (branch: string): boolean => history.unmerged?.includes(branch) ?? false;
   return {
+    listWorktrees: (root) => ({ worktrees: [...open(root).worktrees] }),
+    listBranches(root, prefix, filter): GitBranches {
+      const branches = [...open(root).branches]
+        .filter((name) => name === prefix || name.startsWith(`${prefix}/`))
+        .filter((name) => filter === 'all' || isUnmerged(name))
+        .sort();
+      return { branches };
+    },
+    listChangedFiles: (root) => ({ files: [...changedIn(root)] }),
+    addWorktree(root, path, branch): GitChange {
+      const repository = open(root);
+      if (repository.branches.has(branch)) return { failure: `a branch named ${branch} exists` };
+      if (fileSystem.exists(path)) return { failure: `${path} already exists` };
+      repository.worktrees.push({ path, branch });
+      repository.branches.add(branch);
+      fileSystem.makeDirectory(path);
+      return { changed: true };
+    },
+    removeWorktree(root, path, force): GitChange {
+      const repository = open(root);
+      const index = repository.worktrees.findIndex((worktree) => worktree.path === path);
+      if (index <= 0) return { failure: `${path} is not a linked worktree` };
+      if (!force && changedIn(path).length > 0) return { failure: `${path} has changes` };
+      repository.worktrees.splice(index, 1);
+      fileSystem.remove(path);
+      return { changed: true };
+    },
+    deleteBranch(root, branch, force): GitChange {
+      const repository = open(root);
+      if (!repository.branches.has(branch)) return { failure: `no branch named ${branch}` };
+      if (repository.worktrees.some((worktree) => worktree.branch === branch)) {
+        return { failure: `${branch} is checked out` };
+      }
+      if (!force && isUnmerged(branch)) return { failure: `${branch} is not fully merged` };
+      repository.branches.delete(branch);
+      return { changed: true };
+    },
     readHeadCommit(root): GitText {
       const head = heads[root];
       return head === undefined ? { failure: `${root} has no commit` } : { text: head };
@@ -202,7 +265,13 @@ export function createMemoryProcessRunner(
  */
 export function memoryHost(tree: MemoryTree, options: MemoryHostOptions = {}) {
   const fileSystem = createMemoryFileSystem(tree);
-  const git = createMemoryGit(fileSystem, options.gitFailure, options.staged, options.heads);
+  const git = createMemoryGit(
+    fileSystem,
+    options.gitFailure,
+    options.staged,
+    options.heads,
+    options,
+  );
   const processRunner = createMemoryProcessRunner(options.processes, options.attached);
   const now = options.now ?? fixedInstant;
   const clock: Clock = { now: () => new Date(now) };

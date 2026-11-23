@@ -58,12 +58,12 @@ export const dashParser = map(
   optional(
     or(
       command('ops', opsParser, { brief: message`Reach the nodes of the inventory.` }),
-      command('run', runParser, { brief: message`Run commands and log each run.` }),
+      command('run', runParser, { brief: message`Record runs and their outcomes.` }),
       command('progress', dashProgressParser, {
         brief: message`Record operator progress as receipts.`,
       }),
       command('resources', resourcesParser, {
-        brief: message`Manage disposable directories and worktrees, and the commands run in them.`,
+        brief: message`Manage disposable worktrees and the commands run in them.`,
       }),
       command('release', releaseParser, { brief: message`Plan and run releases of a product.` }),
       command('admission', admissionParser, {
@@ -168,6 +168,26 @@ export type Leaf =
       readonly request: Extract<DashRequest, { kind: 'ops k3s' }>;
     }
   | {
+      readonly kind: 'dash run log';
+      readonly request: Extract<DashRequest, { kind: 'run log' }>;
+    }
+  | {
+      readonly kind: 'dash resources create';
+      readonly request: Extract<DashRequest, { kind: 'resources create' }>;
+    }
+  | {
+      readonly kind: 'dash resources list';
+      readonly request: Extract<DashRequest, { kind: 'resources list' }>;
+    }
+  | {
+      readonly kind: 'dash resources exec';
+      readonly request: Extract<DashRequest, { kind: 'resources exec' }>;
+    }
+  | {
+      readonly kind: 'dash resources remove';
+      readonly request: Extract<DashRequest, { kind: 'resources remove' }>;
+    }
+  | {
       readonly kind: 'burokrat check';
       readonly request: Extract<BurokratRequest, { kind: 'check' }>;
     }
@@ -190,6 +210,11 @@ export const handlerKeys = {
   'navigator research add': 'navigatorResearchAddCommand',
   'dash ops ssh': 'dashOpsSshCommand',
   'dash ops k3s': 'dashOpsK3sCommand',
+  'dash run log': 'dashRunLogCommand',
+  'dash resources create': 'dashResourcesCreateCommand',
+  'dash resources list': 'dashResourcesListCommand',
+  'dash resources exec': 'dashResourcesExecCommand',
+  'dash resources remove': 'dashResourcesRemoveCommand',
   'burokrat check': 'burokratCheckCommand',
   'burokrat wiki index': 'burokratWikiIndexCommand',
   'burokrat repo init': 'burokratRepoInitCommand',
@@ -215,6 +240,16 @@ function selectDashLeaf(request: DashRequest): Leaf {
       return { kind: 'dash ops ssh', request };
     case 'ops k3s':
       return { kind: 'dash ops k3s', request };
+    case 'run log':
+      return { kind: 'dash run log', request };
+    case 'resources create':
+      return { kind: 'dash resources create', request };
+    case 'resources list':
+      return { kind: 'dash resources list', request };
+    case 'resources exec':
+      return { kind: 'dash resources exec', request };
+    case 'resources remove':
+      return { kind: 'dash resources remove', request };
   }
 }
 
