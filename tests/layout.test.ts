@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const root = new URL('../', import.meta.url).pathname;
 
@@ -46,7 +48,7 @@ describe('where code may live', () => {
     const missing = services.flatMap((library) =>
       ['module.ts', 'module.check.ts']
         .map((name) => `${library}/src/${name}`)
-        .filter((path) => !files.includes(path)),
+        .filter((path) => !existsSync(join(root, path))),
     );
     expect(missing).toEqual([]);
   });
