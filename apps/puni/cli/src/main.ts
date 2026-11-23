@@ -5,14 +5,23 @@ import {
   readInvocation,
   UsageRefused,
 } from '@puni/shared-command';
+import type { AdrExports } from '@puni/burokrat-adr';
 import type { CheckExports } from '@puni/burokrat-check';
+import type { RepoExports } from '@puni/burokrat-repo';
 import type { WikiExports } from '@puni/burokrat-wiki';
 import type { OpsExports } from '@puni/dash-ops';
 import type { PlanExports } from '@puni/navigator-plan';
+import type { ResearchExports } from '@puni/navigator-research';
 import { createPuniContainer } from './composition';
 import { handlerKeys, type Leaf, puniProgram, selectLeaf } from './root-parser';
 
-type CommandExports = PlanExports & OpsExports & CheckExports & WikiExports;
+type CommandExports = PlanExports &
+  ResearchExports &
+  OpsExports &
+  CheckExports &
+  WikiExports &
+  RepoExports &
+  AdrExports;
 
 /** What `runPuni` needs of a container: the command services by their keys. */
 export interface CommandContainer {
@@ -65,6 +74,8 @@ export function runPuni(
       return 0;
     case 'navigator plan add':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'navigator research add':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'dash ops ssh':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'dash ops k3s':
@@ -72,6 +83,10 @@ export function runPuni(
     case 'burokrat check':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat wiki index':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat repo init':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat adr add':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
   }
 }

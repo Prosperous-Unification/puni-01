@@ -123,6 +123,23 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     fileSystem.remove(at('x'));
     expect(fileSystem.stat(at('x'), 'no-follow')).toBe('absent');
   });
+
+  test('makes a symlink holding its target text; anything already there is EEXIST', () => {
+    fileSystem.makeLink(at('made'), 'a.md');
+    expect(fileSystem.stat(at('made'), 'no-follow')).toBe('symlink');
+    expect(fileSystem.readLink(at('made'))).toBe('a.md');
+    expect(fileSystem.readText(at('made'))).toBe('a');
+    for (const taken of ['made', 'a.md', 'empty', 'dangling']) {
+      throws(
+        () => {
+          fileSystem.makeLink(at(taken), 'other');
+        },
+        { code: 'EEXIST' },
+      );
+    }
+    expect(fileSystem.readText(at('a.md'))).toBe('a');
+    fileSystem.remove(at('made'));
+  });
 });
 
 describe('the node adapter on failures the memory fake cannot hold', () => {

@@ -118,6 +118,9 @@ describe('readInvocation', () => {
   test.each([
     ['d ops', ['ssh', 'k3s']],
     ['n plan', ['add']],
+    ['n research', ['add']],
+    ['b repo', ['init']],
+    ['b adr', ['add']],
     [
       'd',
       ['ops', 'run', 'progress', 'resources', 'release', 'admission', 'authority', 'mcp', 'pool'],
@@ -142,7 +145,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo | adr | change | assess)]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo [init --name NAME [--owner OWNER]] | adr [add --title TEXT\n       --topics LIST --summary TEXT [--body-file PATH]] | change | assess)]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });
@@ -179,7 +182,7 @@ describe('readInvocation', () => {
     ['d --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki nope', 'Unexpected option or subcommand: `nope`.'],
     ['d release plan', 'Unexpected option or subcommand: `plan`.'],
-    ['n research add', 'Unexpected option or subcommand: `add`.'],
+    ['n research stray', 'Unexpected option or subcommand: `stray`.'],
     ['b adr --bogus', 'Unexpected option or subcommand: `--bogus`.'],
     ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
     ['b check --project', '`--project` requires `NAME`.'],
@@ -206,6 +209,7 @@ describe('listCommands', () => {
       { path: 'puni navigator plan', brief: 'File plans in the records repository.' },
       { path: 'puni navigator plan add', brief: 'File a plan in the records repository.' },
       { path: 'puni navigator research', brief: 'File research in the records repository.' },
+      { path: 'puni navigator research add', brief: 'File research in the records repository.' },
       {
         path: 'puni navigator progress',
         brief: 'Admit progress receipts and turn them into WBS commands.',
@@ -242,7 +246,15 @@ describe('listCommands', () => {
       { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
       { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
       { path: 'puni burokrat repo', brief: 'Set up repositories for puni to govern.' },
+      {
+        path: 'puni burokrat repo init',
+        brief: 'Create a governed repository here and its records repository beside it.',
+      },
       { path: 'puni burokrat adr', brief: 'File architecture decision records.' },
+      {
+        path: 'puni burokrat adr add',
+        brief: 'File an architecture decision record in the records repository.',
+      },
       { path: 'puni burokrat change', brief: 'Archive finished changes.' },
       {
         path: 'puni burokrat assess',

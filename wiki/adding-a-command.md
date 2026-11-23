@@ -22,7 +22,10 @@ In the group's library (the first leaf of a group with none also adds the files 
    `create<Leaf>Command`, a factory destructuring what it uses and returning a `Command` whose
    `run(request, io)` writes through `io` and returns the exit code. JSDoc says every outcome.
 3. The work goes in a `.feature.ts` with its rules and resources, failures in `failures.ts`. A leaf
-   that only prints needs none.
+   that only prints needs none. A leaf that files a record needs none either: its
+   `<leaf>.command.ts` names a `RecordAddLeaf` (kind, default sections, help words) and builds its
+   parser and factory with `recordAddParser` and `createRecordAddCommand` of
+   `@puni/shared-records`, whose `recordFiling` is its one requirement, as `plan add` does.
 4. `group.ts`: add `command('<leaf>', <leaf>Parser, { brief })` to the sub-group's `or(…)`, adding
    the `or` if it held one leaf; the first leaf replaces the `constant` parser with
    `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan` does. The brief, one sentence in Optique's `message` template, is the

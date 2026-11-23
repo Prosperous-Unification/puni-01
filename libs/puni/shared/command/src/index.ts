@@ -3,4 +3,5 @@ export { type CommandBrief, type CommandCatalog, listCommands } from './command-
 export { UsageRefused } from './failures';
 export type { HelpRequest } from './help-request';
 export type { CliProgram } from './program';
+export type { ProgramSource } from './program-source';
 export { printHelp, readInvocation } from './run-parser';

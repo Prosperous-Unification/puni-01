@@ -268,7 +268,8 @@ describe('readIndexSources', () => {
     ]);
   });
 
-  test('a missing libs/ is a defect', () => {
+  test('a missing libs/ is a defect in a workspace', () => {
+    writeRepositoryFile(root, 'nx.json', '{}');
     rmSync(join(root, 'libs'), { recursive: true });
     expect(readIndexSources(root).defects).toEqual([
       { topic: 'read-when', path: 'libs', message: 'directory is missing' },

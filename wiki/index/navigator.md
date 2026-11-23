@@ -5,8 +5,8 @@
 ## Read when
 
 - adding a command that admits a progress receipt or turns it into WBS commands: [puni-navigator-progress](../../libs/puni/navigator/progress/src/group.ts)
-- adding a command that files research in the records repository: [puni-navigator-research](../../libs/puni/navigator/research/src/group.ts)
-- changing how a plan is filed in the records repository: [puni-navigator-plan](../../libs/puni/navigator/plan/src/plan-filing.feature.ts)
+- changing the plan add command: its options and the body a new plan starts with: [puni-navigator-plan](../../libs/puni/navigator/plan/src/plan-add.command.ts)
+- changing the research add command: its options and the body new research starts with: [puni-navigator-research](../../libs/puni/navigator/research/src/research-add.command.ts)
 
 ## Commands
 
@@ -14,3 +14,4 @@
 - `puni navigator plan add`: File a plan in the records repository.
 - `puni navigator progress`: Admit progress receipts and turn them into WBS commands.
 - `puni navigator research`: File research in the records repository.
+- `puni navigator research add`: File research in the records repository.

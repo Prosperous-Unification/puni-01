@@ -128,6 +128,15 @@ export const CheckoutPathRefused = defineException({
   message: ({ path, reason }: { path: string; reason: string }) => `${path}: ${reason}`,
 });
 
+/**
+ * A directory a new repository may not be created in: one that is not empty but for `.git`, or
+ * one that must not exist and does. A refused command line.
+ */
+export const CheckoutRootRefused = defineException({
+  tag: 'puni/shared-checkout/CheckoutRootRefused',
+  message: ({ root, reason }: { root: string; reason: string }) => `${root} ${reason}`,
+});
+
 /** A staged file whose text git does not give, though it listed the file as staged. */
 export const StagedTextUnreadable = defineException({
   tag: 'puni/shared-checkout/StagedTextUnreadable',

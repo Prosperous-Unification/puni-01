@@ -7,6 +7,7 @@ import {
   readlinkSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import type { DirectoryEntry, FileSystem, PathKind } from '@puni/shared-ports';
@@ -59,6 +60,9 @@ export function createNodeFileSystem(): FileSystem {
     },
     makeDirectory(path) {
       mkdirSync(path, { recursive: true });
+    },
+    makeLink(path, target) {
+      symlinkSync(target, path);
     },
   };
 }

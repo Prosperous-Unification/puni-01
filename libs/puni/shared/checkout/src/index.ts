@@ -3,12 +3,15 @@ export type {
   CheckoutEntry,
   CheckoutFiles,
   CheckoutFilesResource,
+  NewCheckout,
+  NewCheckoutPlace,
   ProjectScopeResource,
   RepositoryRegistryResource,
   WikiIndexResource,
 } from './contract';
 export {
   CheckoutPathRefused,
+  CheckoutRootRefused,
   checkoutDefects,
   CheckoutUnlistable,
   FileUnreadable,
@@ -30,8 +33,11 @@ export {
 export { leavesRoot } from './paths';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
 export { nameProject, readProjectFiles } from './project-files';
+export { readRulesSection } from './rules-section';
+export { seedFiles } from './seed-files';
 export {
   formatRegistry,
+  githubUrlPattern,
   nameRepository,
   type Repository,
   type RepositoryRegistry,

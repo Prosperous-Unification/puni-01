@@ -1,7 +1,15 @@
 import { DiBag } from 'di-bag';
+import { createRecordFiling } from './record-filing.feature';
 import { createRecordsCatalog } from './records.resource';
 
-/** The records resources; the host supplies `clock` and `fileSystem`. */
+/**
+ * The records resources and the one record filing path; the host supplies `clock` and
+ * `fileSystem`, and the checkout module `checkoutRegistry` and `checkoutFiles`.
+ */
 export const recordsModule = DiBag.createBuilder()
   .withServices({ recordsCatalog: createRecordsCatalog })
-  .buildModule({ exportedServiceKeys: ['recordsCatalog'], moduleLabel: 'puni-shared-records' });
+  .withServices({ recordFiling: createRecordFiling })
+  .buildModule({
+    exportedServiceKeys: ['recordsCatalog', 'recordFiling'],
+    moduleLabel: 'puni-shared-records',
+  });

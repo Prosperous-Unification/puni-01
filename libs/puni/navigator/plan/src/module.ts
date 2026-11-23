@@ -1,10 +1,8 @@
 import { DiBag } from 'di-bag';
 import { createPlanAddCommand } from './plan-add.command';
-import { createPlanFiling } from './plan-filing.feature';
 
-/** `puni navigator plan add`; the host supplies the checkout and records resources. */
+/** `puni navigator plan add`; the records module supplies the record filing. */
 export const navigatorPlanModule = DiBag.createBuilder()
-  .withServices({ planFiling: createPlanFiling })
   .withServices({ navigatorPlanAddCommand: createPlanAddCommand })
   .buildModule({
     exportedServiceKeys: ['navigatorPlanAddCommand'],

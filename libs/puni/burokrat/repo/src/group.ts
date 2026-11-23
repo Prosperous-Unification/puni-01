@@ -1,10 +1,18 @@
-import { constant } from '@optique/core';
+import { command, map, message, optional } from '@optique/core';
 import type { HelpRequest } from '@puni/shared-command';
+import { initParser } from './repo-init.command';
 
 const helpRequest: HelpRequest = { kind: 'help', path: ['repo'] };
 
 /**
- * The `repo` group, parsed after its name. It has no leaves yet, so it accepts only the bare
- * `repo`, a request to print the group's help.
+ * The `repo` group, parsed after its name. A bare `repo` yields a request to print the group's
+ * help.
  */
-export const repoParser = constant(helpRequest);
+export const repoParser = map(
+  optional(
+    command('init', initParser, {
+      brief: message`Create a governed repository here and its records repository beside it.`,
+    }),
+  ),
+  (leaf) => leaf ?? helpRequest,
+);
