@@ -1,11 +1,9 @@
 import {
   type CheckoutFiles,
   type CheckoutFilesResource,
-  checkoutDefects,
-  FileUnreadable,
+  explainDefect,
   type RepositoryRegistryResource,
 } from '@puni/shared-checkout';
-import { findDefect } from '@puni/shared-failures';
 import type {
   NodeInventoryResource,
   NodeShell,
@@ -46,10 +44,9 @@ export function createNodeShell({
       node = select(checkoutFiles.open(records.root, records.type));
     } catch (caught) {
       if (caught instanceof NodeUnknown) return { kind: 'refused', reason: caught.message };
-      if (caught instanceof FileUnreadable) return { kind: 'defective', reason: caught.message };
-      const defect = findDefect(caught, [...checkoutDefects, ...opsDefects]);
-      if (defect === undefined) throw caught;
-      return { kind: 'defective', reason: `${defect.message}; fix: ${defect.remedy}` };
+      const reason = explainDefect(caught, opsDefects);
+      if (reason === undefined) throw caught;
+      return { kind: 'defective', reason };
     }
     return remoteShell.run(node.ssh, command, cwd);
   };

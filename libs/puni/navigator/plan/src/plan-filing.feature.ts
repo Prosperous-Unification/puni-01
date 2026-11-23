@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
-import { checkoutDefects, FileUnreadable } from '@puni/shared-checkout';
-import { findDefect } from '@puni/shared-failures';
+import { explainDefect } from '@puni/shared-checkout';
 import {
   BodyFileMissing,
   RecordExists,
@@ -51,10 +50,9 @@ export function createPlanFiling({
         return { kind: 'filed', path };
       } catch (caught) {
         if (isRefusal(caught)) return { kind: 'refused', reason: caught.message };
-        if (caught instanceof FileUnreadable) return { kind: 'defective', reason: caught.message };
-        const defect = findDefect(caught, checkoutDefects);
-        if (defect === undefined) throw caught;
-        return { kind: 'defective', reason: `${defect.message}; fix: ${defect.remedy}` };
+        const reason = explainDefect(caught);
+        if (reason === undefined) throw caught;
+        return { kind: 'defective', reason };
       }
     },
   };

@@ -38,13 +38,14 @@ const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
  * The write area of a checkout of each type: a system-state checkout writes only the generated
- * index, anywhere below `wiki/index/`; a records checkout writes only record files, directly
- * inside a kind directory, and empties no directory.
+ * index, anywhere below `wiki/index/`, and may remove a file standing where `wiki/index` belongs;
+ * a records checkout writes only record files, directly inside a kind directory, and empties no
+ * directory.
  */
 const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
   'system-state': {
     description: `inside ${indexDirectory}/`,
-    holdsFile: (normal) => normal.startsWith(`${indexDirectory}/`),
+    holdsFile: (normal) => normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
     holdsDirectory: (normal) =>
       normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
   },

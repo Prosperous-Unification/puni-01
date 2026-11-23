@@ -8,7 +8,8 @@ read-when: adding a command or a command group
 A command line is `puni <role> <group> [<sub-group>] <leaf>`; each group is one library, and
 [architecture](architecture.md) says what each kind of file may do. The worked examples are
 `libs/puni/dash/ops` (a sub-group of two leaves) and `libs/puni/burokrat/check` (a group that is
-itself the leaf). Read their matching files before writing yours.
+itself the leaf). For a leaf in an existing group, that group's own files are the model; read
+them before writing yours.
 
 ## A leaf in an existing group
 
@@ -23,7 +24,8 @@ In the group's library:
    that only prints needs none.
 4. `group.ts`: add `command('<leaf>', <leaf>Parser, { brief })` to the sub-group's `or(…)`, adding
    the `or` if it held one leaf. The brief, one sentence in Optique's `message` template, is the
-   leaf's line in help and the index.
+   leaf's line in help and the index. If the new leaf makes the group's brief or its library's
+   `readWhen` untrue, rewrite them.
 5. `module.ts`: register each service in a `withServices` after those it uses; add the command key
    to `exportedServiceKeys`. `module.check.ts`: supply any new requirement.
 
@@ -35,16 +37,18 @@ In `apps/puni/cli/src`:
 
 Tests, one per seam:
 
-8. The library test, modelled on `libs/puni/dash/ops/src/ops.test.ts`: the module and the shared
-   modules it requires in `withInstalledModules`, over `memoryHost(tree).services`, closed through
+8. The library test, beside the group's existing one: the module and the shared modules it
+   requires in `withInstalledModules`, over `memoryHost(tree, options).services`, closed through
    `closeAfterEach`; resolve the command key and run requests against a collecting `Io`, covering
-   every outcome.
+   every outcome. `MemoryHostOptions` injects defects (`gitFailure`) and fixed values (`now`,
+   `heads`).
 9. `apps/puni/cli/src/group-parsers.test.ts`: the leaf's lines parse; bad ones are refused.
 10. Update the tests pinning the tree: `root-parser.test.ts` (`--help lists`, `listCommands`),
     `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
     which provides every command key).
 11. A spawned run, as in `apps/puni/cli/src/ops-entrypoint.test.ts`, for the real streams and exit
-    code.
+    code. Spawn with `CLAUDECODE` and `AGENT` set to `0`, because Bun changes its output under
+    agents.
 
 Then:
 

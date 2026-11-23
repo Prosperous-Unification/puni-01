@@ -1,11 +1,7 @@
 import { constants } from 'node:os';
+import { describeCause } from '@puni/shared-failures';
 import type { ProcessRunner } from '@puni/shared-ports';
 import { SignalUnknown } from './failures';
-
-/** Why `spawn` could not start its child: the runtime's message. */
-function describeUnstarted(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
 
 /**
  * The exit code of a child the signal `signalCode` ended: 128 plus the signal's number, as a POSIX
@@ -31,7 +27,7 @@ export function createBunProcessRunner(): ProcessRunner {
       try {
         child = Bun.spawnSync([...argv], { cwd, stdout: 'pipe', stderr: 'pipe' });
       } catch (cause) {
-        return { kind: 'unstarted', reason: describeUnstarted(cause) };
+        return { kind: 'unstarted', reason: describeCause(cause) };
       }
       return {
         kind: 'exited',
@@ -45,7 +41,7 @@ export function createBunProcessRunner(): ProcessRunner {
       try {
         child = Bun.spawnSync([...argv], { cwd, stdio: ['inherit', 'inherit', 'inherit'] });
       } catch (cause) {
-        return { kind: 'unstarted', reason: describeUnstarted(cause) };
+        return { kind: 'unstarted', reason: describeCause(cause) };
       }
       const exitCode =
         child.signalCode === undefined ? child.exitCode : exitCodeOfSignal(child.signalCode);

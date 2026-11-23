@@ -32,8 +32,8 @@ import {
   supersedingRecord,
   writeRecord,
 } from './repository-pair.test-host';
-import { forbidPlaintextSecrets } from './rules/secrets.rule';
-import { credentialSamples } from './secrets.test-host';
+import { forbidPlaintextSecrets, forbidRecordsAddresses } from './rules/secrets.rule';
+import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -522,6 +522,12 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
     forbidPlaintextSecrets,
     () => {
       writeRepositoryFile(root, 'dash/notes.txt', `${credentialSamples[1]?.[1] ?? ''}\n`);
+    },
+  ],
+  [
+    forbidRecordsAddresses,
+    () => {
+      writeRepositoryFile(root, 'dash/ops/nodes.json', `{"address": "${forbiddenAddress}"}\n`);
     },
   ],
 ];

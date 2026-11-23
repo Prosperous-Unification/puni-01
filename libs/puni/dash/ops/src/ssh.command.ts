@@ -1,7 +1,7 @@
 import { argument, map, message, passThrough, seq, string } from '@optique/core';
 import type { Command } from '@puni/shared-command';
 import type { NodeShell, SshRequest } from './contract';
-import { exitWithShellOutcome } from './shell-outcome';
+import { exitWithShellOutcome } from './shell-outcome.command';
 
 /**
  * `ssh NODE [COMMAND...]`: the node, then every later token, flags included, as the command; a

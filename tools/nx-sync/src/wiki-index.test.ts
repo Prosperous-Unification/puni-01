@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import syncWikiIndex from './wiki-index.cjs';
@@ -52,6 +52,18 @@ describe('the wiki index sync generator', () => {
     );
   });
 
+  test('deletes a file standing where the wiki/index directory belongs, writing nothing below it', () => {
+    const tree = makeTree({ 'wiki/index': 'a file', 'wiki/page.md': 'kept' });
+    const outcome = syncWikiIndex.syncIndex(
+      tree,
+      JSON.stringify({ 'wiki/index/index.md': 'fresh' }),
+    );
+    expect(Object.fromEntries(tree.files)).toEqual({ 'wiki/page.md': 'kept' });
+    expect(outcome.outOfSyncMessage).toBe(
+      'wiki/index is a file where the index directory belongs; run `bun run puni burokrat wiki index`',
+    );
+  });
+
   test('leaves a current index untouched', () => {
     const tree = makeTree({ 'wiki/index/index.md': 'fresh' });
     let writes = 0;
@@ -76,6 +88,8 @@ describe('the wiki index sync generator', () => {
       await syncWikiIndex(makeTree({}, root));
     } catch (caught) {
       failure = caught;
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
     expect(failure).toBeInstanceOf(Error);
     expect(String(failure)).toContain(

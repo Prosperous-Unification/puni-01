@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const root = new URL('../', import.meta.url).pathname;
 
@@ -27,6 +29,28 @@ describe('where code may live', () => {
       'main.ts',
       'root-parser.ts',
     ]);
+  });
+
+  test('every library with services has module.ts and module.check.ts', () => {
+    const files = listVisible('libs');
+    const libraries = [
+      ...new Set(files.flatMap((path) => /^libs\/[^/]+\/[^/]+\/[^/]+/u.exec(path) ?? [])),
+    ];
+    const services = libraries.filter((library) =>
+      files.some(
+        (path) =>
+          path === `${library}/src/module.ts` ||
+          (path.startsWith(`${library}/src/`) &&
+            /\.(command|feature|resource|repository)\.ts$/u.test(path)),
+      ),
+    );
+    expect(services.length).toBeGreaterThan(0);
+    const missing = services.flatMap((library) =>
+      ['module.ts', 'module.check.ts']
+        .map((name) => `${library}/src/${name}`)
+        .filter((path) => !existsSync(join(root, path))),
+    );
+    expect(missing).toEqual([]);
   });
 
   test('every code file of a library lives in its src directory', () => {

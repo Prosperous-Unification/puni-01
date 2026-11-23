@@ -15,6 +15,7 @@ import {
   type IndexSources,
   indexFile,
   renderIndex,
+  sourceDefectRemedies,
 } from '@puni/shared-checkout';
 import {
   fixtureRemotes,
@@ -28,6 +29,9 @@ import { burokratWikiModule } from './module';
 import { fixtureCommands, makeRepository } from './wiki.test-host';
 
 let root = '';
+
+const readWhenFix = sourceDefectRemedies['read-when'];
+const readFirstFix = sourceDefectRemedies['read-first'];
 
 const container = DiBag.createBuilder()
   .withInstalledModules([nodeHostModule, checkoutModule, burokratWikiModule])
@@ -142,6 +146,10 @@ describe('readIndexSources', () => {
     ['adding to two.', 'project two metadata.readWhen must not end with a full stop'],
     ['adding\nto two', 'project two metadata.readWhen must be one line'],
     [`adding ${'w '.repeat(20)}`, 'project two metadata.readWhen has 21 words; at most 20'],
+    [
+      `Adding\n${'w '.repeat(20)}to two.`,
+      'project two metadata.readWhen must start with a lower-case letter, must not end with a full stop, must be one line, has 23 words; at most 20',
+    ],
   ])('a project with readWhen %j is a defect: %s', (readWhen, message) => {
     writeProject(root, 'libs/two', 'two', { readWhen, readFirst: 'src/index.ts' });
     expect(readIndexSources(root).defects).toEqual([
@@ -211,8 +219,7 @@ describe('wiki index --print', () => {
     expect(runIndex(root, true)).toEqual({
       code: 1,
       stdout: '',
-      stderr:
-        'error: libs/two/project.json: project two has no metadata.readWhen; libs/two/project.json: project two metadata.readFirst is missing\n',
+      stderr: `error: libs/two/project.json: project two has no metadata.readWhen; fix: ${readWhenFix}; libs/two/project.json: project two metadata.readFirst is missing; fix: ${readFirstFix}\n`,
     });
   });
 });
@@ -235,6 +242,18 @@ describe('the wiki index command', () => {
     expect(runIndex()).toEqual({ code: 0, stdout: 'wrote: wiki/index/index.md\n', stderr: '' });
   });
 
+  test('a file standing where wiki/index belongs is replaced by the index', () => {
+    const expected = readFileSync(join(root, indexFile), 'utf8');
+    rmSync(join(root, 'wiki/index'), { recursive: true });
+    writeFileSync(join(root, 'wiki/index'), 'a file\n');
+    expect(runIndex()).toEqual({
+      code: 0,
+      stdout: 'wrote: wiki/index/index.md\nremoved: wiki/index\n',
+      stderr: '',
+    });
+    expect(readFileSync(join(root, indexFile), 'utf8')).toBe(expected);
+  });
+
   test('defective inputs print one error line, exit 1 and write nothing', () => {
     writeProject(root, 'libs/two', 'two', {});
     writeRepositoryFile(root, 'wiki/deploy.md', '# Deploy\n');
@@ -242,8 +261,7 @@ describe('the wiki index command', () => {
     expect(runIndex()).toEqual({
       code: 1,
       stdout: '',
-      stderr:
-        'error: libs/two/project.json: project two has no metadata.readWhen; libs/two/project.json: project two metadata.readFirst is missing; wiki/deploy.md: does not begin with front matter\n',
+      stderr: `error: libs/two/project.json: project two has no metadata.readWhen; fix: ${readWhenFix}; libs/two/project.json: project two metadata.readFirst is missing; fix: ${readFirstFix}; wiki/deploy.md: does not begin with front matter; fix: ${readWhenFix}\n`,
     });
     expect(readFileSync(join(root, indexFile), 'utf8')).toBe(before);
   });

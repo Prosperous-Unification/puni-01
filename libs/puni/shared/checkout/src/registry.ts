@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import { RegistryInvalid } from './failures';
-import { isRecord } from './json';
+import { describeValue, isRecord, parseJson, requireOnlyKeys } from './json';
 
 /** The `puni.json` key naming the type of the repository that holds the file. */
 export const thisRepoTypeKey = 'this-repo-type';
@@ -49,10 +49,6 @@ export interface Repository {
   readonly registry: RepositoryRegistry;
 }
 
-function describeValue(value: unknown): string {
-  return value === undefined ? 'missing' : JSON.stringify(value);
-}
-
 function isRepositoryType(value: unknown): value is RepositoryType {
   return repositoryTypes.some((type) => type === value);
 }
@@ -63,19 +59,6 @@ export function nameRepository(entry: RepositoryEntry): string {
 }
 
 type Refuse = (problem: string) => never;
-
-function requireOnlyKeys(
-  value: Record<string, unknown>,
-  keys: readonly string[],
-  where: string,
-  refuse: Refuse,
-): void {
-  const unknown = Object.keys(value).filter((key) => !keys.includes(key));
-  if (unknown.length > 0) {
-    const subject = where === '' ? '' : `${where} `;
-    refuse(`${subject}has unknown keys ${unknown.join(', ')}; it holds only ${keys.join(' and ')}`);
-  }
-}
 
 function readRemote(value: unknown, where: string, refuse: Refuse): Remote {
   if (!isRecord(value)) return refuse(`${where} is ${describeValue(value)}; expected an object`);
@@ -121,13 +104,9 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
       ? new RegistryInvalid({ details })
       : new RegistryInvalid({ details, cause });
   };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (cause) {
-    if (!(cause instanceof SyntaxError)) throw cause;
-    return refuse(`is not valid JSON: ${cause.message}`, cause);
-  }
+  const read = parseJson(text);
+  if ('problem' in read) return refuse(read.problem, read.cause);
+  const parsed = read.value;
   if (!isRecord(parsed)) return refuse('is not a JSON object');
   requireOnlyKeys(parsed, [thisRepoTypeKey, allReposKey], '', refuse);
   const list = parsed[allReposKey];
@@ -154,9 +133,12 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
       `${thisRepoTypeKey} is ${describeValue(thisType)}; expected a type listed in ${allReposKey}: ${[...byType.keys()].join(', ')}`,
     );
   }
-  // Safe: every type in repositoryTypes was checked present in byType just above.
-  const repos = Object.fromEntries(byType) as Record<RepositoryType, RepositoryEntry>;
-  return { thisType, repos };
+  const listed = (type: RepositoryType): RepositoryEntry =>
+    byType.get(type) ?? refuse(`${allReposKey} lacks the types ${type}`);
+  return {
+    thisType,
+    repos: { 'system-state': listed('system-state'), 'system-records': listed('system-records') },
+  };
 }
 
 /**

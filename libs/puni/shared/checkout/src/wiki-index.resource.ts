@@ -127,7 +127,7 @@ function readSources(files: CheckoutFiles): IndexSources {
 function compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift {
   const present = files
     .listVisible(repositoryScope)
-    .filter((path) => path.startsWith(`${indexDirectory}/`));
+    .filter((path) => path === indexDirectory || path.startsWith(`${indexDirectory}/`));
   const expectedPaths = [...expected.keys()].sort(compareBytes);
   return {
     missing: expectedPaths.filter((path) => !present.includes(path)),
@@ -145,10 +145,10 @@ export function createWikiIndex(): WikiIndexResource {
     compare,
     write(files, expected) {
       const drift = compare(files, expected);
+      for (const path of drift.unexpected) files.remove(path);
       for (const [path, content] of expected) {
         if (drift.missing.includes(path) || drift.stale.includes(path)) files.write(path, content);
       }
-      for (const path of drift.unexpected) files.remove(path);
       files.removeEmptyDirectories(indexDirectory);
       return drift;
     },

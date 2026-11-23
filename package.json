@@ -14,8 +14,8 @@
     "typecheck": "nx run-many -t typecheck",
     "format": "nx format:write --all",
     "format:check": "nx format:check --all",
-    "gate": "nx sync:check && nx format:check --all && bun run puni burokrat check && nx run-many -t lint typecheck test build",
-    "gate:affected": "nx sync:check && nx format:check && nx affected -t puni-bur-check puni-bur-links && nx affected -t lint typecheck test build",
+    "gate": "nx sync:check && { nx format:check --all || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t lint typecheck test build",
+    "gate:affected": "nx sync:check && { nx format:check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && nx affected -t puni-bur-check puni-bur-links && nx affected -t lint typecheck test build",
     "fix": "nx sync && nx format:write --all"
   },
   "dependencies": {

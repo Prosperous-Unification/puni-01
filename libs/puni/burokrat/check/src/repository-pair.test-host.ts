@@ -12,12 +12,16 @@ import {
   writeRepositoryFile,
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
+import { agentsRuleTitles } from './rules/entry.rule';
 
 /** The command tree fixture repositories are indexed with. */
 export const fixtureCommands: readonly CommandBrief[] = [
   { path: 'demo dash', brief: 'Do it.' },
   { path: 'demo burokrat', brief: 'Judge.' },
 ];
+
+/** The `nx.json` of a fixture repository: the index sync generator registered, nothing else. */
+export const fixtureNx = { sync: { globalGenerators: ['@puni/nx-sync:wiki-index'] } };
 
 /**
  * Rewrites `wiki/index/index.md` of the git repository at `root` from its sources, read through
@@ -44,8 +48,9 @@ export async function regenerateIndex(root: string): Promise<void> {
 
 /**
  * Builds a system-state repository named `demo` at `root` that passes every rule: `puni.json`,
- * entry files, the CI workflow, the root project `workspace`, one project `one`, a generated
- * index, and every file staged in a real git repository.
+ * entry files (`AGENTS.md` holding the rules), `nx.json`, the CI workflow, the root project
+ * `workspace`, one project `one`, a generated index, and every file staged in a real git
+ * repository.
  */
 async function buildStateRepository(root: string): Promise<void> {
   mkdirSync(root);
@@ -57,11 +62,13 @@ async function buildStateRepository(root: string): Promise<void> {
     readFirst: 'src/index.ts',
   });
   mkdirSync(join(root, 'libs'));
+  const rules = agentsRuleTitles.map((title, index) => `${String(index + 1)}. **${title}**`);
   writeRepositoryFile(
     root,
     'AGENTS.md',
-    `# demo\n\nStart at \`wiki/index/index.md\`. History lives in ${fixtureRemotes['system-records']}, checked out as \`../demo-records\`.\n`,
+    `# demo\n\nStart at \`wiki/index/index.md\`. History lives in ${fixtureRemotes['system-records']}, checked out as \`../demo-records\`.\n\n${rules.join('\n')}\n`,
   );
+  writeRepositoryFile(root, 'nx.json', JSON.stringify(fixtureNx));
   symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
   writeRepositoryFile(root, 'README.md', '# demo\n\nRules: [AGENTS.md](AGENTS.md).\n');
   writeRepositoryFile(

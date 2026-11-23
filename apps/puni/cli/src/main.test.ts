@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { rejects } from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { sourceDefectRemedies } from '@puni/shared-checkout';
 import { readInvocation as readProgramInvocation } from '@puni/shared-command';
 import { removeFixture } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
@@ -108,8 +109,7 @@ describe('runPuni', () => {
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 1,
       printed: '',
-      errors:
-        'error: apps/one/project.json: project one has no metadata.readWhen; apps/one/project.json: project one metadata.readFirst is missing\n',
+      errors: `error: apps/one/project.json: project one has no metadata.readWhen; fix: ${sourceDefectRemedies['read-when']}; apps/one/project.json: project one metadata.readFirst is missing; fix: ${sourceDefectRemedies['read-first']}\n`,
     });
   });
 

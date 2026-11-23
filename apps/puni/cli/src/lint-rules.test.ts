@@ -106,6 +106,38 @@ const refused: readonly (readonly [string, string, string, string])[] = [
     'export const a = Bun.nanoseconds();',
     'no-restricted-properties',
   ],
+  ['a rule calling Date', `${check}/x.rule.ts`, 'export const a = Date();', 'no-restricted-syntax'],
+  [
+    'a rule reading globalThis.Date.now',
+    `${check}/x.rule.ts`,
+    'export const a = globalThis.Date.now();',
+    'no-restricted-properties',
+  ],
+  [
+    'a feature constructing globalThis.Date',
+    `${check}/x.feature.ts`,
+    'export const a = new globalThis.Date();',
+    'no-restricted-properties',
+  ],
+  [
+    'a command constructing the current date',
+    `${check}/x.command.ts`,
+    'export const a = new Date();',
+    'no-restricted-syntax',
+  ],
+  [
+    'wiring reading Date.now',
+    `${check}/group.ts`,
+    'export const a = Date.now();',
+    'no-restricted-properties',
+  ],
+  ['domain writing to the console', `${check}/x.ts`, "console.log('x');", 'no-console'],
+  [
+    'a repository writing to the console',
+    'libs/puni/shared/adapters/src/x.repository.ts',
+    "console.error('x');",
+    'no-console',
+  ],
   [
     'a test using toThrow',
     `${check}/x.test.ts`,
@@ -123,7 +155,9 @@ const refused: readonly (readonly [string, string, string, string])[] = [
 const allowed: readonly (readonly [string, string, string])[] = [
   ['a test over 400 lines', `${check}/x.test.ts`, longFile.join('\n')],
   ['domain constructing a given date', `${check}/x.ts`, 'export const a = new Date(0);'],
-  ['a command reading the clock', `${check}/x.command.ts`, 'export const a = new Date();'],
+  ['a command constructing a given date', `${check}/x.command.ts`, 'export const a = new Date(0);'],
+  ['a test writing to the console', `${check}/x.test.ts`, "console.log('x');"],
+  ['the app writing to the console', 'apps/puni/cli/src/main.ts', "console.log('x');"],
   [
     'a repository reading the clock',
     'libs/puni/shared/adapters/src/x.repository.ts',
@@ -143,5 +177,46 @@ describe('the repository lint rules', () => {
 
   test.each(allowed)('%s is allowed', async (_name, path, source) => {
     expect(await lintRules(path, source)).toEqual([]);
+  });
+});
+
+/**
+ * The repository's ESLint configuration with type information: a virtual file under the probe
+ * name gets the default project, as a file on disk gets its library's.
+ */
+const typedEslint = new ESLint({
+  cwd: root,
+  overrideConfig: [
+    {
+      files: ['**/*.ts'],
+      languageOptions: {
+        parserOptions: {
+          projectService: {
+            allowDefaultProject: [`${check}/probe-*.ts`],
+            defaultProject: 'tsconfig.base.json',
+          },
+          tsconfigRootDir: root,
+        },
+      },
+    },
+  ],
+});
+
+async function lintTyped(path: string, source: string): Promise<string[]> {
+  const [report] = await typedEslint.lintText(`${source}\n`, { filePath: join(root, path) });
+  return (report?.messages ?? []).map((entry) => entry.ruleId ?? `fatal: ${entry.message}`);
+}
+
+describe('the type-checked lint rules', () => {
+  const assertion = "export const a = JSON.parse('{}') as { a: number };";
+
+  test('an unchecked type assertion in production code is refused', async () => {
+    expect(await lintTyped(`${check}/probe-x.ts`, assertion)).toEqual([
+      '@typescript-eslint/no-unsafe-type-assertion',
+    ]);
+  });
+
+  test('an unchecked type assertion in a test is allowed', async () => {
+    expect(await lintTyped(`${check}/probe-x.test.ts`, assertion)).toEqual([]);
   });
 });

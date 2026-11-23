@@ -21,7 +21,7 @@ import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { formatFinding } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
-import { credentialSamples } from './secrets.test-host';
+import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { makeRepository, regenerateIndex } from './repository-pair.test-host';
 
 let root = '';
@@ -114,6 +114,8 @@ const seeds: readonly (readonly [string, () => void])[] = [
       );
       writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
       writeRepositoryFile(root, 'libs/two/src/key.ts', `${credentialSamples[0]?.[1] ?? ''}\n`);
+      writeRepositoryFile(root, 'libs/two/hosts.txt', `${forbiddenAddress}\n`);
+      writeRepositoryFile(root, 'apps/one/src/head.ts', '// The one app.\n\nexport const a = 1;\n');
       writeRepositoryFile(root, 'apps/one/tsconfig.json', '{}');
       writeRepositoryFile(
         root,
@@ -127,6 +129,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
     'missing AGENTS.md, long README and a stale index',
     () => {
       rmSync(join(root, 'AGENTS.md'));
+      rmSync(join(root, 'nx.json'));
       writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
       appendFileSync(join(root, indexFile), 'stale');
     },
@@ -202,6 +205,10 @@ describe('every project check, the cross-project check and the whole-level rules
         'docs.commands',
         'agents.records',
         'ci.gate',
+        'agents.rules',
+        'nx.sync',
+        'secrets.addresses',
+        'code.header',
       ].sort(),
     );
     expect(broken).toEqual(new Set(codeRules.map(({ rule }) => rule.id)));

@@ -4,17 +4,18 @@ import { countWords } from './word-count';
 export const readWhenWordBudget = 20;
 
 /**
- * Why `text` cannot complete "Read this when …", or `undefined` when it can: it must start with a
- * lower-case letter, end without a full stop, stay on one line and hold at most
- * {@link readWhenWordBudget} words.
+ * Every reason `text` cannot complete "Read this when …", joined by commas, or `undefined` when
+ * it can: it must start with a lower-case letter, end without a full stop, stay on one line and
+ * hold at most {@link readWhenWordBudget} words.
  */
 export function judgeReadWhen(text: string): string | undefined {
-  if (!/^\p{Ll}/u.test(text)) return 'must start with a lower-case letter';
-  if (text.endsWith('.')) return 'must not end with a full stop';
-  if (/[\r\n]/u.test(text)) return 'must be one line';
+  const problems: string[] = [];
+  if (!/^\p{Ll}/u.test(text)) problems.push('must start with a lower-case letter');
+  if (text.endsWith('.')) problems.push('must not end with a full stop');
+  if (/[\r\n]/u.test(text)) problems.push('must be one line');
   const words = countWords(text);
   if (words > readWhenWordBudget) {
-    return `has ${String(words)} words; at most ${String(readWhenWordBudget)}`;
+    problems.push(`has ${String(words)} words; at most ${String(readWhenWordBudget)}`);
   }
-  return undefined;
+  return problems.length === 0 ? undefined : problems.join(', ');
 }

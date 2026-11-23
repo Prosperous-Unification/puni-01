@@ -1,18 +1,18 @@
 import { posix } from 'node:path';
-import { type CheckoutFiles, isRecord, nameProject, readProjectFiles } from '@puni/shared-checkout';
+import {
+  type CheckoutFiles,
+  isRecord,
+  nameProject,
+  parseJson,
+  readProjectFiles,
+} from '@puni/shared-checkout';
 import type { Breach, Rule } from '../finding';
 
 /** The JSON object at `path`, or `undefined` when it is absent or not a JSON object. */
 function readObject(files: CheckoutFiles, path: string): Record<string, unknown> | undefined {
   if (!files.exists(path)) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(files.readText(path));
-  } catch (cause) {
-    if (cause instanceof SyntaxError) return undefined;
-    throw cause;
-  }
-  return isRecord(parsed) ? parsed : undefined;
+  const read = parseJson(files.readText(path));
+  return 'value' in read && isRecord(read.value) ? read.value : undefined;
 }
 
 /** Every command string a target's options run: `command`, and each of `commands`. */
@@ -32,10 +32,7 @@ function includesSource(include: unknown): boolean {
   return include.some((entry) => typeof entry === 'string' && /^(\.\/)?src(\/|$)/u.test(entry));
 }
 
-/**
- * The breaches of the project whose `project.json` is at `path`. A target that declares no
- * command runs the one `defaults` (the `targetDefaults` of `nx.json`) gives it.
- */
+/** The breaches of the project whose `project.json` is at `path`. */
 function judgeProject(
   files: CheckoutFiles,
   path: string,
@@ -62,27 +59,37 @@ function judgeProject(
       remedy: `make ${tsconfig} a JSON object whose include lists "src/**/*.ts"`,
     });
   }
-  for (const [target, declared] of Object.entries(targets)) {
+  return [...breaches, ...judgeTimeouts(path, targets, defaults)];
+}
+
+/**
+ * The breaches of every target of `targets` whose `bun test` lacks `--timeout`; a target that
+ * declares no command runs the one `defaults` (the `targetDefaults` of `nx.json`) gives it.
+ */
+function judgeTimeouts(
+  path: string,
+  targets: Readonly<Record<string, unknown>>,
+  defaults: Readonly<Record<string, unknown>>,
+): Breach[] {
+  return Object.entries(targets).flatMap(([target, declared]) => {
     const own = listTargetCommands(declared);
     const commands = own.length > 0 ? own : listTargetCommands(defaults[target]);
-    for (const command of commands) {
-      if (command.includes('bun test') && !command.includes('--timeout')) {
-        breaches.push({
-          path,
-          message: `target ${target} runs bun test without --timeout`,
-          remedy: `add --timeout=20000 to the bun test command of target ${target}`,
-        });
-      }
-    }
-  }
-  return breaches;
+    return commands
+      .filter((command) => command.includes('bun test') && !command.includes('--timeout'))
+      .map(() => ({
+        path,
+        message: `target ${target} runs bun test without --timeout`,
+        remedy: `add --timeout=20000 to the bun test command of target ${target}`,
+      }));
+  });
 }
 
 /**
  * Every project the scope owns but the root (which holds only the workspace checks) declares
- * `test`, `lint` and `typecheck` targets, and `build` when it is an application; its
- * `tsconfig.json` includes `src`; and every `bun test` it runs, its own or the `nx.json` target
- * default, carries `--timeout`. A `project.json` that names no project is not a project.
+ * `test`, `lint` and `typecheck` targets, and `build` when it is an application, and its
+ * `tsconfig.json` includes `src`; every `bun test` any project runs, the root's included, its
+ * own or the `nx.json` target default, carries `--timeout`. A `project.json` that names no
+ * project is not a project.
  */
 export const requireProjectTargets: Rule = {
   id: 'project.targets',
@@ -93,8 +100,12 @@ export const requireProjectTargets: Rule = {
     const defaults = isRecord(targetDefaults) ? targetDefaults : {};
     return readProjectFiles(files, scope).flatMap((file) => {
       const name = nameProject(file);
-      if (file.path === 'project.json' || name === undefined || !('json' in file)) return [];
-      return judgeProject(files, file.path, name, file.json, defaults);
+      if (name === undefined || !('json' in file)) return [];
+      if (file.path !== 'project.json') {
+        return judgeProject(files, file.path, name, file.json, defaults);
+      }
+      const targets = file.json['targets'];
+      return judgeTimeouts(file.path, isRecord(targets) ? targets : {}, defaults);
     });
   },
 };

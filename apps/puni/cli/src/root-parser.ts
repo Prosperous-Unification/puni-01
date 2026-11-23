@@ -57,8 +57,10 @@ export const burokratParser = map(
 );
 
 /**
- * Every `puni` command line: one `command` per role group. Navigator plans: it decides what to
- * do. Dash executes and operates: it does what was decided. Aliases select their group at
+ * Every `puni` command line: one `command` per role group. A new command goes to the role its
+ * result belongs to: Navigator decides (its result is a decision about what to do), Dash does
+ * (an effect on the system or a node), Burokrat judges (a verdict on whether work was done
+ * right). A command whose result is two of these is two commands. Aliases select their group at
  * runtime and in completion but never appear in usage or help, which name only the canonical
  * group. A new leaf also needs an entry in {@link handlerKeys} and a case in `runPuni` in
  * `main.ts`.

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = new URL('../', import.meta.url).pathname;
@@ -105,8 +106,7 @@ describe('puni-bur-check targets', () => {
     expect(declaring).toEqual([]);
   });
 
-  test('the wiki index sync generator stays registered: Nx suggests removing a failing one', () => {
-    expect(field(nx, 'sync', 'globalGenerators')).toEqual(['@puni/nx-sync:wiki-index']);
+  test('the package the nx.sync rule names is the sync generator', () => {
     expect(field(readJson('tools/nx-sync/package.json'), 'name')).toBe('@puni/nx-sync');
   });
 
@@ -177,6 +177,68 @@ describe('puni-bur-check targets', () => {
       '{workspaceRoot}/nx.json',
     ]);
     expect(field(readJson('project.json'), 'name')).toBe('workspace');
+  });
+});
+
+describe('the CI workflow', () => {
+  test('runs for pushes to main, pull requests and the merge queue', () => {
+    const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+    const triggers = /^on:\n((?: {2}.*\n)+)/mu.exec(workflow)?.[1] ?? '';
+    expect(triggers.match(/^ {2}[a-z_]+:/gmu)).toEqual([
+      '  push:',
+      '  pull_request:',
+      '  merge_group:',
+    ]);
+  });
+});
+
+describe('versions', () => {
+  test('bun-types is the Bun of .bun-version', () => {
+    const pinned = readFileSync(join(root, '.bun-version'), 'utf8').trim();
+    expect(field(readJson('package.json'), 'devDependencies', 'bun-types')).toBe(pinned);
+  });
+});
+
+/** The scripts of the root `package.json` that run the gate. */
+const gateScripts = ['gate', 'gate:affected'];
+
+/** The `&&`-joined step of the `name` script that runs `nx format:check`. */
+function readFormatStep(name: string): string {
+  const script = field(readJson('package.json'), 'scripts', name);
+  if (typeof script !== 'string') throw new Error(`package.json has no script ${name}`);
+  const step = script.split(' && ').find((part) => part.includes('format:check'));
+  if (step === undefined) throw new Error(`the ${name} script runs no format:check`);
+  return step;
+}
+
+/**
+ * Runs `step` with `nx` replaced by a stub exiting `exitCode`, through the shell `bun run` uses
+ * for a package script.
+ */
+function runFormatStep(step: string, exitCode: number) {
+  const bin = mkdtempSync(join(tmpdir(), 'puni-format-step-'));
+  try {
+    writeFileSync(join(bin, 'nx'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
+    const child = Bun.spawnSync(['sh', '-c', step], {
+      env: { PATH: `${bin}:/usr/bin:/bin` },
+      stderr: 'pipe',
+    });
+    return { exitCode: child.exitCode, stderr: child.stderr.toString() };
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
+  }
+}
+
+describe('the gate format step', () => {
+  test.each(gateScripts)('%s prints the remedy when format:check fails', (name) => {
+    expect(runFormatStep(readFormatStep(name), 1)).toEqual({
+      exitCode: 1,
+      stderr: 'fix: run bun run fix\n',
+    });
+  });
+
+  test.each(gateScripts)('%s passes quietly when format:check passes', (name) => {
+    expect(runFormatStep(readFormatStep(name), 0)).toEqual({ exitCode: 0, stderr: '' });
   });
 });
 

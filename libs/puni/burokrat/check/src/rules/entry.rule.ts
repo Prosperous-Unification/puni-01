@@ -50,6 +50,37 @@ export const agentsNamesIndex: Rule = {
   },
 };
 
+/**
+ * The titles of the six rules of `AGENTS.md`, in their order. Only the owner changes the rules;
+ * when the owner has, this list changes to match, and nothing else does.
+ */
+export const agentsRuleTitles = [
+  'State, not history.',
+  'One home for every fact.',
+  'The task sets the scope.',
+  'Ask only before what cannot be undone:',
+  'Fail loudly.',
+  'Evidence, not opinion.',
+] as const;
+
+/**
+ * `AGENTS.md` holds each of {@link agentsRuleTitles} as its numbered rule, `<n>. **<title>**`; a
+ * missing file is `agents.exists`'s.
+ */
+export const agentsKeepRules: Rule = {
+  id: 'agents.rules',
+  remedy:
+    'restore the rule in AGENTS.md; if the owner changed the rules, update agentsRuleTitles in the Burokrat check library to match',
+  judge(reading) {
+    const text = readOptional(reading, 'AGENTS.md');
+    if (text === undefined) return [];
+    return agentsRuleTitles.flatMap((title, index) => {
+      const rule = `${String(index + 1)}. **${title}**`;
+      return text.includes(rule) ? [] : [{ path: 'AGENTS.md', message: `does not hold ${rule}` }];
+    });
+  },
+};
+
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {
   id: 'claude.symlink',
@@ -58,6 +89,15 @@ export const claudeLinksAgents: Rule = {
     const path = 'CLAUDE.md';
     const kind = files.describe(path);
     if (kind === 'absent') return [{ path, message: 'is missing' }];
+    if (kind === 'directory') {
+      return [
+        {
+          path,
+          message: 'is a directory, not a symlink to AGENTS.md',
+          remedy: 'remove the directory, then link: rm -r CLAUDE.md && ln -s AGENTS.md CLAUDE.md',
+        },
+      ];
+    }
     if (kind !== 'symlink') return [{ path, message: 'is not a symlink to AGENTS.md' }];
     const target = files.readLinkTarget(path);
     return target === 'AGENTS.md' ? [] : [{ path, message: `points to ${target}, not AGENTS.md` }];

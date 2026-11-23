@@ -17,7 +17,9 @@ import type { Rule } from './finding';
 import { codeRules, crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
 import {
   agentsExists,
+  agentsKeepRules,
   agentsNamesIndex,
+  agentsRuleTitles,
   agentsWords,
   claudeLinksAgents,
   readmeExists,
@@ -33,9 +35,10 @@ import {
 import { resolveLinks } from './rules/links.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
 import { requireProjectTargets } from './rules/project.rule';
-import { forbidPlaintextSecrets } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
-import { credentialLookalikes, credentialSamples } from './secrets.test-host';
+import { forbidFileHeaders } from './rules/code.rule';
+import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
+import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
+import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { makeRepository } from './repository-pair.test-host';
 
 let root = '';
@@ -238,7 +241,8 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.current',
       path: 'wiki/index',
       message: 'cannot be generated: 2 index.read-when or index.read-first findings',
-      remedy: 'fix the index.read-when and index.read-first findings, then run `bun run fix`',
+      remedy:
+        'fix the index.read-when and index.read-first findings, then run `bun run puni burokrat wiki index`',
     },
   ],
   [
@@ -448,6 +452,131 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
+    'AGENTS.md with a rule replaced',
+    agentsKeepRules,
+    () => {
+      const path = join(root, 'AGENTS.md');
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf8').replace('**Fail loudly.**', '**Do what you like.**'),
+      );
+    },
+    { rule: 'agents.rules', path: 'AGENTS.md', message: 'does not hold 5. **Fail loudly.**' },
+  ],
+  [
+    'CLAUDE.md a directory',
+    claudeLinksAgents,
+    () => {
+      rmSync(join(root, 'CLAUDE.md'));
+      mkdirSync(join(root, 'CLAUDE.md'));
+    },
+    {
+      rule: 'claude.symlink',
+      path: 'CLAUDE.md',
+      message: 'is a directory, not a symlink to AGENTS.md',
+      remedy: 'remove the directory, then link: rm -r CLAUDE.md && ln -s AGENTS.md CLAUDE.md',
+    },
+  ],
+  [
+    'nx.json without the index sync generator',
+    requireIndexSync,
+    () => {
+      writeRepositoryFile(root, 'nx.json', JSON.stringify({ sync: { globalGenerators: [] } }));
+    },
+    {
+      rule: 'nx.sync',
+      path: 'nx.json',
+      message: 'does not list @puni/nx-sync:wiki-index in sync.globalGenerators',
+    },
+  ],
+  [
+    'an IPv4 address in a file',
+    forbidStateAddresses,
+    () => {
+      writeRepositoryFile(root, 'apps/one/hosts.txt', `primary\nhost ${forbiddenAddress}\n`);
+    },
+    {
+      rule: 'secrets.addresses',
+      path: 'apps/one/hosts.txt',
+      message: 'line 2 holds an IPv4 address',
+    },
+  ],
+  [
+    'a source file opening with a header comment',
+    forbidFileHeaders,
+    () => {
+      writeRepositoryFile(
+        root,
+        'apps/one/src/restart.ts',
+        '// Restarts a node.\n// Written for ops.\n\nexport const a = 1;\n',
+      );
+    },
+    {
+      rule: 'code.header',
+      path: 'apps/one/src/restart.ts',
+      message: 'opens with a header comment',
+    },
+  ],
+  [
+    'the root project running bun test without --timeout',
+    requireProjectTargets,
+    () => {
+      const targets = { test: { options: { command: 'bun test tests' } } };
+      writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace', targets }));
+    },
+    {
+      rule: 'project.targets',
+      path: 'project.json',
+      message: 'target test runs bun test without --timeout',
+      remedy: 'add --timeout=20000 to the bun test command of target test',
+    },
+  ],
+  [
+    'an nx run naming no project',
+    judgeDocCommands,
+    () => {
+      appendFileSync(join(root, 'README.md'), 'Then `bunx nx run onee:test`.\n');
+    },
+    {
+      rule: 'docs.commands',
+      path: 'README.md',
+      message: 'names no Nx project onee',
+      remedy: 'name a project `bunx nx show projects` lists, or remove it',
+    },
+  ],
+  [
+    'a link to a heading that does not exist',
+    resolveLinks,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/ops/deploy.md',
+        'See [the index](../index/index.md#nowhere).\n',
+      );
+    },
+    {
+      rule: 'links.resolve',
+      path: 'wiki/ops/deploy.md',
+      message:
+        'links to ../index/index.md#nowhere, but wiki/index/index.md has no heading with the anchor #nowhere',
+      remedy: 'point the link at a heading of wiki/index/index.md, or drop the #nowhere',
+    },
+  ],
+  [
+    'a backticked path to a heading that does not exist',
+    judgeDocPaths,
+    () => {
+      appendFileSync(join(root, 'README.md'), 'Read `wiki/index/index.md#nowhere`.\n');
+    },
+    {
+      rule: 'docs.paths',
+      path: 'README.md',
+      message:
+        'names wiki/index/index.md#nowhere, but wiki/index/index.md has no heading with the anchor #nowhere',
+      remedy: 'name a heading of wiki/index/index.md, or drop the fragment',
+    },
+  ],
+  [
     'no CI workflow',
     requireCiGate,
     () => {
@@ -564,12 +693,14 @@ describe('rule boundaries', () => {
     expect(judge(confineRecordsName)).toEqual([]);
   });
 
-  test('URLs, fragments, links above the root and fenced code are not checked', () => {
+  test('URLs, links above the root and fenced code are not checked; fragments name headings', () => {
     writeRepositoryFile(
       root,
       'wiki/ops/deploy.md',
       [
-        '[web](https://example.com/x) [frag](#top) [up](../../../outside.md) [ok](../../README.md)',
+        '# Top',
+        '',
+        '[web](https://example.com/x) [frag](#top) [up](../../../outside.md) [ok](../../README.md#demo)',
         '```md',
         '[fenced](missing.md)',
         '```',
@@ -596,7 +727,8 @@ describe('the check command', () => {
 
   test('findings print sorted, then a summary, and exit 1', () => {
     rmSync(join(root, 'README.md'));
-    writeFileSync(join(root, 'AGENTS.md'), '# demo\n');
+    const rules = agentsRuleTitles.map((title, index) => `${String(index + 1)}. **${title}**`);
+    writeFileSync(join(root, 'AGENTS.md'), `# demo\n\n${rules.join('\n')}\n`);
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [
@@ -682,7 +814,7 @@ describe('a link target the file system cannot describe is missing, not a crash'
     writeFileSync(join(root, 'wiki/index'), 'x\n');
     expect(runCheck({ project: 'one' })).toEqual({
       code: 0,
-      stdout: 'ok: system-state, project one, 7 rules, no findings.\n',
+      stdout: 'ok: system-state, project one, 9 rules, no findings.\n',
     });
   });
 });
