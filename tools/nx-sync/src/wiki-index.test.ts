@@ -52,18 +52,15 @@ describe('the wiki index sync generator', () => {
     );
   });
 
-  test('replaces a file standing where the wiki/index directory belongs', () => {
+  test('deletes a file standing where the wiki/index directory belongs, writing nothing below it', () => {
     const tree = makeTree({ 'wiki/index': 'a file', 'wiki/page.md': 'kept' });
     const outcome = syncWikiIndex.syncIndex(
       tree,
       JSON.stringify({ 'wiki/index/index.md': 'fresh' }),
     );
-    expect(Object.fromEntries(tree.files)).toEqual({
-      'wiki/index/index.md': 'fresh',
-      'wiki/page.md': 'kept',
-    });
+    expect(Object.fromEntries(tree.files)).toEqual({ 'wiki/page.md': 'kept' });
     expect(outcome.outOfSyncMessage).toBe(
-      'wiki/index is not generated; wiki/index/index.md is missing; run `bun run fix`',
+      'wiki/index is a file where the index directory belongs; run `bun run puni burokrat wiki index`',
     );
   });
 

@@ -80,10 +80,14 @@ function listFiles(tree, directory) {
   });
 }
 
+/** The command that writes the index directly, replacing a file where its directory belongs. */
+const writeCommand = 'bun run puni burokrat wiki index';
+
 /**
- * Makes `wiki/index/` in `tree` exactly what `printed` renders: deletes a file standing where the
- * directory belongs, writes each file that differs and deletes every other file below it, naming
- * each change in the message Nx prints.
+ * Makes `wiki/index/` in `tree` exactly what `printed` renders: writes each file that differs and
+ * deletes every other file below it, naming each change in the message Nx prints. A file standing
+ * where the directory belongs is only deleted, and the message names {@link writeCommand}: Nx's
+ * tree forgets a deletion once a file is written below it, so the flush would fail on the file.
  *
  * @param {IndexTree} tree the Nx tree
  * @param {string} printed the JSON `puni burokrat wiki index --print` printed
@@ -95,7 +99,9 @@ function syncIndex(tree, printed) {
   const changes = [];
   if (tree.exists(indexDirectory) && tree.isFile(indexDirectory)) {
     tree.delete(indexDirectory);
-    changes.push(`${indexDirectory} is not generated`);
+    return {
+      outOfSyncMessage: `${indexDirectory} is a file where the index directory belongs; run \`${writeCommand}\``,
+    };
   }
   for (const [path, text] of rendered) {
     const exists = tree.exists(path);
