@@ -202,6 +202,10 @@ export type Leaf =
   | {
       readonly kind: 'burokrat adr add';
       readonly request: Extract<BurokratRequest, { kind: 'adr add' }>;
+    }
+  | {
+      readonly kind: 'burokrat assess outcomes';
+      readonly request: Extract<BurokratRequest, { kind: 'assess outcomes' }>;
     };
 
 /** The container key of the command service that runs each leaf kind. */
@@ -219,6 +223,7 @@ export const handlerKeys = {
   'burokrat wiki index': 'burokratWikiIndexCommand',
   'burokrat repo init': 'burokratRepoInitCommand',
   'burokrat adr add': 'burokratAdrAddCommand',
+  'burokrat assess outcomes': 'burokratAssessOutcomesCommand',
 } as const satisfies Record<Exclude<Leaf['kind'], 'help'>, string>;
 
 function selectNavigatorLeaf(request: NavigatorRequest): Leaf {
@@ -265,6 +270,8 @@ function selectBurokratLeaf(request: BurokratRequest): Leaf {
       return { kind: 'burokrat repo init', request };
     case 'adr add':
       return { kind: 'burokrat adr add', request };
+    case 'assess outcomes':
+      return { kind: 'burokrat assess outcomes', request };
   }
 }
 

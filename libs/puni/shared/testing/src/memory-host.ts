@@ -8,6 +8,8 @@ import type {
   GitBranches,
   GitChange,
   GitListing,
+  GitMerge,
+  GitMerges,
   GitText,
   GitWorktree,
   PathKind,
@@ -50,10 +52,22 @@ export interface MemoryHostOptions {
   readonly unmerged?: readonly string[];
   /** The instant the clock always reads; {@link fixedInstant} when not given. */
   readonly now?: Date;
+  /** The home directory; {@link memoryHome} when not given. */
+  readonly home?: string;
+  /** When each file was last modified, by absolute path; any other file at {@link fixedInstant}. */
+  readonly modified?: Readonly<Record<string, Date>>;
+  /**
+   * The merges `git log` lists in each repository by its absolute root, then by
+   * `<ancestry> <revisions>`, newest first; any other revision is unknown.
+   */
+  readonly merges?: Readonly<Record<string, Readonly<Record<string, readonly GitMerge[]>>>>;
 }
 
 /** The instant a memory host's clock reads unless told otherwise. */
 export const fixedInstant = new Date('2031-04-05T23:30:00Z');
+
+/** The home directory of a memory host unless told otherwise. */
+export const memoryHome = '/home/puni';
 
 /** A failure of the memory file system, carrying the `code` the runtime's own error would. */
 class MemoryFileError extends Error {
@@ -70,8 +84,13 @@ class MemoryFileError extends Error {
  * A mutable in-memory file system over `tree`, keeping the {@link FileSystem} contract the node
  * adapter keeps. A symlink's target resolves from the link's directory; more than eight links in
  * a row are a loop (`ELOOP`); reading a missing path throws `ENOENT` and a directory `EISDIR`.
+ * Files were last modified as `options.modified` says, else at {@link fixedInstant}; the home
+ * directory is `options.home`, else {@link memoryHome}.
  */
-export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
+export function createMemoryFileSystem(
+  tree: MemoryTree,
+  options: Pick<MemoryHostOptions, 'home' | 'modified'> = {},
+): FileSystem & {
   readonly nodes: Map<string, MemoryNode>;
 } {
   const nodes = new Map<string, MemoryNode>(Object.entries(tree));
@@ -92,14 +111,26 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
     if (node !== undefined && 'symlink' in node) return 'symlink';
     return isDirectory(path) ? 'directory' : 'absent';
   };
+  const readText = (path: string): string => {
+    const target = follow(path);
+    const node = nodes.get(target);
+    if (typeof node === 'string') return node;
+    throw new MemoryFileError(isDirectory(target) ? 'EISDIR' : 'ENOENT', path);
+  };
   return {
     nodes,
-    readText(path) {
-      const target = follow(path);
-      const node = nodes.get(target);
-      if (typeof node === 'string') return node;
-      throw new MemoryFileError(isDirectory(target) ? 'EISDIR' : 'ENOENT', path);
+    readText,
+    *readLines(path) {
+      const lines = readText(path).split('\n');
+      if (lines.at(-1) === '') lines.pop();
+      yield* lines;
     },
+    readModifiedTime(path) {
+      const target = follow(path);
+      if (kindAt(target) === 'absent') throw new MemoryFileError('ENOENT', path);
+      return new Date(options.modified?.[target] ?? fixedInstant);
+    },
+    homeDirectory: () => options.home ?? memoryHome,
     stat: (path, links) => kindAt(links === 'follow' ? follow(path) : path),
     exists(path) {
       try {
@@ -147,14 +178,14 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
  * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, and
  * holds `staged` in its index, or fails every listing with `failure`. Each repository starts
  * with one worktree, its root on the branch `main`; added worktrees are directories of
- * `fileSystem`, their changes and unmerged branches as `history` says.
+ * `fileSystem`, their changes, unmerged branches and merges as `history` says.
  */
 export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
   staged: MemoryStaged = {},
   heads: Readonly<Record<string, string>> = {},
-  history: Pick<MemoryHostOptions, 'changed' | 'unmerged'> = {},
+  history: Pick<MemoryHostOptions, 'changed' | 'unmerged' | 'merges'> = {},
 ): Git {
   const repositories = new Map<string, { worktrees: GitWorktree[]; branches: Set<string> }>();
   const open = (root: string) => {
@@ -204,6 +235,12 @@ export function createMemoryGit(
       if (!force && isUnmerged(branch)) return { failure: `${branch} is not fully merged` };
       repository.branches.delete(branch);
       return { changed: true };
+    },
+    listMerges(root, revisions, ancestry): GitMerges {
+      const merges = history.merges?.[root]?.[`${ancestry} ${revisions}`];
+      return merges === undefined
+        ? { failure: `unknown revision ${revisions} in ${root}` }
+        : { merges: [...merges] };
     },
     readHeadCommit(root): GitText {
       const head = heads[root];
@@ -264,7 +301,7 @@ export function createMemoryProcessRunner(
  * run is in {@link MemoryHost.attachedRuns}.
  */
 export function memoryHost(tree: MemoryTree, options: MemoryHostOptions = {}) {
-  const fileSystem = createMemoryFileSystem(tree);
+  const fileSystem = createMemoryFileSystem(tree, options);
   const git = createMemoryGit(
     fileSystem,
     options.gitFailure,

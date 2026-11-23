@@ -3,6 +3,8 @@ import type {
   GitBranches,
   GitChange,
   GitListing,
+  GitMerge,
+  GitMerges,
   GitText,
   GitWorktree,
   GitWorktrees,
@@ -21,7 +23,8 @@ type GitRun = { readonly stdout: string } | { readonly failure: string };
  * `HEAD` commit is `git rev-parse --short --verify HEAD`. Worktrees are
  * `git worktree list --porcelain -z`; branches `git for-each-ref` over `refs/heads/<prefix>`,
  * `--no-merged=HEAD` for unmerged ones; changed files `git status --porcelain -z
- * --untracked-files=all`; the changes are `git worktree add -b`, `git worktree remove [--force]`
+ * --untracked-files=all`; merges `git log --merges [--first-parent] --format=%H%x1f%ct%x1f%s`
+ * with the revisions after `--end-of-options`, the time the committer time; the changes are `git worktree add -b`, `git worktree remove [--force]`
  * and `git branch -d` or `-D`.
  */
 export function createBunGit({ processRunner }: { processRunner: ProcessRunner }): Git {
@@ -106,6 +109,34 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
         if (/^(?:[RC].|.[RC])/u.test(field)) index += 1;
       }
       return { files };
+    },
+    listMerges(root, revisions, ancestry): GitMerges {
+      const logged = run(root, [
+        'log',
+        '--merges',
+        ...(ancestry === 'first-parent' ? ['--first-parent'] : []),
+        '--format=%H%x1f%ct%x1f%s',
+        '--end-of-options',
+        revisions,
+        '--',
+      ]);
+      if ('failure' in logged) return logged;
+      const merges: GitMerge[] = [];
+      for (const line of logged.stdout.split('\n')) {
+        if (line === '') continue;
+        const [hash, seconds, subject, ...rest] = line.split('\x1f');
+        if (
+          hash === undefined ||
+          seconds === undefined ||
+          subject === undefined ||
+          rest.length > 0 ||
+          !/^[0-9]+$/u.test(seconds)
+        ) {
+          return { failure: `git log printed an unexpected line: ${JSON.stringify(line)}` };
+        }
+        merges.push({ hash, committedAt: new Date(Number(seconds) * 1000), subject });
+      }
+      return { merges };
     },
     addWorktree: (root, path, branch, from) =>
       change(root, ['worktree', 'add', '-q', '-b', branch, path, from]),

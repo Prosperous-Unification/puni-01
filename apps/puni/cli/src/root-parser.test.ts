@@ -121,6 +121,7 @@ describe('readInvocation', () => {
     ['n research', ['add']],
     ['b repo', ['init']],
     ['b adr', ['add']],
+    ['b assess', ['outcomes']],
     [
       'd',
       ['ops', 'run', 'progress', 'resources', 'release', 'admission', 'authority', 'mcp', 'pool'],
@@ -145,7 +146,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo [init --name NAME [--owner OWNER]] | adr [add --title TEXT\n       --topics LIST --summary TEXT [--body-file PATH]] | change | assess)]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo [init --name NAME [--owner OWNER]] | adr [add --title TEXT\n       --topics LIST --summary TEXT [--body-file PATH]] | change | assess [outcomes --since INSTANT\n       --until INSTANT [--rate-card PATH] [--claude-projects DIR...] [--codex-sessions DIR...] [\n       --json]])]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });
@@ -276,6 +277,10 @@ describe('listCommands', () => {
       {
         path: 'puni burokrat assess',
         brief: 'Assess the outcomes of work and what they cost.',
+      },
+      {
+        path: 'puni burokrat assess outcomes',
+        brief: 'Say what the agent work of a period cost per accepted outcome.',
       },
     ]);
   });

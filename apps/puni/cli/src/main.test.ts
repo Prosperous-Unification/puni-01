@@ -193,6 +193,7 @@ describe('runProcess', () => {
         navigatorResearchAddCommand: () => ({ run: () => 0 }),
         burokratRepoInitCommand: () => ({ run: () => 0 }),
         burokratAdrAddCommand: () => ({ run: () => 0 }),
+        burokratAssessOutcomesCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),
         dashOpsK3sCommand: () => ({ run: () => 0 }),
         dashRunLogCommand: () => ({ run: () => 0 }),

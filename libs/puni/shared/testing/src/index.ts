@@ -3,6 +3,7 @@ export { FixtureGitFailed } from './failures';
 export {
   fixedInstant,
   type MemoryHost,
+  memoryHome,
   type MemoryHostOptions,
   memoryHost,
   type MemoryTree,

@@ -18,6 +18,19 @@ export type GitWorktrees =
 /** Branch names without `refs/heads/`, or why git gave none. */
 export type GitBranches = { readonly branches: readonly string[] } | { readonly failure: string };
 
+/** One merge commit: its full hash, when it was committed, and its subject line. */
+export interface GitMerge {
+  readonly hash: string;
+  readonly committedAt: Date;
+  readonly subject: string;
+}
+
+/** Merge commits, newest first, or why git gave none. */
+export type GitMerges = { readonly merges: readonly GitMerge[] } | { readonly failure: string };
+
+/** Which ancestors of a revision a history walk follows: every parent, or only the first. */
+export type GitAncestry = 'all' | 'first-parent';
+
 /** A change git made, or why it made none. */
 export type GitChange = { readonly changed: true } | { readonly failure: string };
 
@@ -51,6 +64,12 @@ export interface Git {
    * untracked files it does not ignore; none for a clean worktree.
    */
   listChangedFiles(root: string): GitListing;
+  /**
+   * The merge commits `git log` reaches from `revisions` in the repository at `root`, a revision
+   * or range such as `main` or `<hash>^1..<hash>`, following `ancestry`; an unknown revision is
+   * a `failure`.
+   */
+  listMerges(root: string, revisions: string, ancestry: GitAncestry): GitMerges;
   /** Adds a worktree at `path`, checking out a new `branch` that starts at the commit `from`. */
   addWorktree(root: string, path: string, branch: string, from: string): GitChange;
   /**

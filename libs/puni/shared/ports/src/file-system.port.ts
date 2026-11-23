@@ -29,6 +29,22 @@ export interface FileSystem {
    * that cannot be described for any reason does not exist.
    */
   exists(path: string): boolean;
+  /**
+   * The lines of the text file at `path`, read as UTF-8 in pieces as they are taken, so a file
+   * larger than memory can be read; each line without its `\n`, and a last line without one
+   * included. An empty file has none.
+   *
+   * @throws the runtime's error, on the first line taken, when the file cannot be opened or read.
+   */
+  readLines(path: string): Iterable<string>;
+  /**
+   * When the file at `path`, a symlink followed, was last modified.
+   *
+   * @throws the runtime's error when nothing is there or it cannot be described.
+   */
+  readModifiedTime(path: string): Date;
+  /** The absolute home directory of the user this process runs as. */
+  homeDirectory(): string;
   /** The target text of the symlink at `path`. */
   readLink(path: string): string;
   /** The entries of the directory at `path`. */
