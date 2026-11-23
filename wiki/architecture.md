@@ -10,7 +10,9 @@ read-when: deciding where new code goes, or which kind a file is
 Every source file but a test has one kind: its suffix, or a wiring name at a library's source root.
 
 - **command** (`.command.ts`): one leaf's Optique parser, and a handler from the parsed request to
-  a feature call, output and an exit code; or the output and exit codes its group's leaves share.
+  a feature call, output and an exit code; or the output and exit codes its group's leaves share;
+  or, in `libs/puni/shared/records`, the parser and handler factories every leaf that files a
+  record is built from.
 - **feature** (`.feature.ts`): one capability a user asks for, returning a modelled outcome.
 - **rule** (`.rule.ts`): one judgement, from a reading to findings.
 - **resource** (`.resource.ts`): the invariants of one aggregate.

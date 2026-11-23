@@ -135,11 +135,18 @@ function readPage(path: string, text: string): Reading {
   return { entry: { name: title, path, readWhen } };
 }
 
+/**
+ * The index sources of `files`. An Nx workspace (one with `nx.json`) keeps its projects under
+ * `apps/` and `libs/`, so each missing one is a defect; a repository without `nx.json` holds no
+ * code and needs neither.
+ */
 function readSources(files: CheckoutFiles): IndexSources {
   const readings: Reading[] = [];
   const projectFiles = readProjectFiles(files, repositoryScope);
+  const isWorkspace = files.exists('nx.json');
   for (const top of ['apps', 'libs']) {
     if (!files.exists(top)) {
+      if (!isWorkspace) continue;
       readings.push(defectOf(top, 'directory is missing'));
       continue;
     }

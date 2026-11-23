@@ -87,6 +87,27 @@ export interface CheckoutFiles {
   removeEmptyDirectories(directory: string): void;
 }
 
+/**
+ * Where a new repository is created: in an existing directory holding nothing but `.git`, or at
+ * a path where nothing exists yet.
+ */
+export type NewCheckoutPlace = 'empty-directory' | 'absent';
+
+/**
+ * A repository being created: it only adds the entry files a new repository of its type starts
+ * with (`seedFiles`), and for a system-state repository the generated index, each once.
+ * Paths are repository-relative POSIX paths; any other path, or one where something already
+ * exists, is refused with `CheckoutPathRefused`.
+ */
+export interface NewCheckout {
+  /** The absolute directory the repository is created in. */
+  readonly root: string;
+  /** Writes `text` at `path`, creating its directories. */
+  write(path: string, text: string): void;
+  /** Creates a symlink at `path` holding the target text `target`. */
+  link(path: string, target: string): void;
+}
+
 /** Opens checkouts. */
 export interface CheckoutFilesResource {
   /** The checkout of a repository of `type` whose root is the absolute directory `root`. */
@@ -99,6 +120,14 @@ export interface CheckoutFilesResource {
    * @throws StagedTextUnreadable when git cannot give the staged text of a file.
    */
   openStaged(root: string): CheckoutFiles;
+  /**
+   * A new repository of `type` at the absolute directory `root`, which must be `place`. It
+   * judges `root` when called and writes nothing until asked.
+   *
+   * @throws CheckoutRootRefused when `root` holds anything but `.git` or is not a directory
+   *   (`empty-directory`), or when something exists there (`absent`).
+   */
+  create(root: string, type: RepositoryType, place: NewCheckoutPlace): NewCheckout;
 }
 
 /** The projects of a checkout and the scope a `--project` names. */
@@ -125,8 +154,9 @@ export interface WikiIndexResource {
   /**
    * Reads every Nx project (`project.json` under `apps/` and `libs/`) and every authored page
    * (Markdown under `wiki/` outside `wiki/index/`) that is visible and not below `node_modules`;
-   * a project's entry carries its scope. A defect in them is no failure; each one is returned,
-   * sorted by path.
+   * a project's entry carries its scope. In an Nx workspace (one with `nx.json`) a missing
+   * `apps/` or `libs/` is a defect. A defect in them is no failure; each one is returned, sorted
+   * by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
   /**

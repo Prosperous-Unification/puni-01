@@ -1,6 +1,6 @@
-import { countWords, indexFile } from '@puni/shared-checkout';
+import { countWords, indexFile, readRulesSection } from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
-import { agentsRulesDigest, digestRulesSection, readRulesSection } from '../agents-rules';
+import { agentsRulesDigest, digestRulesSection } from '../agents-rules';
 import type { Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {

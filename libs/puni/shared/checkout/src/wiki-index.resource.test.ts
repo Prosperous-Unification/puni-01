@@ -62,6 +62,19 @@ describe('readSources', () => {
     });
   });
 
+  test('a workspace needs apps/ and libs/; a repository without nx.json needs neither', () => {
+    const page = { '/r/wiki/deploy.md': sources['/r/wiki/deploy.md'] ?? '' };
+    expect(openMemory(page).wikiIndex.readSources(openMemory(page).files)).toEqual({
+      entries: [{ name: 'Deploy', path: 'wiki/deploy.md', readWhen: 'deploying' }],
+      defects: [],
+    });
+    const workspace = openMemory({ ...page, '/r/nx.json': '{}' });
+    expect(workspace.wikiIndex.readSources(workspace.files).defects).toEqual([
+      { topic: 'read-when', path: 'apps', message: 'directory is missing' },
+      { topic: 'read-when', path: 'libs', message: 'directory is missing' },
+    ]);
+  });
+
   test.each([
     ['{ not json', /^is not valid JSON: /u],
     ['[]', /^is not a JSON object$/u],

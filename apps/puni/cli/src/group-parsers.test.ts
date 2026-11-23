@@ -53,6 +53,16 @@ describe('burokratParser', () => {
         staged: false,
       },
     ],
+    ['repo init --name shop', { kind: 'repo init', name: 'shop', owner: undefined }],
+    ['repo init --owner acme --name shop', { kind: 'repo init', name: 'shop', owner: 'acme' }],
+    [
+      'adr add --title T --topics a,b --summary S',
+      { kind: 'adr add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+    ],
+    [
+      'adr add --summary S --body-file b.md --topics a --title T',
+      { kind: 'adr add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+    ],
   ] as const)('%s parses to its leaf', (line, value) => {
     expect(parse(burokratParser, line.split(' '))).toEqual({ success: true, value });
   });
@@ -68,7 +78,12 @@ describe('burokratParser', () => {
     'check --project',
     'check --repo system-docs',
     'repo init',
+    'repo init --owner acme',
+    'repo init --name',
+    'repo init --name x --bogus',
     'adr add',
+    'adr add --title T --topics a',
+    'adr stray',
     'change archive',
     'assess outcomes',
   ])('%s is refused', (line) => {
@@ -90,6 +105,10 @@ describe('navigatorParser', () => {
       'plan add --summary S --body-file b.md --topics a --title T',
       { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
     ],
+    [
+      'research add --title T --topics a --summary S --body-file b.md',
+      { kind: 'research add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+    ],
   ] as const)('%j parses to %j', (line, value) => {
     expect(parse(navigatorParser, line.split(' ').filter(Boolean))).toEqual({
       success: true,
@@ -101,6 +120,8 @@ describe('navigatorParser', () => {
     'stray',
     'plan stray',
     'research add',
+    'research add --title T --topics a',
+    'research stray',
     'progress admit',
     'plan add',
     'plan add --title T --topics a',

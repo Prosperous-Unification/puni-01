@@ -5,7 +5,9 @@ import { createPuniContainer } from './composition';
 import { type CommandContainer, runPuni } from './main';
 
 const exportedKeys = [
+  'burokratAdrAddCommand',
   'burokratCheckCommand',
+  'burokratRepoInitCommand',
   'burokratWikiIndexCommand',
   'checkoutFiles',
   'checkoutProjectScope',
@@ -18,7 +20,10 @@ const exportedKeys = [
   'fileSystem',
   'git',
   'navigatorPlanAddCommand',
+  'navigatorResearchAddCommand',
   'processRunner',
+  'programSource',
+  'recordFiling',
   'recordsCatalog',
 ] as const;
 

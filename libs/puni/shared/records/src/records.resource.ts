@@ -19,7 +19,8 @@ import { fieldOrder, formatRecord, type RecordFields, slugifyTitle } from './rec
 import { judgeRecordValue, recordKeyForms } from './record-values';
 
 /**
- * The body of `draft`: its body file's text, or `# <title>` without one.
+ * The body of `draft`: its body file's text, or without one `# <title>` and an empty
+ * `## <heading>` section for each of its `sections`.
  *
  * @throws BodyFileMissing when the body file names nothing.
  * @throws FileUnreadable when it exists but cannot be read.
@@ -29,8 +30,10 @@ function readBody(
   title: string,
   fileSystem: RecordsRequirements['fileSystem'],
 ): string {
-  const { bodyFile } = draft;
-  if (bodyFile === undefined) return `# ${title}`;
+  const { bodyFile, sections = [] } = draft;
+  if (bodyFile === undefined) {
+    return [`# ${title}`, ...sections.map((heading) => `## ${heading}`)].join('\n\n');
+  }
   if (fileSystem.stat(bodyFile, 'follow') === 'absent') {
     throw new BodyFileMissing({ details: { path: bodyFile } });
   }
@@ -42,7 +45,10 @@ function readBody(
 }
 
 /** The {@link RecordsCatalog}; a record it files is dated today in UTC by `clock`. */
-export function createRecordsCatalog({ clock, fileSystem }: RecordsRequirements): RecordsCatalog {
+export function createRecordsCatalog({
+  clock,
+  fileSystem,
+}: Pick<RecordsRequirements, 'clock' | 'fileSystem'>): RecordsCatalog {
   return {
     list: (files) =>
       files.listVisible(repositoryScope).flatMap((path) => {

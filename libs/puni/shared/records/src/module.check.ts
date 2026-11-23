@@ -6,5 +6,10 @@ declare const requirements: RecordsRequirements;
 
 DiBag.createBuilder()
   .withInstalledModules([recordsModule])
-  .withServices({ clock: () => requirements.clock, fileSystem: () => requirements.fileSystem })
+  .withServices({
+    clock: () => requirements.clock,
+    fileSystem: () => requirements.fileSystem,
+    checkoutRegistry: () => requirements.checkoutRegistry,
+    checkoutFiles: () => requirements.checkoutFiles,
+  })
   .verifyGraphAtCompileTime() satisfies void;

@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:navigator", "type:group"],
   "metadata": {
-    "readWhen": "adding a command that files research in the records repository",
-    "readFirst": "src/group.ts"
+    "readWhen": "changing the research add command: its options and the body new research starts with",
+    "readFirst": "src/research-add.command.ts"
   },
   "sourceRoot": "libs/puni/navigator/research/src",
   "targets": {

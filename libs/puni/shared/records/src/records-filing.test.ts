@@ -98,6 +98,17 @@ describe('recordsCatalog.file', () => {
     }
   });
 
+  test('without a body file the body is the title heading, then each section empty', () => {
+    const { host, file } = open();
+    const path = file({ sections: ['Decision', 'Why'] });
+    expect(host.nodes.get(`/r/${path}`)).toEndWith(
+      '---\n\n# Run k3s: first steps!\n\n## Decision\n\n## Why\n',
+    );
+    const withBody = open({ '/notes/body.md': 'Mine.\n' });
+    const bodyPath = withBody.file({ sections: ['Decision'], bodyFile: '/notes/body.md' });
+    expect(withBody.host.nodes.get(`/r/${bodyPath}`)).toEndWith('---\n\nMine.\n');
+  });
+
   test('the body is the body file, given a final newline', () => {
     const { host, file } = open({ '/notes/body.md': '# Plan\n\nSteps.' });
     const path = file({ bodyFile: '/notes/body.md' });

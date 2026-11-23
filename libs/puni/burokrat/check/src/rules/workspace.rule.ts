@@ -1,4 +1,4 @@
-import { isRecord, nameRepository, parseJson } from '@puni/shared-checkout';
+import { type CheckoutFiles, isRecord, nameRepository, parseJson } from '@puni/shared-checkout';
 import type { Breach, Rule } from '../finding';
 import { listInlineCode } from '../docs';
 
@@ -45,11 +45,24 @@ const gateRuns: readonly (readonly [string, RegExp])[] = [
   ['bun run gate:affected', /\bbun run gate:affected(?![\w:-])/u],
 ];
 
-/** The CI workflow runs both gate scripts: `bun run gate` and `bun run gate:affected`. */
+/**
+ * Whether the repository is an Nx workspace, which holds code and its gate scripts: it has an
+ * `nx.json`. A system-state repository without one holds no code, so the rules of the workspace
+ * and its gate do not apply to it.
+ */
+function isWorkspace(files: CheckoutFiles): boolean {
+  return files.exists('nx.json');
+}
+
+/**
+ * The CI workflow of an Nx workspace ({@link isWorkspace}) runs both gate scripts: `bun run gate`
+ * and `bun run gate:affected`. A repository without `nx.json` has no gate scripts to run.
+ */
 export const requireCiGate: Rule = {
   id: 'ci.gate',
   remedy: `run \`bun run gate\` on pushes and \`bun run gate:affected\` on pull requests in ${workflow}`,
   judge({ files }) {
+    if (!isWorkspace(files)) return [];
     if (!files.exists(workflow)) return [{ path: workflow, message: 'is missing' }];
     const text = files.readText(workflow);
     return gateRuns
@@ -62,15 +75,17 @@ export const requireCiGate: Rule = {
 const indexSyncGenerator = '@puni/nx-sync:wiki-index';
 
 /**
- * `nx.json` registers {@link indexSyncGenerator} in `sync.globalGenerators`, so `nx sync:check`
- * judges the index. Nx suggests removing a failing global generator; this rule undoes that.
+ * The `nx.json` of an Nx workspace ({@link isWorkspace}) registers {@link indexSyncGenerator} in
+ * `sync.globalGenerators`, so `nx sync:check` judges the index. Nx suggests removing a failing
+ * global generator; this rule undoes that. A repository without `nx.json` keeps its index current
+ * through `index.current` alone.
  */
 export const requireIndexSync: Rule = {
   id: 'nx.sync',
   remedy: `restore "sync": { "globalGenerators": ["${indexSyncGenerator}"] } in nx.json; if the generator fails, fix the finding it prints instead`,
   judge({ files }) {
     const path = 'nx.json';
-    if (!files.exists(path)) return [{ path, message: 'is missing' }];
+    if (!isWorkspace(files)) return [];
     const read = parseJson(files.readText(path));
     if ('problem' in read) return [{ path, message: read.problem }];
     const sync = isRecord(read.value) ? read.value['sync'] : undefined;

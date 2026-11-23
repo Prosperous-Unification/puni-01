@@ -190,6 +190,9 @@ describe('runProcess', () => {
         }),
         burokratWikiIndexCommand: () => ({ run: () => 0 }),
         navigatorPlanAddCommand: () => ({ run: () => 0 }),
+        navigatorResearchAddCommand: () => ({ run: () => 0 }),
+        burokratRepoInitCommand: () => ({ run: () => 0 }),
+        burokratAdrAddCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),
         dashOpsK3sCommand: () => ({ run: () => 0 }),
       })

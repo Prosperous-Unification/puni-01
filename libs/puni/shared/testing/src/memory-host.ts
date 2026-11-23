@@ -124,6 +124,10 @@ export function createMemoryFileSystem(tree: MemoryTree): FileSystem & {
     makeDirectory(path) {
       if (!isDirectory(path)) nodes.set(path, { directory: true });
     },
+    makeLink(path, target) {
+      if (kindAt(path) !== 'absent') throw new MemoryFileError('EEXIST', path);
+      nodes.set(path, { symlink: target });
+    },
   };
 }
 

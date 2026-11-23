@@ -1,8 +1,17 @@
 import { join, posix } from 'node:path';
 import { compareBytes } from './byte-order';
-import type { CheckoutFiles, CheckoutFilesResource, FileSystem, Git, GitListing } from './contract';
+import type {
+  CheckoutFiles,
+  CheckoutFilesResource,
+  FileSystem,
+  Git,
+  GitListing,
+  NewCheckout,
+  NewCheckoutPlace,
+} from './contract';
 import {
   CheckoutPathRefused,
+  CheckoutRootRefused,
   CheckoutUnlistable,
   HeadCommitUnreadable,
   StagedTextUnreadable,
@@ -12,6 +21,7 @@ import { leavesRoot } from './paths';
 import { recordDirectories } from './record-directories';
 import type { RepositoryType } from './registry';
 import { indexDirectory } from './render-index';
+import { seedFiles } from './seed-files';
 import { readOrRefuse } from './unreadable';
 
 function refuse(path: string, reason: string): never {
@@ -161,6 +171,74 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
   };
 }
 
+/** Refuses `root` unless it is `place`, as {@link CheckoutFilesResource.create} says. */
+function requirePlace(root: string, place: NewCheckoutPlace, fileSystem: FileSystem): void {
+  const kind = fileSystem.stat(root, 'no-follow');
+  const refuseRoot = (reason: string): never => {
+    throw new CheckoutRootRefused({ details: { root, reason } });
+  };
+  if (place === 'absent') {
+    if (kind !== 'absent') refuseRoot('already exists; a new repository goes where nothing is');
+    return;
+  }
+  if (kind !== 'directory') refuseRoot(`is not a directory (${kind})`);
+  const held = fileSystem
+    .list(root)
+    .map((entry) => entry.name)
+    .filter((name) => name !== '.git')
+    .sort(compareBytes);
+  if (held.length > 0) {
+    refuseRoot(
+      `holds ${held.join(', ')}; a new repository starts in an empty directory, where only .git may exist`,
+    );
+  }
+}
+
+/**
+ * The {@link NewCheckout} at `root`: it adds the {@link seedFiles} of `type` and, for a
+ * system-state repository, files inside the generated index, each only where nothing exists.
+ */
+function createCheckout(
+  root: string,
+  type: RepositoryType,
+  place: NewCheckoutPlace,
+  fileSystem: FileSystem,
+): NewCheckout {
+  requirePlace(root, place, fileSystem);
+  const seeds = seedFiles[type];
+  const holdsIndex = (normal: string): boolean =>
+    type === 'system-state' && normal.startsWith(`${indexDirectory}/`);
+  const normaliseNew = (path: string, kind: 'file' | 'symlink'): string => {
+    const normal = normalise(path);
+    if (seeds[normal] !== kind && !(kind === 'file' && holdsIndex(normal))) {
+      const listed = Object.keys(seeds).filter((seed) => seeds[seed] === kind);
+      const index =
+        kind === 'file' && type === 'system-state' ? `, or inside ${indexDirectory}/` : '';
+      refuse(
+        path,
+        `is not a ${kind} a new ${type} repository starts with (${listed.join(', ')}${index})`,
+      );
+    }
+    if (fileSystem.stat(join(root, normal), 'no-follow') !== 'absent') {
+      refuse(path, 'already exists; a new repository replaces nothing');
+    }
+    return normal;
+  };
+  return {
+    root,
+    write(path, text) {
+      const normal = normaliseNew(path, 'file');
+      fileSystem.makeDirectory(join(root, posix.dirname(normal)));
+      fileSystem.write(join(root, normal), text);
+    },
+    link(path, target) {
+      const normal = normaliseNew(path, 'symlink');
+      fileSystem.makeDirectory(root);
+      fileSystem.makeLink(join(root, normal), target);
+    },
+  };
+}
+
 /** The {@link CheckoutFilesResource} over `fileSystem` and `git`. */
 export function createCheckoutFiles({
   fileSystem,
@@ -172,5 +250,6 @@ export function createCheckoutFiles({
   return {
     open: (root, type) => openCheckout(root, type, fileSystem, git),
     openStaged: (root) => openStaged(root, fileSystem, git),
+    create: (root, type, place) => createCheckout(root, type, place, fileSystem),
   };
 }

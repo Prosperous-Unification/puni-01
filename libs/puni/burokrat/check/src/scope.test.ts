@@ -136,7 +136,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
     'missing AGENTS.md, long README and a stale index',
     () => {
       rmSync(join(root, 'AGENTS.md'));
-      rmSync(join(root, 'nx.json'));
+      writeRepositoryFile(root, 'nx.json', '{}');
       writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
       appendFileSync(join(root, indexFile), 'stale');
     },

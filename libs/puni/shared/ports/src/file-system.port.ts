@@ -39,4 +39,10 @@ export interface FileSystem {
   remove(path: string): void;
   /** Creates the directory at `path` and every missing parent. */
   makeDirectory(path: string): void;
+  /**
+   * Creates a symlink at `path`, whose directory exists, holding the target text `target`.
+   *
+   * @throws the runtime's error, `EEXIST`, when anything is already at `path`.
+   */
+  makeLink(path: string, target: string): void;
 }

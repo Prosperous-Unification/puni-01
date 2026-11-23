@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:burokrat", "type:group"],
   "metadata": {
-    "readWhen": "adding a command that files an architecture decision record",
-    "readFirst": "src/group.ts"
+    "readWhen": "changing the adr add command: its options and the sections a new decision record starts with",
+    "readFirst": "src/adr-add.command.ts"
   },
   "sourceRoot": "libs/puni/burokrat/adr/src",
   "targets": {

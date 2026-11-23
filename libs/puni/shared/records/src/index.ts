@@ -1,4 +1,14 @@
-export type { RecordDraft, RecordFile, RecordsCatalog, RecordsExports } from './contract';
+export type {
+  RecordAddRequest,
+  RecordDraft,
+  RecordFile,
+  RecordFiling,
+  RecordFilingOutcome,
+  RecordsCatalog,
+  RecordsExports,
+  RecordShape,
+} from './contract';
+export { createRecordAddCommand, type RecordAddLeaf, recordAddParser } from './record-add.command';
 export {
   BodyFileMissing,
   RecordExists,

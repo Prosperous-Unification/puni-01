@@ -19,6 +19,7 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowArbitraryExtensions": true,
     "skipLibCheck": true,
     "paths": {
       "@puni/shared-command": ["./libs/puni/shared/command/src/index.ts"],

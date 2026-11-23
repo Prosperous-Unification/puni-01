@@ -6,17 +6,19 @@
 
 - adding a command that archives a finished change: [puni-burokrat-change](../../libs/puni/burokrat/change/src/group.ts)
 - adding a command that assesses the outcomes of work and what they cost: [puni-burokrat-assess](../../libs/puni/burokrat/assess/src/group.ts)
-- adding a command that files an architecture decision record: [puni-burokrat-adr](../../libs/puni/burokrat/adr/src/group.ts)
-- adding a command that sets up a repository for puni to govern: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/group.ts)
 - adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
+- changing the adr add command: its options and the sections a new decision record starts with: [puni-burokrat-adr](../../libs/puni/burokrat/adr/src/adr-add.command.ts)
+- changing what repo init creates for a new governed repository pair: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/repository-pair.feature.ts)
 
 ## Commands
 
 - `puni burokrat adr`: File architecture decision records.
+- `puni burokrat adr add`: File an architecture decision record in the records repository.
 - `puni burokrat assess`: Assess the outcomes of work and what they cost.
 - `puni burokrat change`: Archive finished changes.
 - `puni burokrat check`: Judge the repository against its rules.
 - `puni burokrat repo`: Set up repositories for puni to govern.
+- `puni burokrat repo init`: Create a governed repository here and its records repository beside it.
 - `puni burokrat wiki`: Generate the wiki index.
 - `puni burokrat wiki index`: Write the generated wiki index.

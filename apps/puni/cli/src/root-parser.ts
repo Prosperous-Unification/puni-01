@@ -156,6 +156,10 @@ export type Leaf =
       readonly request: Extract<NavigatorRequest, { kind: 'plan add' }>;
     }
   | {
+      readonly kind: 'navigator research add';
+      readonly request: Extract<NavigatorRequest, { kind: 'research add' }>;
+    }
+  | {
       readonly kind: 'dash ops ssh';
       readonly request: Extract<DashRequest, { kind: 'ops ssh' }>;
     }
@@ -170,15 +174,26 @@ export type Leaf =
   | {
       readonly kind: 'burokrat wiki index';
       readonly request: Extract<BurokratRequest, { kind: 'wiki index' }>;
+    }
+  | {
+      readonly kind: 'burokrat repo init';
+      readonly request: Extract<BurokratRequest, { kind: 'repo init' }>;
+    }
+  | {
+      readonly kind: 'burokrat adr add';
+      readonly request: Extract<BurokratRequest, { kind: 'adr add' }>;
     };
 
 /** The container key of the command service that runs each leaf kind. */
 export const handlerKeys = {
   'navigator plan add': 'navigatorPlanAddCommand',
+  'navigator research add': 'navigatorResearchAddCommand',
   'dash ops ssh': 'dashOpsSshCommand',
   'dash ops k3s': 'dashOpsK3sCommand',
   'burokrat check': 'burokratCheckCommand',
   'burokrat wiki index': 'burokratWikiIndexCommand',
+  'burokrat repo init': 'burokratRepoInitCommand',
+  'burokrat adr add': 'burokratAdrAddCommand',
 } as const satisfies Record<Exclude<Leaf['kind'], 'help'>, string>;
 
 function selectNavigatorLeaf(request: NavigatorRequest): Leaf {
@@ -187,6 +202,8 @@ function selectNavigatorLeaf(request: NavigatorRequest): Leaf {
       return { kind: 'help', path: ['navigator', ...request.path] };
     case 'plan add':
       return { kind: 'navigator plan add', request };
+    case 'research add':
+      return { kind: 'navigator research add', request };
   }
 }
 
@@ -209,6 +226,10 @@ function selectBurokratLeaf(request: BurokratRequest): Leaf {
       return { kind: 'burokrat check', request };
     case 'wiki index':
       return { kind: 'burokrat wiki index', request };
+    case 'repo init':
+      return { kind: 'burokrat repo init', request };
+    case 'adr add':
+      return { kind: 'burokrat adr add', request };
   }
 }
 

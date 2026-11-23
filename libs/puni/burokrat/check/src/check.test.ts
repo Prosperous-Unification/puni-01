@@ -681,6 +681,21 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
+  test('a repository without nx.json holds no workspace: nx.sync and ci.gate judge nothing', () => {
+    rmSync(join(root, 'nx.json'));
+    rmSync(join(root, '.github'), { recursive: true });
+    expect([...judge(requireIndexSync), ...judge(requireCiGate)]).toEqual([]);
+    writeRepositoryFile(root, 'nx.json', '{}');
+    expect([...judge(requireIndexSync), ...judge(requireCiGate)]).toEqual([
+      {
+        rule: 'nx.sync',
+        path: 'nx.json',
+        message: 'does not list @puni/nx-sync:wiki-index in sync.globalGenerators',
+      },
+      { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'is missing' },
+    ]);
+  });
+
   test('the rules digest is FNV-1a 64 of the whitespace-normalised text', () => {
     expect(['', 'a', ' \n a\n'].map(digestRulesSection)).toEqual([
       'cbf29ce484222325',

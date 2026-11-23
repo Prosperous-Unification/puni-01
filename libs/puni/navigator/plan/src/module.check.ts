@@ -6,9 +6,5 @@ declare const requirements: PlanRequirements;
 
 DiBag.createBuilder()
   .withInstalledModules([navigatorPlanModule])
-  .withServices({
-    checkoutRegistry: () => requirements.checkoutRegistry,
-    checkoutFiles: () => requirements.checkoutFiles,
-    recordsCatalog: () => requirements.recordsCatalog,
-  })
+  .withServices({ recordFiling: () => requirements.recordFiling })
   .verifyGraphAtCompileTime() satisfies void;
