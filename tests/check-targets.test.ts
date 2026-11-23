@@ -202,23 +202,23 @@ describe('versions', () => {
 /** The scripts of the root `package.json` that run the gate. */
 const gateScripts = ['gate', 'gate:affected'];
 
-/** The `&&`-joined step of the `name` script that runs `nx format:check`. */
+/** The `&&`-joined step of the `name` script that runs `bun fmt --check`. */
 function readFormatStep(name: string): string {
   const script = field(readJson('package.json'), 'scripts', name);
   if (typeof script !== 'string') throw new Error(`package.json has no script ${name}`);
-  const step = script.split(' && ').find((part) => part.includes('format:check'));
-  if (step === undefined) throw new Error(`the ${name} script runs no format:check`);
+  const step = script.split(' && ').find((part) => part.includes('bun fmt --check'));
+  if (step === undefined) throw new Error(`the ${name} script runs no bun fmt --check`);
   return step;
 }
 
 /**
- * Runs `step` with `nx` replaced by a stub exiting `exitCode`, through the shell `bun run` uses
+ * Runs `step` with `bun` replaced by a stub exiting `exitCode`, through the shell `bun run` uses
  * for a package script.
  */
 function runFormatStep(step: string, exitCode: number) {
   const bin = mkdtempSync(join(tmpdir(), 'puni-format-step-'));
   try {
-    writeFileSync(join(bin, 'nx'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
+    writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
     const child = Bun.spawnSync(['sh', '-c', step], {
       env: { PATH: `${bin}:/usr/bin:/bin` },
       stderr: 'pipe',
@@ -229,15 +229,25 @@ function runFormatStep(step: string, exitCode: number) {
   }
 }
 
+/** Formatting is Bun's own `bun fmt`; Prettier is not a dependency. */
+test('prettier is not a dependency, and the pre-commit hook formats with bun fmt', () => {
+  const manifest = readJson('package.json');
+  expect(field(manifest, 'devDependencies', 'prettier')).toBeUndefined();
+  expect(field(manifest, 'dependencies', 'prettier')).toBeUndefined();
+  expect(readFileSync(join(root, 'lefthook.yml'), 'utf8')).toContain(
+    'bun fmt --check {staged_files}',
+  );
+});
+
 describe('the gate format step', () => {
-  test.each(gateScripts)('%s prints the remedy when format:check fails', (name) => {
+  test.each(gateScripts)('%s prints the remedy when bun fmt --check fails', (name) => {
     expect(runFormatStep(readFormatStep(name), 1)).toEqual({
       exitCode: 1,
       stderr: 'fix: run bun run fix\n',
     });
   });
 
-  test.each(gateScripts)('%s passes quietly when format:check passes', (name) => {
+  test.each(gateScripts)('%s passes quietly when bun fmt --check passes', (name) => {
     expect(runFormatStep(readFormatStep(name), 0)).toEqual({ exitCode: 0, stderr: '' });
   });
 });
