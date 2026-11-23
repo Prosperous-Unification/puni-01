@@ -81,8 +81,9 @@ function listFiles(tree, directory) {
 }
 
 /**
- * Makes `wiki/index/` in `tree` exactly what `printed` renders: writes each file that differs and
- * deletes every other file below it, naming each change in the message Nx prints.
+ * Makes `wiki/index/` in `tree` exactly what `printed` renders: deletes a file standing where the
+ * directory belongs, writes each file that differs and deletes every other file below it, naming
+ * each change in the message Nx prints.
  *
  * @param {IndexTree} tree the Nx tree
  * @param {string} printed the JSON `puni burokrat wiki index --print` printed
@@ -92,6 +93,10 @@ function syncIndex(tree, printed) {
   const rendered = readRendered(printed);
   /** @type {string[]} */
   const changes = [];
+  if (tree.exists(indexDirectory) && tree.isFile(indexDirectory)) {
+    tree.delete(indexDirectory);
+    changes.push(`${indexDirectory} is not generated`);
+  }
   for (const [path, text] of rendered) {
     const exists = tree.exists(path);
     if (exists && tree.read(path, 'utf8') === text) continue;

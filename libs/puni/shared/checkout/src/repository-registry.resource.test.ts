@@ -88,7 +88,7 @@ describe('readRegistry', () => {
     [
       'an unknown top-level key',
       { 'this-repo-type': 'system-state', 'all-repos': [state, records], repos: {} },
-      'has unknown keys repos; it holds only this-repo-type and all-repos',
+      'has unknown keys repos; it holds only this-repo-type, all-repos',
     ],
     [
       'all-repos missing',
@@ -113,7 +113,7 @@ describe('readRegistry', () => {
     [
       'an unknown entry key',
       { 'this-repo-type': 'system-state', 'all-repos': [state, { ...records, self: true }] },
-      'all-repos[1] has unknown keys self; it holds only type and remote',
+      'all-repos[1] has unknown keys self; it holds only type, remote',
     ],
     [
       'an unknown repository type',
@@ -149,7 +149,7 @@ describe('readRegistry', () => {
         'this-repo-type': 'system-state',
         'all-repos': [state, { ...records, remote: { ...records.remote, branch: 'main' } }],
       },
-      'all-repos[1].remote has unknown keys branch; it holds only type and url',
+      'all-repos[1].remote has unknown keys branch; it holds only type, url',
     ],
     [
       'a bad remote type',

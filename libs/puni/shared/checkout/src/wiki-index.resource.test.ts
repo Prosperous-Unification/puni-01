@@ -101,9 +101,8 @@ describe('compare and write', () => {
     };
     expect(wikiIndex.compare(files, expected)).toEqual(drift);
     expect(wikiIndex.write(files, expected)).toEqual(drift);
-    expect([...host.nodes.keys()].filter((path) => path.startsWith('/r/wiki/index'))).toEqual([
-      `/r/${indexFile}`,
-    ]);
+    const below = [...host.nodes.keys()].filter((path) => path.startsWith('/r/wiki/index/'));
+    expect(below).toEqual([`/r/${indexFile}`]);
   });
 
   test('a stale file is rewritten', () => {

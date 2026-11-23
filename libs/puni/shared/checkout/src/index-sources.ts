@@ -8,6 +8,14 @@ export interface SourceDefect {
   readonly message: string;
 }
 
+/** What to do about a source defect of each topic: the remedy every reporter of it gives. */
+export const sourceDefectRemedies: Readonly<Record<SourceDefect['topic'], string>> = {
+  'read-when':
+    'give it a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words (a page holds it as front matter with a title)',
+  'read-first':
+    'set metadata.readFirst to the path, relative to the project, of the file to read first',
+};
+
 /** One line of the "Read when" section: a project or an authored page. */
 export interface ReadWhenEntry {
   readonly name: string;

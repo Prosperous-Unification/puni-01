@@ -128,12 +128,15 @@ export interface WikiIndexResource {
    * A defect in them is no failure; each one is returned, sorted by path.
    */
   readSources(files: CheckoutFiles): IndexSources;
-  /** How the visible files of the committed `wiki/index/` differ from `expected`. */
+  /**
+   * How the visible files of the committed `wiki/index/` differ from `expected`; a file standing
+   * where the `wiki/index` directory belongs is unexpected.
+   */
   compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
   /**
-   * Makes the visible files of `wiki/index/` exactly `expected`: writes each missing or stale
-   * file, removes each unexpected one and every directory left empty, and returns that drift. A
-   * file git ignores there is neither compared nor removed.
+   * Makes the visible files of `wiki/index/` exactly `expected`: removes each unexpected one,
+   * then writes each missing or stale file, removes every directory left empty, and returns that
+   * drift. A file git ignores there is neither compared nor removed.
    */
   write(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
 }

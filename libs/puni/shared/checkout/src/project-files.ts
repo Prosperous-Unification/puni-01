@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import type { CheckoutFiles } from './contract';
-import { isRecord } from './json';
+import { isRecord, parseJson } from './json';
 import type { CheckScope } from './ownership';
 
 /** One visible `project.json`, in the project directory holding it: its JSON object, or why it holds none. */
@@ -19,15 +19,10 @@ export function readProjectFiles(files: CheckoutFiles, scope: CheckScope): Proje
     .filter((path) => !path.split('/').includes('node_modules'))
     .map((path): ProjectFile => {
       const directory = posix.dirname(path);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(files.readText(path));
-      } catch (cause) {
-        if (!(cause instanceof SyntaxError)) throw cause;
-        return { path, directory, problem: `is not valid JSON: ${cause.message}` };
-      }
-      return isRecord(parsed)
-        ? { path, directory, json: parsed }
+      const read = parseJson(files.readText(path));
+      if ('problem' in read) return { path, directory, problem: read.problem };
+      return isRecord(read.value)
+        ? { path, directory, json: read.value }
         : { path, directory, problem: 'is not a JSON object' };
     });
 }

@@ -1,13 +1,13 @@
 import {
   type CheckoutFiles,
   type CheckScope,
-  checkoutDefects,
   compareBytes,
+  findCheckoutDefect,
   isRepositoryLevel,
   type RepositoryType,
   repositoryScope,
 } from '@puni/shared-checkout';
-import { findDefect, type Finding } from '@puni/shared-failures';
+import type { Finding } from '@puni/shared-failures';
 import type { CheckRequest, CheckRequirements, RepositoryCheck } from './contract';
 import {
   applyRule,
@@ -142,7 +142,7 @@ export function createRepositoryCheck({
         };
         findings = rules.flatMap((rule) => applyRule(rule, reading));
       } catch (caught) {
-        const defect = findDefect(caught, checkoutDefects);
+        const defect = findCheckoutDefect(caught);
         if (defect === undefined) throw caught;
         findings = [defect];
       }

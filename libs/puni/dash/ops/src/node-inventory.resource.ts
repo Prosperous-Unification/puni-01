@@ -1,5 +1,11 @@
 import { join } from 'node:path';
-import { type CheckoutFiles, isRecord } from '@puni/shared-checkout';
+import {
+  type CheckoutFiles,
+  describeValue,
+  isRecord,
+  parseJson,
+  requireOnlyKeys,
+} from '@puni/shared-checkout';
 import type { NodeInventoryResource, OpsNode } from './contract';
 import {
   NodeInventoryInvalid,
@@ -12,22 +18,6 @@ import { nodeInventoryPath, nodeNamePattern, rolePattern, sshDestinationPattern 
 type Refuse = (problem: string, cause?: unknown) => never;
 
 const nodeKeys = ['name', 'ssh', 'roles'];
-
-function describeValue(value: unknown): string {
-  return value === undefined ? 'missing' : JSON.stringify(value);
-}
-
-function requireOnlyKeys(
-  value: Record<string, unknown>,
-  keys: readonly string[],
-  where: string,
-  refuse: Refuse,
-): void {
-  const unknown = Object.keys(value).filter((key) => !keys.includes(key));
-  if (unknown.length > 0) {
-    refuse(`${where} has unknown keys ${unknown.join(', ')}; it holds only ${keys.join(', ')}`);
-  }
-}
 
 function readString(
   value: unknown,
@@ -97,13 +87,9 @@ function parseInventory(text: string, file: string): readonly OpsNode[] {
       ? new NodeInventoryInvalid({ details })
       : new NodeInventoryInvalid({ details, cause });
   };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (cause) {
-    if (!(cause instanceof SyntaxError)) throw cause;
-    return refuse(`is not valid JSON: ${cause.message}`, cause);
-  }
+  const read = parseJson(text);
+  if ('problem' in read) return refuse(read.problem, read.cause);
+  const parsed = read.value;
   if (!isRecord(parsed)) return refuse('is not a JSON object; expected {"nodes": [...]}');
   requireOnlyKeys(parsed, ['nodes'], 'the inventory', refuse);
   const list = parsed['nodes'];

@@ -1,7 +1,7 @@
 import { argument, map, message, passThrough, seq, string } from '@optique/core';
 import type { Command } from '@puni/shared-command';
 import type { K3sRequest, NodeShell } from './contract';
-import { exitWithShellOutcome } from './shell-outcome';
+import { exitWithShellOutcome } from './shell-outcome.command';
 
 /**
  * `k3s KUBECTL_ARGS...`: at least one argument, then every later token, flags included, passed

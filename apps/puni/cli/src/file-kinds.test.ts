@@ -365,9 +365,43 @@ const refused: readonly (readonly [string, string, string, string])[] = [
     "export { a } from './y.repository';",
     'no-restricted-imports',
   ],
+  [
+    'module.ts registering a file without a kind',
+    'libs/puni/dash/ops/src/module.ts',
+    "import { createRestartCommand } from './restart';",
+    'no-restricted-imports',
+  ],
+  [
+    'module.ts registering a nested file without a kind',
+    `${check}/module.ts`,
+    "import { a } from './rules/x.js';",
+    'no-restricted-imports',
+  ],
+  [
+    'a group module.ts registering a repository',
+    `${check}/module.ts`,
+    "import { a } from './y.repository';",
+    'no-restricted-imports',
+  ],
+  [
+    'the adapters module.ts importing a domain file',
+    'libs/puni/shared/adapters/src/module.ts',
+    "import { a } from './y';",
+    'no-restricted-imports',
+  ],
 ];
 
 const allowed: readonly (readonly [string, string, string])[] = [
+  [
+    'module.ts registering every kind it may and importing its wiring',
+    `${check}/module.ts`,
+    "import { a } from './y.command';\nimport { b } from './y.feature';\nimport { c } from './rules/y.rule';\nimport { d } from './y.resource.ts';\nimport type { E } from './contract';\nimport { f } from './failures';\nimport { DiBag } from 'di-bag';",
+  ],
+  [
+    'the adapters module.ts registering a repository',
+    'libs/puni/shared/adapters/src/module.ts',
+    "import { a } from './y.repository';",
+  ],
   ['domain importing node:path', `${check}/x.ts`, "import { a } from 'node:path';"],
   [
     'a feature importing a rule, domain and a library',

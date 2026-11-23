@@ -10,7 +10,7 @@ read-when: deciding where new code goes, or which kind a file is
 Every source file but a test has one kind: its suffix, or a wiring name at a library's source root.
 
 - **command** (`.command.ts`): one leaf's Optique parser, and a handler from the parsed request to
-  a feature call, output and an exit code.
+  a feature call, output and an exit code; or the output and exit codes its group's leaves share.
 - **feature** (`.feature.ts`): one capability a user asks for, returning a modelled outcome.
 - **rule** (`.rule.ts`): one judgement, from a reading to findings.
 - **resource** (`.resource.ts`): the invariants of one aggregate.
@@ -18,21 +18,22 @@ Every source file but a test has one kind: its suffix, or a wiring name at a lib
   `libs/puni/shared/adapters`.
 - **port** (`.port.ts`): an interface a repository implements, in `libs/puni/shared/ports`.
 - **wiring**: `contract.ts`, `failures.ts`, `group.ts`,
-  `index.ts`, `module.ts`, `module.check.ts`.
+  `index.ts`, `module.ts`, `module.check.ts`. `module.ts` imports only files of a kind and the
+  wiring, so nothing it registers escapes the kind rules.
 - **domain**: any other name; pure code importing no kind and no runtime.
 
 The direction is command → feature → rule → resource → port. A command sees its feature only as a
 `contract.ts` type; `module.ts` joins them. Only repositories and the app reach the runtime,
-ambient time included: code that needs the time declares `clock: Clock` in its requirements, as
-`records.resource.ts` does. `forbiddenKinds` and `forbiddenByWiring` in
+ambient time and the console included: library code that needs the time declares `clock: Clock`
+in its requirements, as `records.resource.ts` does, and prints only through a command's `Io`. `forbiddenKinds` and `forbiddenByWiring` in
 [eslint.config.js](../eslint.config.js) hold the exact lists.
 
 ## Libraries
 
 - **app**: `apps/puni/cli` (`scope:app`), only `entrypoint.ts`, `main.ts`, `root-parser.ts`,
   `composition.ts` and `composition.check.ts`.
-- **shared**: `libs/puni/shared/*` (`scope:shared`); of these only `checkout` and `records` have a
-  `module.ts`.
+- **shared**: `libs/puni/shared/*` (`scope:shared`); of these only `adapters` (the host
+  services), `checkout` and `records` have a `module.ts`.
 - **group**: one library per command group at `libs/puni/<role>/<group>` (`scope:<role>`,
   `type:group`); the roles are navigator, dash and burokrat.
 

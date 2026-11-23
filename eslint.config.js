@@ -12,8 +12,8 @@ import { builtinModules } from 'node:module';
  * `module.check`) count only at a library's `src/` root; any other library file with no suffix is
  * domain: pure code that imports no other kind and no runtime. Tests and the testing library are
  * free of the kind blocks; no other file imports a test, and every file is barred from another
- * library's files, from dynamic imports and from `process.exit`. Rules, features, resources and
- * domain read no clock; tests do not use `.toThrow`.
+ * library's files, from dynamic imports and from `process.exit`. Library code reads no clock but
+ * in a repository, and writes no console; tests do not use `.toThrow`.
  */
 const kinds = ['command', 'feature', 'rule', 'resource', 'repository', 'port'];
 const tests = ['**/*.test.ts', '**/*.test-host.ts'];
@@ -45,6 +45,16 @@ const forbiddenByWiring = {
 function kindSpecifier(names) {
   return `\\.(${names.join('|')})(\\.[cm]?[jt]s)?$`;
 }
+
+/**
+ * `module.ts` registers services only from files of a kind, so no file without a suffix escapes
+ * the kind rules by being registered; it may also import the wiring at its source root.
+ */
+const unsuffixedModuleImport = {
+  regex: `^\\.{1,2}/(?!(?:[^/]+/)*[^/]+${kindSpecifier(['command', 'feature', 'rule', 'resource', 'repository'])})(?!(?:contract|failures|group|index)(?:\\.[cm]?[jt]s)?$)`,
+  message:
+    'module.ts registers only .command, .feature, .rule, .resource and .repository files; give the file its kind',
+};
 
 const intoLibraryFiles = {
   group: ['**/src/**', '**/src'],
@@ -148,22 +158,19 @@ function moduleBoundaries({ testing }) {
   };
 }
 
+const clockMessage =
+  'library code takes time as input (a feature declares clock: Clock); only repositories read a clock';
 const clock = {
   properties: [
     ['Date', 'now'],
     ['performance', 'now'],
     ['Bun', 'nanoseconds'],
-  ].map(([object, property]) => ({
-    object,
-    property,
-    message:
-      'rules, features, resources and domain take time as input; only the edge reads a clock',
-  })),
-  newDate: {
-    selector: "NewExpression[callee.name='Date'][arguments.length=0]",
-    message:
-      'rules, features, resources and domain take time as input; only the edge reads a clock',
-  },
+    ['globalThis', 'Date'],
+  ].map(([object, property]) => ({ object, property, message: clockMessage })),
+  syntax: [
+    "NewExpression[callee.name='Date'][arguments.length=0]",
+    "CallExpression[callee.name='Date']",
+  ].map((selector) => ({ selector, message: clockMessage })),
 };
 
 const toThrow = {
@@ -188,7 +195,7 @@ function libraryImports(kindPattern, seesPorts, reachesRuntime = false) {
 /** The runtime and clock rules of a library file of `kind`. */
 function libraryRuntime(kind) {
   const reachesRuntime = kind === 'repository';
-  const readsNoClock = ['feature', 'rule', 'resource', 'domain'].includes(kind);
+  const readsNoClock = kind !== 'repository' && kind !== 'port';
   return {
     ...(reachesRuntime ? {} : runtimeGlobals),
     'no-restricted-properties': [
@@ -201,7 +208,7 @@ function libraryRuntime(kind) {
       'error',
       dynamicImport,
       ...(reachesRuntime ? [] : [metaRequire]),
-      ...(readsNoClock ? [clock.newDate] : []),
+      ...(readsNoClock ? clock.syntax : []),
     ],
   };
 }
@@ -244,6 +251,7 @@ function wiringBlock(name) {
     rules: {
       ...restrictImports(
         ...libraryImports(forbidKinds(`${name}.ts`, forbiddenByWiring[name]), false),
+        ...(name === 'module' ? [unsuffixedModuleImport] : []),
       ),
       ...libraryRuntime('wiring'),
     },
@@ -298,8 +306,12 @@ export default tseslint.config(
   {
     files: ['**/*.ts'],
     ignores: tests,
-    rules: { 'max-lines': ['error', { max: 400, skipComments: true, skipBlankLines: true }] },
+    rules: {
+      'max-lines': ['error', { max: 400, skipComments: true, skipBlankLines: true }],
+      '@typescript-eslint/no-unsafe-type-assertion': 'error',
+    },
   },
+  { files: ['libs/**/*.ts'], ignores: tests, rules: { 'no-console': 'error' } },
   {
     files: tests,
     rules: {
@@ -325,6 +337,16 @@ export default tseslint.config(
   },
   ...Object.keys(forbiddenKinds).map(libraryBlock),
   ...Object.keys(forbiddenByWiring).map(wiringBlock),
+  {
+    // Repositories live in the adapters library, so its module.ts is the one that registers them.
+    files: ['libs/puni/shared/adapters/src/module.ts'],
+    rules: {
+      ...restrictImports(
+        ...libraryImports(forbidKinds('module.ts', ['port']), false),
+        unsuffixedModuleImport,
+      ),
+    },
+  },
   {
     files: ['libs/puni/shared/*/src/contract.ts'],
     rules: {

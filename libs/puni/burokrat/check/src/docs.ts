@@ -10,8 +10,8 @@ export function isDocumentation(path: string): boolean {
   return path.startsWith('wiki/') && path.endsWith('.md') && !path.startsWith(`${indexDirectory}/`);
 }
 
-/** The Markdown of `text` split into fenced code blocks and the prose between them. */
-function splitFences(text: string): { readonly prose: string[]; readonly fenced: string[] } {
+/** The Markdown of `text` split into the lines of fenced code blocks and the prose between them. */
+export function splitFences(text: string): { readonly prose: string[]; readonly fenced: string[] } {
   const prose: string[] = [];
   const fenced: string[] = [];
   let inFence = false;
@@ -50,4 +50,21 @@ export function readPathToken(span: string): string | undefined {
   if (!isDirectory && !/\.[A-Za-z0-9]+$/u.test(posix.basename(span))) return undefined;
   const normal = posix.normalize(span).replace(/\/$/u, '');
   return normal === '.' || leavesRoot(normal) ? undefined : normal;
+}
+
+/** A repository path an inline code span names, and the heading anchor after its `#`, if any. */
+export interface PathReference {
+  readonly path: string;
+  readonly fragment: string | undefined;
+}
+
+/**
+ * The {@link PathReference} of an inline code span: the part before a `#` read by
+ * {@link readPathToken}, and the rest as the fragment.
+ */
+export function readPathReference(span: string): PathReference | undefined {
+  const hash = span.indexOf('#');
+  const path = readPathToken(hash === -1 ? span : span.slice(0, hash));
+  if (path === undefined) return undefined;
+  return { path, fragment: hash === -1 ? undefined : span.slice(hash + 1) };
 }

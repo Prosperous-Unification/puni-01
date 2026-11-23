@@ -14,9 +14,10 @@ export {
   FileUnreadable,
   ProjectUnknown,
 } from './failures';
+export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
-export type { IndexSources } from './index-sources';
-export { isRecord } from './json';
+export { type IndexSources, sourceDefectRemedies } from './index-sources';
+export { describeValue, isRecord, parseJson, type ParsedJson, requireOnlyKeys } from './json';
 export { checkoutModule } from './module';
 export {
   type CheckScope,

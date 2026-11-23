@@ -1,7 +1,9 @@
 import type { RepositoryType } from '@puni/shared-checkout';
 import type { LeveledRule, Rule, RuleLevel } from './finding';
+import { forbidFileHeaders } from './rules/code.rule';
 import {
   agentsExists,
+  agentsKeepRules,
   agentsNamesIndex,
   agentsWords,
   claudeLinksAgents,
@@ -24,8 +26,12 @@ import {
 } from './rules/records.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
 import { requireProjectTargets } from './rules/project.rule';
-import { forbidPlaintextSecrets } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
+import {
+  forbidPlaintextSecrets,
+  forbidRecordsAddresses,
+  forbidStateAddresses,
+} from './rules/secrets.rule';
+import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
 
 const at =
   (level: RuleLevel) =>
@@ -33,20 +39,23 @@ const at =
 
 /**
  * The rules for a `system-state` repository. The generated index is judged only whole; entry
- * files, the index budget and the index sources (every `project.json`, which the root project's
- * check reads) are repository-level; the per-file and per-project rules are project-level.
+ * files, the index budget, `nx.json` and the index sources (every `project.json`, which the root
+ * project's check reads) are repository-level; the per-file and per-project rules are
+ * project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
     agentsExists,
     agentsWords,
     agentsNamesIndex,
+    agentsKeepRules,
     claudeLinksAgents,
     readmeExists,
     readmeWords,
     limitIndexWords,
     matchRecordsLocation,
     requireCiGate,
+    requireIndexSync,
     requireReadWhen,
     requireReadFirst,
   ].map(at('repository')),
@@ -55,6 +64,8 @@ export const codeRules: readonly LeveledRule[] = [
     confineRecordsName,
     resolveLinks,
     forbidPlaintextSecrets,
+    forbidStateAddresses,
+    forbidFileHeaders,
     requireProjectTargets,
     judgeDocPaths,
     judgeDocCommands,
@@ -73,6 +84,7 @@ export const recordsRules: readonly LeveledRule[] = [
   judgeRecordFrontMatter,
   judgeSupersession,
   forbidPlaintextSecrets,
+  forbidRecordsAddresses,
 ].map(at('repository'));
 
 /** The rule set `puni burokrat check` applies to each repository type. */

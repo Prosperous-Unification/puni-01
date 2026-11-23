@@ -1,4 +1,4 @@
-import { nameRepository } from '@puni/shared-checkout';
+import { isRecord, nameRepository, parseJson } from '@puni/shared-checkout';
 import type { Breach, Rule } from '../finding';
 import { listInlineCode } from '../docs';
 
@@ -55,5 +55,27 @@ export const requireCiGate: Rule = {
     return gateRuns
       .filter(([, pattern]) => !pattern.test(text))
       .map(([script]) => ({ path: workflow, message: `does not run ${script}` }));
+  },
+};
+
+/** The Nx sync generator that keeps `wiki/index/` current. */
+const indexSyncGenerator = '@puni/nx-sync:wiki-index';
+
+/**
+ * `nx.json` registers {@link indexSyncGenerator} in `sync.globalGenerators`, so `nx sync:check`
+ * judges the index. Nx suggests removing a failing global generator; this rule undoes that.
+ */
+export const requireIndexSync: Rule = {
+  id: 'nx.sync',
+  remedy: `restore "sync": { "globalGenerators": ["${indexSyncGenerator}"] } in nx.json; if the generator fails, fix the finding it prints instead`,
+  judge({ files }) {
+    const path = 'nx.json';
+    if (!files.exists(path)) return [{ path, message: 'is missing' }];
+    const read = parseJson(files.readText(path));
+    if ('problem' in read) return [{ path, message: read.problem }];
+    const sync = isRecord(read.value) ? read.value['sync'] : undefined;
+    const generators = isRecord(sync) ? sync['globalGenerators'] : undefined;
+    if (Array.isArray(generators) && generators.includes(indexSyncGenerator)) return [];
+    return [{ path, message: `does not list ${indexSyncGenerator} in sync.globalGenerators` }];
   },
 };
