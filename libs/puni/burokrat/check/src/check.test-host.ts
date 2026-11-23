@@ -3,10 +3,25 @@ import type { CommandBrief, CommandExitCode } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
 import { type MemoryHost, nodeHostModule } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
+import { createCheckCommand } from './check.command';
 import type { CheckRequest } from './contract';
 import { applyRule, type Finding, type ReferenceReach, type Rule } from './finding';
-import { burokratCheckModule } from './module';
-import { fixtureCommands } from './repository-pair.test-host';
+import { createRepositoryCheck } from './repository-check.feature';
+import { fixtureAgentsRulesDigest, fixtureCommands } from './repository-pair.test-host';
+import { ruleSets } from './rule-set.rule';
+import { agentsKeepRules, pinAgentsRules } from './rules/entry.rule';
+
+/** `agents.rules` pinned to the fixtures' rules section, not this repository's. */
+export const fixtureAgentsKeepRules = pinAgentsRules(fixtureAgentsRulesDigest);
+
+/** {@link ruleSets} with {@link fixtureAgentsKeepRules} in place of the production `agents.rules`. */
+export const fixtureRuleSets: typeof ruleSets = {
+  'system-state': ruleSets['system-state'].map(({ level, rule }) => ({
+    level,
+    rule: rule === agentsKeepRules ? fixtureAgentsKeepRules : rule,
+  })),
+  'system-records': ruleSets['system-records'],
+};
 
 /** One run of the check command: its exit code and what it printed. */
 export interface CheckRun {
@@ -16,8 +31,8 @@ export interface CheckRun {
 }
 
 /**
- * The check module with the checkout and records modules it needs and `commands` as the command
- * catalog, over this machine, or over the memory host services `memory` put in its place. Its
+ * The check module's services, judging by {@link fixtureRuleSets}, with the checkout and records
+ * modules they need and `commands` as the command catalog, over this machine, or over the memory host services `memory` put in its place. Its
  * owner closes it.
  */
 export function openCheckHost(
@@ -25,8 +40,11 @@ export function openCheckHost(
   commands: readonly CommandBrief[] = fixtureCommands,
 ) {
   const machine = DiBag.createBuilder()
-    .withInstalledModules([nodeHostModule, checkoutModule, recordsModule, burokratCheckModule])
+    .withInstalledModules([nodeHostModule, checkoutModule, recordsModule])
     .withServices({ commandCatalog: () => ({ list: () => commands }) })
+    .withServices({ checkRuleSets: () => fixtureRuleSets })
+    .withServices({ repositoryCheck: createRepositoryCheck })
+    .withServices({ burokratCheckCommand: createCheckCommand })
     .buildContainer();
   const container =
     memory === undefined

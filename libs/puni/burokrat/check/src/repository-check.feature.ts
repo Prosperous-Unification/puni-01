@@ -17,7 +17,7 @@ import {
   type Rule,
 } from './finding';
 import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
-import { crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
+import { crossProjectRules, type ruleSets, stagedRules } from './rule-set.rule';
 
 /** What one run judges, chosen by the request's options. */
 type CheckMode =
@@ -66,10 +66,10 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
 /**
  * The {@link RepositoryCheck}. The repository holding the nearest `puni.json` is found as the
  * type that file declares; `repo` names the type to judge instead, resolved through the registry
- * to the checkout beside it. The judged type selects its rule set from {@link ruleSets}. Without
- * an option the whole repository is judged by every rule. With `project`, only what that project
- * of the `system-state` repository owns, by the rules of its level, references reaching only
- * paths the same project owns. With `crossProjectLinks`, every file, by
+ * to the checkout beside it. The judged type selects its rule set from `checkRuleSets`, which the
+ * module supplies as {@link ruleSets}. Without an option the whole repository is judged by every
+ * rule. With `project`, only what that project of the `system-state` repository owns, by the
+ * rules of its level, references reaching only paths the same project owns. With `crossProjectLinks`, every file, by
  * {@link crossProjectRules}, references reaching only paths another project owns. So every
  * project check, the cross-project check and the `whole`-level rules together find what the
  * whole check finds. With `staged`, the staged files as the index holds them, by
@@ -82,7 +82,8 @@ export function createRepositoryCheck({
   checkoutWikiIndex,
   recordsCatalog,
   commandCatalog,
-}: CheckRequirements): RepositoryCheck {
+  checkRuleSets,
+}: CheckRequirements & { readonly checkRuleSets: typeof ruleSets }): RepositoryCheck {
   const plan = (mode: CheckMode, rules: readonly LeveledRule[], files: CheckoutFiles): RunPlan => {
     switch (mode.kind) {
       case 'whole':
@@ -129,7 +130,7 @@ export function createRepositoryCheck({
         const { root, registry } = checkoutRegistry.resolve(found, type);
         const files =
           mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
-        const { scope, references, rules, label } = plan(mode, ruleSets[type], files);
+        const { scope, references, rules, label } = plan(mode, checkRuleSets[type], files);
         summary = `${type}, ${label}${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
         const reading = {
           files,

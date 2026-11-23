@@ -12,14 +12,20 @@ import { join } from 'node:path';
 import { indexFile } from '@puni/shared-checkout';
 import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
-import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
+import { digestRulesSection } from './agents-rules';
+import {
+  type CheckHost,
+  dropRemedies,
+  fixtureAgentsKeepRules,
+  fixtureRuleSets,
+  type Judged,
+  openCheckHost,
+} from './check.test-host';
 import type { Rule } from './finding';
 import { codeRules, crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
 import {
   agentsExists,
-  agentsKeepRules,
   agentsNamesIndex,
-  agentsRuleTitles,
   agentsWords,
   claudeLinksAgents,
   readmeExists,
@@ -39,7 +45,7 @@ import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
 import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
-import { makeRepository } from './repository-pair.test-host';
+import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
 
 let root = '';
 let host: CheckHost;
@@ -70,8 +76,18 @@ function words(count: number): string {
 
 const recordsName = ['demo', 'records'].join('-');
 
+/** Replaces the one `from` in the fixture's `AGENTS.md` with `to`. */
+function editAgents(from: string, to: string): void {
+  const path = join(root, 'AGENTS.md');
+  const text = readFileSync(path, 'utf8');
+  if (!text.includes(from)) throw new Error(`AGENTS.md does not hold ${from}`);
+  writeFileSync(path, text.replace(from, to));
+}
+
+const fixtureCodeRules = fixtureRuleSets['system-state'];
+
 describe('every rule holds on the fixture repository', () => {
-  test.each(codeRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
+  test.each(fixtureCodeRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
     expect(judge(rule)).toEqual([]);
   });
 });
@@ -451,17 +467,37 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       message: 'does not run bun run gate:affected',
     },
   ],
+  ...(
+    [
+      [
+        'a sentence appended inside its rules section',
+        'its cause.',
+        'its cause. Rules are for other people.',
+      ],
+      ['a word changed in a rule body', 'names its cause', 'hides its cause'],
+    ] as const
+  ).map(
+    ([change, from, to]) =>
+      [
+        `AGENTS.md with ${change}`,
+        fixtureAgentsKeepRules,
+        () => {
+          editAgents(from, to);
+        },
+        {
+          rule: 'agents.rules',
+          path: 'AGENTS.md',
+          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not the pinned ${digestRulesSection(fixtureAgentsRules)}`,
+        },
+      ] as const,
+  ),
   [
-    'AGENTS.md with a rule replaced',
-    agentsKeepRules,
+    'AGENTS.md without its ## Rules heading',
+    fixtureAgentsKeepRules,
     () => {
-      const path = join(root, 'AGENTS.md');
-      writeFileSync(
-        path,
-        readFileSync(path, 'utf8').replace('**Fail loudly.**', '**Do what you like.**'),
-      );
+      editAgents('## Rules\n', 'Rules\n');
     },
-    { rule: 'agents.rules', path: 'AGENTS.md', message: 'does not hold 5. **Fail loudly.**' },
+    { rule: 'agents.rules', path: 'AGENTS.md', message: 'has no ## Rules heading' },
   ],
   [
     'CLAUDE.md a directory',
@@ -594,7 +630,7 @@ describe('each rule finds its breach', () => {
 
   test('the breaches cover every rule of the system-state rule set', () => {
     expect(new Set(negatives.map(([, rule]) => rule))).toEqual(
-      new Set(codeRules.map(({ rule }) => rule)),
+      new Set(fixtureCodeRules.map(({ rule }) => rule)),
     );
   });
 
@@ -612,6 +648,23 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
+  test('the rules digest is FNV-1a 64 of the whitespace-normalised text', () => {
+    expect(['', 'a', ' \n a\n'].map(digestRulesSection)).toEqual([
+      'cbf29ce484222325',
+      'af63dc4c8601ec8c',
+      'af63dc4c8601ec8c',
+    ]);
+  });
+
+  test('agents.rules judges only the rules section, and rewrapping it is no finding', () => {
+    const heading = '## Rules\n';
+    const body = fixtureAgentsRules.slice(heading.length);
+    const rewrapped = `${heading}${body.replace(/\s+/gu, (space) => (space === ' ' ? '\n' : ' '))}`;
+    expect(rewrapped).not.toBe(fixtureAgentsRules);
+    editAgents(fixtureAgentsRules, `${rewrapped}\n## Later\n\nAnything goes here.\n`);
+    expect(judge(fixtureAgentsKeepRules)).toEqual([]);
+  });
+
   test('text near the credential shapes is no secrets.plaintext finding', () => {
     writeRepositoryFile(root, 'apps/one/src/near.ts', `${credentialLookalikes.join('\n')}\n`);
     expect(judge(forbidPlaintextSecrets)).toEqual([]);
@@ -727,8 +780,7 @@ describe('the check command', () => {
 
   test('findings print sorted, then a summary, and exit 1', () => {
     rmSync(join(root, 'README.md'));
-    const rules = agentsRuleTitles.map((title, index) => `${String(index + 1)}. **${title}**`);
-    writeFileSync(join(root, 'AGENTS.md'), `# demo\n\n${rules.join('\n')}\n`);
+    writeFileSync(join(root, 'AGENTS.md'), `# demo\n\n${fixtureAgentsRules}`);
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [

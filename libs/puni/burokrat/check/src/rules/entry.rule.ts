@@ -1,5 +1,6 @@
 import { countWords, indexFile } from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
+import { agentsRulesDigest, digestRulesSection, readRulesSection } from '../agents-rules';
 import type { Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {
@@ -51,35 +52,34 @@ export const agentsNamesIndex: Rule = {
 };
 
 /**
- * The titles of the six rules of `AGENTS.md`, in their order. Only the owner changes the rules;
- * when the owner has, this list changes to match, and nothing else does.
+ * `AGENTS.md` holds a `## Rules` section whose {@link digestRulesSection} is `digest`: any edit to
+ * the rules but rewrapping is a finding. A missing file is `agents.exists`'s.
  */
-export const agentsRuleTitles = [
-  'State, not history.',
-  'One home for every fact.',
-  'The task sets the scope.',
-  'Ask only before what cannot be undone:',
-  'Fail loudly.',
-  'Evidence, not opinion.',
-] as const;
+export function pinAgentsRules(digest: string): Rule {
+  return {
+    id: 'agents.rules',
+    remedy:
+      'restore the rules section (git show origin/main:AGENTS.md); if the owner changed the rules, set agentsRulesDigest in the Burokrat check library to the digest printed here',
+    judge(reading) {
+      const text = readOptional(reading, 'AGENTS.md');
+      if (text === undefined) return [];
+      const section = readRulesSection(text);
+      if (section === undefined) return [{ path: 'AGENTS.md', message: 'has no ## Rules heading' }];
+      const actual = digestRulesSection(section);
+      return actual === digest
+        ? []
+        : [
+            {
+              path: 'AGENTS.md',
+              message: `rules section digests to ${actual}, not the pinned ${digest}`,
+            },
+          ];
+    },
+  };
+}
 
-/**
- * `AGENTS.md` holds each of {@link agentsRuleTitles} as its numbered rule, `<n>. **<title>**`; a
- * missing file is `agents.exists`'s.
- */
-export const agentsKeepRules: Rule = {
-  id: 'agents.rules',
-  remedy:
-    'restore the rule in AGENTS.md; if the owner changed the rules, update agentsRuleTitles in the Burokrat check library to match',
-  judge(reading) {
-    const text = readOptional(reading, 'AGENTS.md');
-    if (text === undefined) return [];
-    return agentsRuleTitles.flatMap((title, index) => {
-      const rule = `${String(index + 1)}. **${title}**`;
-      return text.includes(rule) ? [] : [{ path: 'AGENTS.md', message: `does not hold ${rule}` }];
-    });
-  },
-};
+/** {@link pinAgentsRules} to {@link agentsRulesDigest}, the owner's rules. */
+export const agentsKeepRules = pinAgentsRules(agentsRulesDigest);
 
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {
