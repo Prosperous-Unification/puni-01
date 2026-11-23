@@ -59,6 +59,12 @@ export interface CheckoutFiles {
   describe(path: string): PathKind;
   /** Whether something exists at `path`, a symlink followed to its target. Never throws. */
   exists(path: string): boolean;
+  /**
+   * Whether `path` is a file git shows, or a directory holding one. Unlike {@link exists}, a path
+   * git ignores (a build output, an editor directory) is not shown, so a judgement over it is the
+   * same in every checkout of the same commit.
+   */
+  isShown(path: string): boolean;
   /** The target text of the symlink at `path`. */
   readLinkTarget(path: string): string;
   /**

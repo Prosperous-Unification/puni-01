@@ -34,7 +34,7 @@ in its requirements, as `records.resource.ts` does, and prints only through a co
 
 - **app**: `apps/puni/cli` (`scope:app`), only `entrypoint.ts`, `main.ts`, `root-parser.ts`,
   `composition.ts` and `composition.check.ts`.
-  Its `build` target bundles the app's own code into `dist/apps/puni/cli/puni.js` and leaves
+  Its `build` target bundles the app's own code into one file under the ignored build directory and leaves
   packages to `node_modules`, because configurable-tree-traversal's ESM entry requires its
   CommonJS file at run time; its `test` target depends on `build`, so `bundle.test.ts` runs the
   bundle the gate built.

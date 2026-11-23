@@ -29,7 +29,7 @@ function judgeLinks(
   return listLinkTargets(files.readText(path)).flatMap(({ target, fragment }): Breach[] => {
     const resolved = target === '' ? path : resolveTarget(path, target);
     if (resolved === undefined || !keep(resolved)) return [];
-    if (!files.exists(resolved)) return [{ path, message: `links to missing ${target}` }];
+    if (!files.isShown(resolved)) return [{ path, message: `links to missing ${target}` }];
     const missing = findMissingAnchor(files, resolved, fragment);
     const anchor = `#${fragment ?? ''}`;
     return missing === undefined

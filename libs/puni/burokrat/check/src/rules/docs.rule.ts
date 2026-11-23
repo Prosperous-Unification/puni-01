@@ -31,7 +31,7 @@ export const judgeDocPaths: Rule = {
         if (reference === undefined || !reachesReference(references, path, reference.path)) {
           return [];
         }
-        if (!files.exists(reference.path)) {
+        if (!files.isShown(reference.path)) {
           return [{ path, message: `names the missing path ${span}` }];
         }
         const missing = findMissingAnchor(files, reference.path, reference.fragment);
