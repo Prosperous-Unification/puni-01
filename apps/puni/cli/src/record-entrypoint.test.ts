@@ -19,6 +19,12 @@ const options = ['--title', 'First note', '--topics', 'ops,k3s', '--summary', 'S
 describe.each([
   ['navigator research add', 'nav/research', 'research', '# First note\n'],
   [
+    'dash run log',
+    'bur/assessments',
+    'assessment',
+    '# First note\n\n## Command\n\n## Outcome\n\n## Evidence\n',
+  ],
+  [
     'burokrat adr add',
     'bur/adr',
     'adr',

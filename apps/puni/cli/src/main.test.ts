@@ -195,6 +195,11 @@ describe('runProcess', () => {
         burokratAdrAddCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),
         dashOpsK3sCommand: () => ({ run: () => 0 }),
+        dashRunLogCommand: () => ({ run: () => 0 }),
+        dashResourcesCreateCommand: () => ({ run: () => 0 }),
+        dashResourcesListCommand: () => ({ run: () => 0 }),
+        dashResourcesExecCommand: () => ({ run: () => 0 }),
+        dashResourcesRemoveCommand: () => ({ run: () => 0 }),
       })
       .buildContainer();
     const argv = process.argv;

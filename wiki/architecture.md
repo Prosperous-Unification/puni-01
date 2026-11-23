@@ -76,7 +76,7 @@ feature maps it to a finding or outcome with `findDefect`. Exit codes:
 - 2: the command line is refused, or names something the repository lacks.
 - 3: an unexpected failure.
 
-A pass-through command (`dash ops ssh`) returns the remote exit code once `ssh` started. Expected
+A pass-through command (`dash ops ssh`, `dash resources exec`) returns its command's exit code once it started. Expected
 failures print one `error:` line on stderr. Anything else propagates to
 [entrypoint.ts](../apps/puni/cli/src/entrypoint.ts), the one catch-all: it writes a bounded,
 redacted report to `<os tmpdir>/puni-failures-<uid>/<reference>.json` (to stderr when

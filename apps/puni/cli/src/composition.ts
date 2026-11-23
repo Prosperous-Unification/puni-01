@@ -3,6 +3,8 @@ import { burokratCheckModule } from '@puni/burokrat-check';
 import { burokratRepoModule } from '@puni/burokrat-repo';
 import { burokratWikiModule } from '@puni/burokrat-wiki';
 import { dashOpsModule } from '@puni/dash-ops';
+import { dashResourcesModule } from '@puni/dash-resources';
+import { dashRunModule } from '@puni/dash-run';
 import { navigatorPlanModule } from '@puni/navigator-plan';
 import { navigatorResearchModule } from '@puni/navigator-research';
 import { nodeHostModule } from '@puni/shared-adapters';
@@ -25,6 +27,8 @@ export const puniGraph = DiBag.createBuilder()
     navigatorPlanModule,
     navigatorResearchModule,
     dashOpsModule,
+    dashRunModule,
+    dashResourcesModule,
     burokratCheckModule,
     burokratWikiModule,
     burokratRepoModule,

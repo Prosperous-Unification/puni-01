@@ -4,6 +4,23 @@ export type GitListing = { readonly files: readonly string[] } | { readonly fail
 /** The text of one file as git holds it, or why git gave none. */
 export type GitText = { readonly text: string } | { readonly failure: string };
 
+/** One worktree of a repository: its absolute path as git prints it, and its branch if any. */
+export interface GitWorktree {
+  readonly path: string;
+  /** The branch checked out there, without `refs/heads/`; none when `HEAD` is detached. */
+  readonly branch?: string | undefined;
+}
+
+/** The worktrees of a repository, the main one first, or why git gave none. */
+export type GitWorktrees =
+  { readonly worktrees: readonly GitWorktree[] } | { readonly failure: string };
+
+/** Branch names without `refs/heads/`, or why git gave none. */
+export type GitBranches = { readonly branches: readonly string[] } | { readonly failure: string };
+
+/** A change git made, or why it made none. */
+export type GitChange = { readonly changed: true } | { readonly failure: string };
+
 /** Raw access to git. */
 export interface Git {
   /**
@@ -21,4 +38,29 @@ export interface Git {
    * repository with no commit is a `failure`.
    */
   readHeadCommit(root: string): GitText;
+  /** The worktrees of the repository at `root`, any of them: the main worktree first. */
+  listWorktrees(root: string): GitWorktrees;
+  /**
+   * The branches of the repository at `root` under `prefix`, a ref path matched up to a slash
+   * (`resources` holds `resources/a`, not `resourcesa`), sorted; with `unmerged`, only those
+   * holding a commit the `HEAD` of `root` lacks.
+   */
+  listBranches(root: string, prefix: string, filter: 'all' | 'unmerged'): GitBranches;
+  /**
+   * The paths `git status` shows changed in the worktree at `root`: staged, unstaged and
+   * untracked files it does not ignore; none for a clean worktree.
+   */
+  listChangedFiles(root: string): GitListing;
+  /** Adds a worktree at `path`, checking out a new `branch` that starts at the commit `from`. */
+  addWorktree(root: string, path: string, branch: string, from: string): GitChange;
+  /**
+   * Removes the worktree at `path`; refused for a worktree with changes unless `force`, which
+   * discards them.
+   */
+  removeWorktree(root: string, path: string, force: boolean): GitChange;
+  /**
+   * Deletes `branch`; refused for a branch not merged into `HEAD` unless `force`, which discards
+   * its commits.
+   */
+  deleteBranch(root: string, branch: string, force: boolean): GitChange;
 }
