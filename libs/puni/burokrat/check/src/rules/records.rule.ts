@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { type CheckoutEntry, compareBytes } from '@puni/shared-checkout';
+import { type CheckoutEntry, compareBytes, parseFrontMatter } from '@puni/shared-checkout';
 import {
   discoverValidateAndCaptureDag,
   materializeMultiEntryDagInputFromRecordCatalog,
@@ -9,7 +9,9 @@ import {
   groupDirectories,
   isCalendarDate,
   isRecordKey,
+  isReviewRecordKind,
   judgeRecordValue,
+  judgeReviewBody,
   type RecordFile,
   recordKeyForms,
   recordNamePattern,
@@ -140,6 +142,26 @@ function judgeFrontMatter(reading: RuleReading): Breach[] {
     }),
   );
 }
+
+/** Findings and assessment reviews hold a structured review body with consistent runs and scores. */
+export const judgeReviewRecords: Rule = {
+  id: 'records.review',
+  since: 1,
+  remedy: 'file the review with the generated Markdown body and all required review fields',
+  judge: (reading) =>
+    judgeRecordFiles(reading, (recordFiles) =>
+      recordFiles.flatMap(({ path, kind }) => {
+        if (!isReviewRecordKind(kind)) return [];
+        const text = reading.files.readText(path);
+        if ('problem' in parseFrontMatter(text)) return [];
+        const lines = text.split(/\r?\n/u);
+        const start = lines.indexOf('---', 1) + 1;
+        const body = lines.slice(lines[start] === '' ? start + 1 : start).join('\n');
+        const message = judgeReviewBody(kind, body);
+        return message === undefined ? [] : [{ path, message }];
+      }),
+    ),
+};
 
 const opposite = { supersedes: 'superseded-by', 'superseded-by': 'supersedes' } as const;
 

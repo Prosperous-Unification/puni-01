@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { chmodSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
@@ -9,6 +17,16 @@ import { createMemoryFileSystem, type MemoryTree } from './memory-host';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
 const scratchDirectories = removeScratchDirectoriesAfterAll();
+
+/** Whether anything, a dangling symlink included, is at the absolute `path` on this machine. */
+function lstatOrAbsent(path: string): 'present' | 'absent' {
+  try {
+    lstatSync(path);
+    return 'present';
+  } catch {
+    return 'absent';
+  }
+}
 
 /** The tree every implementation is judged over, by path below its root. */
 const tree: MemoryTree = {
@@ -150,13 +168,27 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     expect(fileSystem.homeDirectory()).toStartWith('/');
   });
 
-  test('writes, makes directories and removes a whole directory', () => {
+  test('writes and makes directories', () => {
     fileSystem.makeDirectory(at('x/y'));
     fileSystem.write(at('x/y/z.md'), 'z');
     expect(fileSystem.list(at('x'))).toEqual([{ name: 'y', kind: 'directory' }]);
     expect(fileSystem.readText(at('x/y/z.md'))).toBe('z');
-    fileSystem.remove(at('x'));
-    expect(fileSystem.stat(at('x'), 'no-follow')).toBe('absent');
+  });
+
+  test('creates a new file without replacing anything already there', () => {
+    const path = at('new.txt');
+    fileSystem.writeNew(path, 'first');
+    for (const taken of [path, at('empty'), at('dangling')]) {
+      throws(
+        () => {
+          fileSystem.writeNew(taken, 'second');
+        },
+        { code: 'EEXIST' },
+      );
+    }
+    expect(fileSystem.readText(path)).toBe('first');
+    expect(fileSystem.stat(at('dangling'), 'no-follow')).toBe('symlink');
+    expect(fileSystem.list(root).some(({ name }) => name.startsWith('.puni-write-'))).toBe(false);
   });
 
   test('makes a symlink holding its target text; anything already there is EEXIST', () => {
@@ -173,7 +205,30 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
       );
     }
     expect(fileSystem.readText(at('a.md'))).toBe('a');
-    fileSystem.remove(at('made'));
+  });
+
+  test('refuses a relative path to every change, changing nothing where the process runs', () => {
+    const probe = 'puni-relative-probe';
+    const changes: readonly (() => void)[] = [
+      () => {
+        fileSystem.write(probe, 'x');
+      },
+      () => {
+        fileSystem.writeNew(probe, 'x');
+      },
+      () => {
+        fileSystem.makeDirectory(probe);
+      },
+      () => {
+        fileSystem.makeLink(probe, at('a.md'));
+      },
+    ];
+    try {
+      for (const change of changes) throws(change, /is not an absolute path/u);
+      expect(lstatOrAbsent(join(process.cwd(), probe))).toBe('absent');
+    } finally {
+      rmSync(join(process.cwd(), probe), { force: true, recursive: true });
+    }
   });
 });
 

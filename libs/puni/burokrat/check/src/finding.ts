@@ -58,8 +58,9 @@ export interface Breach {
  * pin. So a rule applies to a repository pinned at `pin` when `since <= pin` and, if it has an
  * `until`, `pin < until`. A new rule takes the next epoch as its `since`. A rule made to refuse
  * what it accepted ships as two objects: the old one given `until: N`, and the new one (the same
- * id is allowed) with `since: N`. A rule whose subject puni no longer produces may be retired, by
- * an `until` with no successor or by deleting it, and is listed in `retiredRules`.
+ * id is allowed) with `since: N`. A rule object ended by an `until` with no successor is retired
+ * and listed in `retiredRules`. Deleting a rule outright is a loosening, which keeps the contract,
+ * and is not listed.
  */
 export interface Rule {
   /** A stable `subject.rule` id. */

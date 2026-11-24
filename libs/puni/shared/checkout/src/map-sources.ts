@@ -18,6 +18,12 @@ export interface SourceDefect {
   readonly remedy: string;
 }
 
+/**
+ * The directory puni generated the wiki index into before the map was printed: never a page or
+ * documentation, and from rules epoch 2 a leftover the `index.leftover` rule reports.
+ */
+export const generatedIndexDirectory = 'wiki/index';
+
 /** What to do about a `read-when` defect, of a page or a project. */
 export const readWhenRemedy =
   'give it a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words (a page holds it as front matter with a title)';
@@ -100,19 +106,22 @@ function readPage(path: string, text: string): PageReading {
 }
 
 /**
- * The map sources of `files`: every visible authored page (Markdown under `wiki/`), and the
- * projects every one of `projectSources` reads, in their order. A defect is no failure; each is
- * returned, sorted by path.
+ * The map sources of `files`, pinned at the rules epoch `epoch`: every visible authored page
+ * (Markdown under `wiki/` outside {@link generatedIndexDirectory}), and the projects every one of
+ * `projectSources` reads at that epoch, in their order. A defect is no failure; each is returned,
+ * sorted by path.
  */
 export function readMapSources(
   files: CheckoutFiles,
   projectSources: readonly ProjectSource[],
+  epoch: number,
 ): MapSources {
   const readings = files
     .listVisible(repositoryScope)
     .filter((path) => path.startsWith('wiki/') && path.endsWith('.md'))
+    .filter((path) => !path.startsWith(`${generatedIndexDirectory}/`))
     .map((path) => readPage(path, files.readText(path)));
-  const projects = projectSources.map((source) => source.readProjects(files));
+  const projects = projectSources.map((source) => source.readProjects(files, epoch));
   return {
     pages: readings.flatMap((reading) => ('page' in reading ? [reading.page] : [])),
     projects: projects.flatMap((reading) => reading.projects),

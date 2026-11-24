@@ -2,8 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { removeScratchDirectoriesAfterEach, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, dropRemedies, openCheckHost } from './check.test-host';
 import { listUnlinkedCode, readSymbolSpan } from './docs';
-import { formatFixtureRegistry, makeRepository } from './repository-pair.test-host';
-import { latestRulesEpoch } from './rule-set.rule';
+import { makeRepository, writeEpochFiles } from './repository-pair.test-host';
+import { appliesAt } from './finding';
+import { codeRules, latestRulesEpoch } from './rule-set.rule';
 import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
 
 describe('readSymbolSpan', () => {
@@ -68,8 +69,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  root = makeRepository(scratchDirectories);
-  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(latestRulesEpoch));
+  root = makeRepository(scratchDirectories, latestRulesEpoch);
   writeRepositoryFile(
     root,
     'libs/x/src/box.ts',
@@ -167,10 +167,14 @@ describe('the epoch contract', () => {
       '---\ntitle: Use\nread-when: using the box\n---\n\n# Use\n\nCall `joinPaths` from [`Box`](../libs/x/src/box.ts#Gone) or [key](../config/a.json#key).\n',
     );
     writeRepositoryFile(root, 'libs/x/src/paths.ts', 'export const joinPaths = 1;\n');
-    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(2));
+    writeEpochFiles(root, 2);
     const atTwo = host.runCheck({}, root);
-    expect([atTwo.code, atTwo.stdout.startsWith('ok: ')]).toEqual([0, true]);
-    writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(3));
+    expect([atTwo.code, atTwo.stderr, atTwo.stdout.split('\n')[0]]).toEqual([
+      0,
+      '',
+      `ok: system-state, ${String(codeRules.filter(({ rule }) => appliesAt(rule, 2)).length)} rules, no findings.`,
+    ]);
+    writeEpochFiles(root, 3);
     expect(
       host
         .runCheck({}, root)

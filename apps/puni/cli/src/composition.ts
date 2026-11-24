@@ -2,6 +2,8 @@ import { burokratAdrModule } from '@puni/burokrat-adr';
 import { burokratAssessModule } from '@puni/burokrat-assess';
 import { burokratCheckModule } from '@puni/burokrat-check';
 import { burokratRepoModule } from '@puni/burokrat-repo';
+import { burokratReviewModule } from '@puni/burokrat-review';
+import { burokratSkillsModule } from '@puni/burokrat-skills';
 import { burokratWikiModule } from '@puni/burokrat-wiki';
 import { dashOpsModule } from '@puni/dash-ops';
 import { dashResourcesModule } from '@puni/dash-resources';
@@ -39,6 +41,8 @@ export const puniGraph = DiBag.createBuilder()
     burokratRepoModule,
     burokratAdrModule,
     burokratAssessModule,
+    burokratReviewModule,
+    burokratSkillsModule,
   ])
   .withServices({
     commandCatalog: (): CommandCatalog => ({ list: () => listCommands(puniProgram) }),

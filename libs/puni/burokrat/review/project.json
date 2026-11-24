@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-burokrat-review",
+  "projectType": "library",
+  "tags": ["scope:burokrat", "type:group"],
+  "metadata": {
+    "readWhen": "changing how fresh reviews discover, compare, score or file findings",
+    "readFirst": "src/review.feature.ts"
+  },
+  "sourceRoot": "libs/puni/burokrat/review/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

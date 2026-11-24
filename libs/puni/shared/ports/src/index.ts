@@ -8,6 +8,8 @@ export type {
   GitChange,
   GitCommit,
   GitCommits,
+  GitIndexEntries,
+  GitIndexEntry,
   GitListing,
   GitMerge,
   GitMerges,
@@ -16,3 +18,4 @@ export type {
   GitWorktrees,
 } from './git.port';
 export type { AttachedOutcome, ProcessOutcome, ProcessRunner } from './process-runner.port';
+export type { WorkingTreeDigest } from './working-tree-digest.port';

@@ -18,9 +18,13 @@ import {
   claudeLinksAgents,
   readmeExists,
   readmeWords,
+  recordsAgentsHeadings,
+  stateAgentsHeadings,
 } from './rules/entry.rule';
+import { judgeEntryKinds } from './rules/entries.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
+  forbidGeneratedIndex,
   limitIndexWords,
   requirePurposes,
   requireReadFirst,
@@ -34,6 +38,7 @@ import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
+  judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
 import {
@@ -56,9 +61,9 @@ const at =
   (rule: Rule): LeveledRule => ({ level, rule });
 
 /**
- * The rules for a `system-state` repository. Entry files, the map (its sources, every
- * `project.json`, which the root project's check reads, its purposes and its budget) and the CI
- * workflow are repository-level; the per-file and per-project rules are project-level.
+ * The rules for a `system-state` repository. Entry files, the map (its sources, which the root
+ * project's check reads across every project, its purposes, its budget and a leftover generated
+ * index) and the CI workflow are repository-level; the per-file and per-project rules are project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
@@ -67,6 +72,7 @@ export const codeRules: readonly LeveledRule[] = [
     agentsNamesIndex,
     agentsNamesMap,
     ...agentsKeepRules,
+    stateAgentsHeadings,
     claudeLinksAgents,
     readmeExists,
     readmeWords,
@@ -74,6 +80,7 @@ export const codeRules: readonly LeveledRule[] = [
     matchRecordsLocation,
     requireCiGate,
     requirePurposes,
+    forbidGeneratedIndex,
     requireReadWhen,
     requireReadFirst,
     requireScope,
@@ -96,6 +103,7 @@ export const codeRules: readonly LeveledRule[] = [
     judgeDocReferences,
     judgeDocSpans,
     judgeDocLinks,
+    judgeEntryKinds,
   ].map(at('project')),
 ];
 
@@ -104,10 +112,13 @@ export const recordsRules: readonly LeveledRule[] = [
   agentsExists,
   claudeLinksAgents,
   agentsWords,
+  recordsAgentsHeadings,
+  judgeEntryKinds,
   resolveAgentsLinks,
   judgeRecordsLayout,
   judgeRecordNames,
   judgeRecordFrontMatter,
+  judgeReviewRecords,
   judgeSupersession,
   forbidPlaintextSecrets,
   forbidRecordsAddresses,
@@ -121,8 +132,9 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
- * repository, judging only the references that leave the linking file's project, and, before
- * epoch 3, the symbols documentation names, which a project check leaves to this run.
+ * repository, judging only the references that leave the linking file's project (a symlink's
+ * target among them), and, before epoch 3, the symbols documentation names, which a project
+ * check leaves to this run.
  */
 export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
@@ -130,12 +142,16 @@ export const crossProjectRules: readonly Rule[] = [
   judgeDocPaths,
   judgeDocSymbols,
   judgeDocReferences,
+  judgeEntryKinds,
 ];
 
 /**
  * The rules judging what a commit makes public, by the type of the repository judged: its
  * credentials and its addresses. `check --staged` applies them to the staged files as the git
- * index holds them, and `check --commits` to what each commit of a range adds and to its message.
+ * index holds them, and `check --commits` to what each commit of a range adds and to its message;
+ * either reads a symlink as its target text, as git holds it. Neither judges entry kinds: a
+ * staged gitlink has no text and is not listed, and what a symlink points at is a state of the
+ * tree, which `entries.kind` judges in every other run.
  */
 export const secretRules: Readonly<Record<RepositoryType, readonly Rule[]>> = {
   'system-state': [forbidPlaintextSecrets, forbidStateAddresses],
@@ -151,8 +167,9 @@ export const checkRules: CheckRules = {
 };
 
 /**
- * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
- * only ids a repository's verdict may lose when it raises its pin.
+ * The rule objects ended by an `until` with no successor, by id, at that epoch: the only ids a
+ * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
+ * listed.
  */
 export const retiredRules: Readonly<Record<string, number>> = { 'docs.symbols': 3 };
 

@@ -162,6 +162,41 @@ describe('renderRootMap', () => {
     expect([section.words > indexWordBudget, section.largest]).toEqual([true, 'pages']);
   });
 
+  /**
+   * `content` with pages directly in `wiki/` padding its expanded root to exactly the budget, and
+   * `extra` more words on the last of them.
+   */
+  function padRoot(extra: number): MapContent {
+    const padded: MapPage[] = [];
+    const withPads = () => ({ ...content, pages: [...pages, ...padded] });
+    for (let at = 0; ; at += 1) {
+      const left = indexWordBudget - renderRootMap(withPads()).words;
+      if (left === 0) break;
+      const take = left >= 25 ? 22 : left;
+      padded.push({
+        name: `Pad${String(at)}`,
+        path: `wiki/pad${String(at)}.md`,
+        readWhen: words(take - 2),
+      });
+    }
+    const last = padded.at(-1);
+    if (last === undefined) throw new Error('nothing padded');
+    padded[padded.length - 1] = { ...last, readWhen: `${last.readWhen}${' w'.repeat(extra)}` };
+    return withPads();
+  }
+
+  test.each([
+    [0, false],
+    [1, true],
+  ])(
+    '%i words over the budget expanded, the root collapses its sections: %p',
+    (extra, collapsed) => {
+      const root = renderRootMap(padRoot(extra));
+      expect(root.text.includes('## Sections')).toBe(collapsed);
+      if (!collapsed) expect(root.words).toBe(indexWordBudget);
+    },
+  );
+
   test('over budget even collapsed, it names the kind of line that holds the most words', () => {
     const tops = Array.from({ length: 30 }, (_, at) => `top${String(at)}`);
     const wide: MapContent = {

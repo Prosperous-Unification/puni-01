@@ -16,11 +16,7 @@ import { type CheckHost, openCheckHost } from './check.test-host';
 import { appliesAt } from './finding';
 import { codeRules, crossProjectRules, latestRulesEpoch } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
-import {
-  fixturePurposes,
-  formatFixtureRegistry,
-  makeRepository,
-} from './repository-pair.test-host';
+import { fixturePurposes, makeRepository } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -48,8 +44,7 @@ let pin = latestRulesEpoch;
 
 /** The fixture repository pinned at {@link pin}, with a second project, `two`. */
 function makeTwoProjectRepository(): string {
-  const repository = makeRepository(scratchDirectories);
-  writeRepositoryFile(repository, 'puni.json', formatFixtureRegistry(pin));
+  const repository = makeRepository(scratchDirectories, pin);
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
@@ -138,6 +133,17 @@ const seeds: readonly (readonly [string, () => void])[] = [
         `---\ntitle: Long\nread-when: reading long\n---\n\n${'word '.repeat(pageWordBudget)}\n`,
       );
       rmSync(join(root, '.github'), { recursive: true });
+      symlinkSync('/nowhere/absolute', join(root, 'libs/two/far'));
+      symlinkSync('../../../outside', join(root, 'apps/one/out'));
+      symlinkSync('gone.md', join(root, 'apps/one/near'));
+      symlinkSync('../../apps/one/gone.md', join(root, 'libs/two/across'));
+      runGit(root, ['add', 'libs/two/far', 'apps/one/out', 'apps/one/near', 'libs/two/across']);
+      runGit(root, [
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `160000,${'1'.repeat(40)},libs/two/vendor`,
+      ]);
     },
   ],
   [
@@ -145,6 +151,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
     () => {
       rmSync(join(root, 'AGENTS.md'));
       writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
+      writeRepositoryFile(root, 'wiki/index/index.md', '# Wiki index\n');
       for (const index of Array.from({ length: 20 }, (_, at) => String(at))) {
         writeProject(root, `libs/many${index}`, `many${index}`, {
           readWhen: `changing ${'many '.repeat(18)}things`,
@@ -160,9 +167,13 @@ const seeds: readonly (readonly [string, () => void])[] = [
     },
   ],
   [
-    'AGENTS.md giving no records location',
+    'AGENTS.md giving no records location, with a section puni does not declare',
     () => {
-      writeRepositoryFile(root, 'AGENTS.md', 'Start at `puni burokrat wiki map`.\n');
+      writeRepositoryFile(
+        root,
+        'AGENTS.md',
+        'Start at `puni burokrat wiki map`.\n\n## Exceptions\n\nNone.\n',
+      );
     },
   ],
 ];
@@ -204,12 +215,14 @@ describe.each([2, latestRulesEpoch])(
       expect([...broken].sort()).toEqual(
         [
           'agents.exists',
+          'agents.headings',
           'agents.index',
           'claude.symlink',
           'agents.words',
           'history.date',
           'history.records',
           'index.purpose',
+          'index.leftover',
           'index.read-first',
           'index.read-when',
           'index.scope',
@@ -229,6 +242,7 @@ describe.each([2, latestRulesEpoch])(
           'agents.rules',
           'secrets.addresses',
           'code.header',
+          'entries.kind',
         ].sort(),
       );
       expect(broken).toEqual(

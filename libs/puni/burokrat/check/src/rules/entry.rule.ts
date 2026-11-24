@@ -1,12 +1,15 @@
 import {
+  agentsSections,
   countWords,
   formatMapCommand,
+  readHeadings,
   readRulesSection,
+  type RepositoryType,
   rulesUpgradeCommand,
 } from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
 import { agentsRulesDigests, digestRulesSection } from '../agents-rules';
-import type { Rule, RuleReading } from '../finding';
+import type { Breach, Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {
   return files.exists(path) ? files.readText(path) : undefined;
@@ -73,7 +76,7 @@ const mapCommand = formatMapCommand('puni');
 export const agentsNamesMap: Rule = {
   id: 'agents.index',
   since: 2,
-  remedy: `name \`${mapCommand}\` in AGENTS.md as the command printing the map to read first`,
+  remedy: `replace \`${indexFile}\` in AGENTS.md with \`${mapCommand}\`; where it names neither, add the line: - Unsure where something lives? \`${mapCommand}\` prints the map from a task to the file to read first.`,
   judge(reading) {
     const text = readOptional(reading, 'AGENTS.md');
     if (text === undefined || text.includes(mapCommand)) return [];
@@ -126,6 +129,58 @@ export function pinAgentsRules(digests: Readonly<Record<number, string>>): Rule[
 
 /** {@link pinAgentsRules} of {@link agentsRulesDigests}, the owner's rules. */
 export const agentsKeepRules: readonly Rule[] = pinAgentsRules(agentsRulesDigests);
+
+/**
+ * `AGENTS.md` of a `type` repository holds only the headings puni seeds it with: one `# ` title,
+ * and `## ` sections only of `agentsSections` of `@puni/shared-checkout`, each once. Any other
+ * heading of level 1 or 2, setext included, is a breach naming it; a missing file is
+ * `agents.exists`'s. Text inside an allowed section is not judged.
+ */
+export function limitAgentsHeadings(type: RepositoryType): Rule {
+  const allowed = agentsSections[type];
+  const listed = allowed.map((title) => `## ${title}`).join(', ');
+  return {
+    id: 'agents.headings',
+    since: 1,
+    remedy: `remove the heading and its section, or move its text into an existing section; AGENTS.md holds one # title and only ${listed}, as puni burokrat repo init seeds it`,
+    judge(reading) {
+      const text = readOptional(reading, 'AGENTS.md');
+      if (text === undefined) return [];
+      const seen = new Set<string>();
+      let titled = false;
+      return readHeadings(text).flatMap(({ level, text: title, line }): Breach[] => {
+        const at = `line ${String(line)}`;
+        const shown = `${'#'.repeat(level)} ${title}`;
+        if (level === 1) {
+          if (!titled) {
+            titled = true;
+            return [];
+          }
+          return [{ path: 'AGENTS.md', message: `${at} is a second title, "${shown}"` }];
+        }
+        if (!allowed.includes(title)) {
+          return [
+            {
+              path: 'AGENTS.md',
+              message: `${at} is the heading "${shown}", which puni does not declare for AGENTS.md`,
+            },
+          ];
+        }
+        if (seen.has(title)) {
+          return [{ path: 'AGENTS.md', message: `${at} repeats the heading "${shown}"` }];
+        }
+        seen.add(title);
+        return [];
+      });
+    },
+  };
+}
+
+/** {@link limitAgentsHeadings} of a system-state repository. */
+export const stateAgentsHeadings = limitAgentsHeadings('system-state');
+
+/** {@link limitAgentsHeadings} of a system-records repository. */
+export const recordsAgentsHeadings = limitAgentsHeadings('system-records');
 
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {

@@ -22,10 +22,17 @@ import {
 } from './finding';
 import {
   fixtureAgentsRules,
-  formatFixtureRegistry,
   makeRepositoryPair,
+  writeEpochFiles,
 } from './repository-pair.test-host';
-import { checkRules, latestRulesEpoch, retiredRules } from './rule-set.rule';
+import {
+  checkRules,
+  codeRules,
+  crossProjectRules,
+  latestRulesEpoch,
+  recordsRules,
+  retiredRules,
+} from './rule-set.rule';
 import { pinAgentsRules } from './rules/entry.rule';
 
 /** A rule that finds `path` wherever it exists, under `id`, from `since` (until `until`). */
@@ -53,16 +60,26 @@ function shows(id: string, path: string, since: number): Rule {
 /** The rules section the fixture's `AGENTS.md` must hold from epoch 2. */
 const secondRules = '## Rules\n\n1. **The second rules.** Stricter than the first.\n';
 
-/** `rule` as epoch 1 holds it, applying from there on. */
-function freeze(rule: Rule): Rule {
-  const frozen: { -readonly [Key in keyof Rule]: Rule[Key] } = { ...rule };
-  delete frozen.until;
-  return frozen;
+/** The last epoch this file walks; production rules from later epochs are left out. */
+const walked = 2;
+
+/** `rules` as epoch {@link walked} left them: none starting later, none stopping later. */
+function capRules(rules: readonly Rule[]): Rule[] {
+  return rules
+    .filter((rule) => rule.since <= walked)
+    .map((rule) => {
+      if (rule.until === undefined || rule.until <= walked) return rule;
+      const capped: { -readonly [Key in keyof Rule]: Rule[Key] } = { ...rule };
+      delete capped.until;
+      return capped;
+    });
 }
 
-/** The rules of `rules` that apply at epoch 1, each frozen there (see {@link freeze}). */
-function freezeAll(rules: readonly Rule[]): Rule[] {
-  return rules.filter((rule) => appliesAt(rule, 1)).map(freeze);
+/** `rules` capped (see {@link capRules}), each keeping its level. */
+function capLeveled(rules: readonly LeveledRule[]): LeveledRule[] {
+  return rules.flatMap(({ level, rule }) =>
+    capRules([rule]).map((capped) => ({ level, rule: capped })),
+  );
 }
 
 const fixture = fixtureCheckRules({
@@ -71,25 +88,19 @@ const fixture = fixtureCheckRules({
 });
 
 /**
- * The fixture rules frozen at epoch 1, but for their `agents.rules` rules, which hold the
- * fixture's own rules texts: so the epochs the tests walk are only those this file adds, however
- * many the production rules reach.
+ * The fixture rules capped at {@link walked}, so the epochs this file walks are those of the
+ * rules it adds, however far the production rules reach.
  */
 const base: CheckRules = {
   ...fixture,
   sets: {
-    'system-state': fixture.sets['system-state'].flatMap(({ level, rule }) => {
-      if (rule.id === 'agents.rules') return [{ level, rule }];
-      return freezeAll([rule]).map((frozen) => ({ level, rule: frozen }));
-    }),
-    'system-records': fixture.sets['system-records'].flatMap(({ level, rule }) =>
-      freezeAll([rule]).map((frozen) => ({ level, rule: frozen })),
-    ),
+    'system-state': capLeveled(fixture.sets['system-state']),
+    'system-records': capLeveled(fixture.sets['system-records']),
   },
-  crossProject: freezeAll(fixture.crossProject),
+  crossProject: capRules(fixture.crossProject),
   secrets: {
-    'system-state': freezeAll(fixture.secrets['system-state']),
-    'system-records': freezeAll(fixture.secrets['system-records']),
+    'system-state': capRules(fixture.secrets['system-state']),
+    'system-records': capRules(fixture.secrets['system-records']),
   },
 };
 const project = (rule: Rule): LeveledRule => ({ level: 'project', rule });
@@ -152,52 +163,62 @@ function git(root: string, ...args: string[]): string {
 
 /** Pins the fixture at `rules`; from epoch 2 its `AGENTS.md` holds {@link secondRules}. */
 function pin(rules: number): void {
-  writeFileSync(join(state, 'puni.json'), formatFixtureRegistry(rules));
+  writeEpochFiles(state, rules);
   if (rules < 2) return;
   const agents = join(state, 'AGENTS.md');
   writeFileSync(agents, readFileSync(agents, 'utf8').replace(fixtureAgentsRules, secondRules));
 }
 
+/** The production counts each mode applies at pin 1, before the later rules here. */
+/** How many system-state rules apply at the pin `epoch`, of every level or of `level`. */
+const cappedCode = capLeveled(codeRules);
+const stateAt = (epoch: number) => cappedCode.filter(({ rule }) => appliesAt(rule, epoch)).length;
+const projectAt = (epoch: number) =>
+  cappedCode.filter(({ level, rule }) => level === 'project' && appliesAt(rule, epoch)).length;
+const crossCount = capRules(crossProjectRules).length;
+const recordsCount = recordsRules.length;
+const n = String;
+
 const newer = (ids: string) =>
-  `newer: puni.json pins rules epoch 1, so ${ids} not applied; run puni burokrat repo upgrade\n`;
+  `newer: puni.json pins rules epoch 1; later epochs add or change: ${ids}; run puni burokrat repo upgrade\n`;
 const later = (id: string) => `${id} later.md: exists; fix: remove later.md`;
 
 const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     'whole',
     {},
-    `ok: system-state, 25 rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 26 rules, 2 findings.\n`,
+    `ok: system-state, ${n(stateAt(1) + 1)} rules, no findings.\n${newer('agents.index, agents.rules, demo.also, demo.later, index.leftover, index.purpose, index.words')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, ${n(stateAt(2) + 2)} rules, 2 findings.\n`,
   ],
   [
     '--project one',
     { project: 'one' },
-    `ok: system-state, project one, 11 rules, no findings.\n${newer('demo.also, demo.later are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, project one, 13 rules, 2 findings.\n`,
+    `ok: system-state, project one, ${n(projectAt(1))} rules, no findings.\n${newer('demo.also, demo.later')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, project one, ${n(projectAt(2) + 2)} rules, 2 findings.\n`,
   ],
   [
     '--cross-project-links',
     { crossProjectLinks: true },
-    `ok: system-state, cross-project links, 3 rules, no findings.\n${newer('demo.cross is')}`,
-    `${later('demo.cross')}\nfail: system-state, cross-project links, 4 rules, 1 finding.\n`,
+    `ok: system-state, cross-project links, ${n(crossCount)} rules, no findings.\n${newer('demo.cross')}`,
+    `${later('demo.cross')}\nfail: system-state, cross-project links, ${n(crossCount + 1)} rules, 1 finding.\n`,
   ],
   [
     '--staged',
     { staged: true },
-    `ok: system-state, staged files, 2 rules, no findings.\n${newer('demo.staged is')}`,
+    `ok: system-state, staged files, 2 rules, no findings.\n${newer('demo.staged')}`,
     `${later('demo.staged')}\nfail: system-state, staged files, 3 rules, 1 finding.\n`,
   ],
   [
     '--repo system-records --staged',
     { repo: 'system-records', staged: true },
-    `ok: system-records, staged files, 2 rules, no findings.\n${newer('demo.secret is')}`,
+    `ok: system-records, staged files, 2 rules, no findings.\n${newer('demo.secret')}`,
     'demo.secret AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, staged files, 3 rules, 1 finding.\n',
   ],
   [
     '--repo system-records',
     { repo: 'system-records' },
-    `ok: system-records, 10 rules, no findings.\n${newer('demo.records is')}`,
-    'demo.records AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, 11 rules, 1 finding.\n',
+    `ok: system-records, ${n(recordsCount)} rules, no findings.\n${newer('demo.records')}`,
+    `demo.records AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, ${n(recordsCount + 1)} rules, 1 finding.\n`,
   ],
 ];
 
@@ -221,7 +242,7 @@ describe('check at a rules pin', () => {
     const hash = git(state, 'rev-parse', '--short', 'HEAD');
     expect(host.runCheck({ commits: 'HEAD~1..HEAD' }, state)).toEqual({
       code: 0,
-      stdout: `ok: system-state, commits HEAD~1..HEAD, 1 commit, 2 rules, no findings.\n${newer('demo.staged is')}`,
+      stdout: `ok: system-state, commits HEAD~1..HEAD, 1 commit, 2 rules, no findings.\n${newer('demo.staged')}`,
       stderr: '',
     });
     pin(2);
@@ -235,7 +256,7 @@ describe('check at a rules pin', () => {
   test('a retired rule applies before its until and is neither applied nor newer after', () => {
     writeFileSync(join(state, 'retired.md'), 'x\n');
     expect(host.runCheck({}, state).stdout).toStartWith(
-      'demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, 25 rules, 1 finding.\n',
+      `demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, ${n(stateAt(1) + 1)} rules, 1 finding.\n`,
     );
     pin(2);
     expect(host.runCheck({}, state).stdout).not.toContain('demo.retired');
@@ -270,6 +291,7 @@ describe('the latest rules', () => {
   });
 
   test('judge every repository at the latest epoch as if the rules section were the given text', () => {
+    writeEpochFiles(state, 2);
     const judged = host.container.resolve('latestRules').judge(state, secondRules);
     expect(dropRemedies(judged['system-state'])).toEqual([
       { rule: 'demo.also', path: 'later.md', message: 'exists' },
@@ -287,6 +309,7 @@ describe('the latest rules', () => {
   });
 
   test('a records checkout that is not beside the state one is its one finding', () => {
+    writeEpochFiles(state, 2);
     rmSync(records, { recursive: true });
     const judged = host.container.resolve('latestRules').judge(state, secondRules);
     expect(judged['system-records'].map(({ rule, path }) => `${rule} ${path}`)).toEqual([

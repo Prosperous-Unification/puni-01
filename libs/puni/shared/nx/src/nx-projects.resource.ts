@@ -24,6 +24,9 @@ import {
   scopeRemedy,
 } from './remedies';
 
+/** The rules epoch from which `metadata.index` places a project; below it, the scope tag alone does. */
+export const metadataIndexEpoch = 2;
+
 type Reading = { readonly project: MapProject } | { readonly defect: SourceDefect };
 
 /** The usual remedy of each defect topic a project can have. */
@@ -104,10 +107,11 @@ function readIndex(
 }
 
 /**
- * Reads one `project.json`: its `name`, `metadata.readWhen`, `metadata.readFirst` and index path
- * (see `readIndex`). Returns the project, or one defect per invalid field.
+ * Reads one `project.json` at the rules epoch `epoch`: its `name`, `metadata.readWhen`,
+ * `metadata.readFirst` and index path (see `readIndex`; `metadata.index` only from
+ * {@link metadataIndexEpoch}). Returns the project, or one defect per invalid field.
  */
-function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
+function readProject(files: CheckoutFiles, file: ProjectFile, epoch: number): Reading[] {
   const { path, directory } = file;
   if ('problem' in file) return [defectOf('read-when', path, file.problem, invalidJsonRemedy)];
   const name = nameProject(file);
@@ -133,7 +137,8 @@ function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
       defectOf('read-first', path, `project ${name} metadata.readFirst ${readFirstProblem}`),
     );
   }
-  const index = readIndex(name, metadata['index'], file.json['tags']);
+  const declared = epoch >= metadataIndexEpoch ? metadata['index'] : undefined;
+  const index = readIndex(name, declared, file.json['tags']);
   if ('problem' in index) defects.push(defectOf('scope', path, index.problem));
   if (
     defects.length > 0 ||
@@ -155,15 +160,15 @@ function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
 
 /**
  * The {@link ProjectSource} of an Nx workspace: every visible `project.json` under `apps/` and
- * `libs/`, not below `node_modules`, is a project, its place in the map its `metadata.index` or
- * else its scope tag (see `readIndex`). A workspace (a repository with `nx.json`) keeps its
+ * `libs/`, not below `node_modules`, is a project, its place in the map its `metadata.index` (from
+ * rules epoch {@link metadataIndexEpoch}) or else its scope tag (see `readIndex`). A workspace (a repository with `nx.json`) keeps its
  * projects there, so each of `apps/` and `libs/` it lacks is a defect; a repository without
  * `nx.json` holds no code and needs neither.
  */
 export function createNxProjectSource(): ProjectSource {
   return {
     placementHint: nxPlacementHint,
-    readProjects(files): ProjectReading {
+    readProjects(files, epoch): ProjectReading {
       const readings: Reading[] = [];
       const projectFiles = readProjectFiles(files, repositoryScope);
       const isWorkspace = files.exists('nx.json');
@@ -177,7 +182,7 @@ export function createNxProjectSource(): ProjectSource {
           continue;
         }
         for (const file of projectFiles) {
-          if (file.path.startsWith(`${top}/`)) readings.push(...readProject(files, file));
+          if (file.path.startsWith(`${top}/`)) readings.push(...readProject(files, file, epoch));
         }
       }
       return {

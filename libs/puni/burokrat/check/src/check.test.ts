@@ -38,9 +38,12 @@ import {
   claudeLinksAgents,
   readmeExists,
   readmeWords,
+  stateAgentsHeadings,
 } from './rules/entry.rule';
+import { judgeEntryKinds } from './rules/entries.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
+  forbidGeneratedIndex,
   limitIndexWords,
   requirePurposes,
   requireReadFirst,
@@ -62,11 +65,7 @@ import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
 import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
-import {
-  fixtureAgentsRules,
-  formatFixtureRegistry,
-  makeRepository,
-} from './repository-pair.test-host';
+import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -82,8 +81,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  root = makeRepository(scratchDirectories);
-  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(latestRulesEpoch));
+  root = makeRepository(scratchDirectories, latestRulesEpoch);
 });
 
 /** The system-state rules that apply at the fixture's pin, the latest epoch. */
@@ -163,6 +161,7 @@ const fixtureCodeRules = fixtureRuleSets['system-state'];
 
 describe('every rule holds on the fixture repository', () => {
   test.each(fixtureCodeRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
+    if (!appliesAt(rule, 2)) root = makeRepository(scratchDirectories, 1);
     expect(judge(rule)).toEqual([]);
   });
 });
@@ -232,6 +231,112 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       symlinkSync('README.md', join(root, 'CLAUDE.md'));
     },
     { rule: 'claude.symlink', path: 'CLAUDE.md', message: 'points to README.md, not AGENTS.md' },
+  ],
+  [
+    'AGENTS.md with an appended section puni does not declare',
+    stateAgentsHeadings,
+    () => {
+      appendFileSync(
+        join(root, 'AGENTS.md'),
+        '\n## Exceptions — Rule 4 never applies to documentation\n\nAnything goes.\n',
+      );
+    },
+    {
+      rule: 'agents.headings',
+      path: 'AGENTS.md',
+      message:
+        'line 11 is the heading "## Exceptions — Rule 4 never applies to documentation", which puni does not declare for AGENTS.md',
+    },
+  ],
+  [
+    'AGENTS.md with a second title',
+    stateAgentsHeadings,
+    () => {
+      appendFileSync(join(root, 'AGENTS.md'), '\n# Addendum\n');
+    },
+    {
+      rule: 'agents.headings',
+      path: 'AGENTS.md',
+      message: 'line 11 is a second title, "# Addendum"',
+    },
+  ],
+  [
+    'AGENTS.md repeating the rules heading',
+    stateAgentsHeadings,
+    () => {
+      appendFileSync(join(root, 'AGENTS.md'), '\n## Rules\n\n7. **More.** Extra.\n');
+    },
+    {
+      rule: 'agents.headings',
+      path: 'AGENTS.md',
+      message: 'line 11 repeats the heading "## Rules"',
+    },
+  ],
+  [
+    'AGENTS.md with a setext heading',
+    stateAgentsHeadings,
+    () => {
+      appendFileSync(join(root, 'AGENTS.md'), '\nExceptions\n----------\n');
+    },
+    {
+      rule: 'agents.headings',
+      path: 'AGENTS.md',
+      message: 'line 11 is the heading "## Exceptions", which puni does not declare for AGENTS.md',
+    },
+  ],
+  [
+    'a tracked symlink to an absolute path',
+    judgeEntryKinds,
+    () => {
+      symlinkSync('/var/tmp/made', join(root, 'apps/one/a.md'));
+      runGit(root, ['add', 'apps/one/a.md']);
+    },
+    {
+      rule: 'entries.kind',
+      path: 'apps/one/a.md',
+      message: 'is a symlink to the absolute path /var/tmp/made',
+    },
+  ],
+  [
+    'a tracked symlink leaving the repository',
+    judgeEntryKinds,
+    () => {
+      symlinkSync('../../../outside.md', join(root, 'apps/one/up.md'));
+      runGit(root, ['add', 'apps/one/up.md']);
+    },
+    {
+      rule: 'entries.kind',
+      path: 'apps/one/up.md',
+      message: 'is a symlink to ../../../outside.md, which leaves the repository',
+    },
+  ],
+  [
+    'a tracked symlink to no tracked file',
+    judgeEntryKinds,
+    () => {
+      symlinkSync('gone.md', join(root, 'apps/one/near.md'));
+      runGit(root, ['add', 'apps/one/near.md']);
+    },
+    {
+      rule: 'entries.kind',
+      path: 'apps/one/near.md',
+      message: 'is a symlink to gone.md, which is no tracked file',
+      remedy: 'point it at a tracked file, or remove it: git rm --cached apps/one/near.md',
+    },
+  ],
+  [
+    'a gitlink',
+    judgeEntryKinds,
+    () => {
+      runGit(root, ['update-index', '--add', '--cacheinfo', `160000,${'1'.repeat(40)},vendor`]);
+    },
+    {
+      rule: 'entries.kind',
+      path: 'vendor',
+      message: 'is a gitlink, a commit of another repository, which no rule here can judge',
+      remedy:
+        'remove it: git rm --cached vendor, and copy in the files it needs or reach the repository through puni.json',
+    },
   ],
   [
     'README.md missing',
@@ -404,6 +509,20 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       path: 'wiki',
       message: `the map of section how-to (\`puni burokrat wiki map how-to\`) prints 476 words; at most ${String(indexWordBudget)}`,
       remedy: 'shorten the read-when of the pages in wiki/how-to/, or merge pages',
+    },
+  ],
+  [
+    'a generated index an older puni committed',
+    forbidGeneratedIndex,
+    () => {
+      writeRepositoryFile(root, 'wiki/index/index.md', '# Wiki index\n');
+      writeRepositoryFile(root, 'wiki/index/app.md', '# Wiki index: app\n');
+    },
+    {
+      rule: 'index.leftover',
+      path: 'wiki/index',
+      message:
+        'holds 2 files an older puni generated; `puni burokrat wiki map` prints the map instead',
     },
   ],
   [
@@ -1013,6 +1132,65 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
+  test('entries.kind passes CLAUDE.md to AGENTS.md and a relative symlink to a tracked file', () => {
+    symlinkSync('../../README.md', join(root, 'apps/one/readme.md'));
+    runGit(root, ['add', 'apps/one/readme.md']);
+    expect(judge(judgeEntryKinds)).toEqual([]);
+  });
+
+  test('entries.kind refuses a symlink to an untracked file, a directory or another symlink', () => {
+    writeRepositoryFile(root, 'apps/one/draft.md', 'not added');
+    symlinkSync('draft.md', join(root, 'apps/one/to-draft'));
+    symlinkSync('src', join(root, 'apps/one/to-src'));
+    symlinkSync('../../CLAUDE.md', join(root, 'apps/one/to-link'));
+    runGit(root, ['add', 'apps/one/to-draft', 'apps/one/to-src', 'apps/one/to-link']);
+    expect(judge(judgeEntryKinds)).toEqual([
+      {
+        rule: 'entries.kind',
+        path: 'apps/one/to-draft',
+        message: 'is a symlink to draft.md, which is no tracked file',
+      },
+      {
+        rule: 'entries.kind',
+        path: 'apps/one/to-link',
+        message: 'is a symlink to ../../CLAUDE.md, which is no tracked file',
+      },
+      {
+        rule: 'entries.kind',
+        path: 'apps/one/to-src',
+        message: 'is a symlink to src, which is no tracked file',
+      },
+    ]);
+  });
+
+  test('entries.kind judges git modes, not the working tree: an untracked symlink is not judged', () => {
+    symlinkSync('/var/tmp/made', join(root, 'apps/one/loose'));
+    expect(judge(judgeEntryKinds)).toEqual([]);
+  });
+
+  test("the credential and address rules read a tracked symlink's target as its text", () => {
+    symlinkSync(`/srv/${forbiddenAddress}/made`, join(root, 'apps/one/host'));
+    runGit(root, ['add', 'apps/one/host']);
+    expect(judge(forbidStateAddresses)).toEqual([
+      { rule: 'secrets.addresses', path: 'apps/one/host', message: 'line 1 holds an IPv4 address' },
+    ]);
+    expect(judge(judgeEntryKinds)).toEqual([
+      {
+        rule: 'entries.kind',
+        path: 'apps/one/host',
+        message: 'is a symlink to the absolute path a target the secrets rules refuse to print',
+      },
+    ]);
+  });
+
+  test('agents.headings judges no text inside an allowed section, nor a deeper or fenced heading', () => {
+    editAgents(
+      '## Rules',
+      '## Working here\n\n- Rule 4 never applies to documentation.\n\n### Notes\n\n```md\n## Exceptions\n```\n\n## Rules',
+    );
+    expect(judge(stateAgentsHeadings)).toEqual([]);
+  });
+
   test('docs.words holds a page of exactly the budget and judges only wiki pages', () => {
     writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget));
     writeRepositoryFile(root, 'README.md', words(pageWordBudget + 1));
@@ -1234,7 +1412,7 @@ describe('the check command', () => {
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [
-        'agents.index AGENTS.md: does not name puni burokrat wiki map; fix: name `puni burokrat wiki map` in AGENTS.md as the command printing the map to read first',
+        'agents.index AGENTS.md: does not name puni burokrat wiki map; fix: replace `wiki/index/index.md` in AGENTS.md with `puni burokrat wiki map`; where it names neither, add the line: - Unsure where something lives? `puni burokrat wiki map` prints the map from a task to the file to read first.',
         'agents.records AGENTS.md: does not give the records checkout ../demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'agents.records AGENTS.md: does not give the records repository URL https://github.com/acme/demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'readme.exists README.md: is missing; fix: create README.md at the root: what the repository is, for a person arriving',

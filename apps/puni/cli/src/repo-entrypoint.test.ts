@@ -57,12 +57,12 @@ describe('burokrat repo init through the entrypoint, in an empty temporary direc
     runGit(records, ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 28 rules, no findings.\n',
+      stdout: 'ok: system-state, 31 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 10 rules, no findings.\n',
+      stdout: 'ok: system-records, 13 rules, no findings.\n',
       stderr: '',
     });
   });

@@ -10,7 +10,11 @@ export interface DirectoryEntry {
   readonly kind: Exclude<PathKind, 'absent'>;
 }
 
-/** Raw synchronous access to the local file system, by absolute path. It decides nothing. */
+/**
+ * Raw synchronous access to the local file system, by absolute path. It decides nothing, but
+ * every method that changes the file system throws, changing nothing, when given a relative
+ * path, which would otherwise land wherever the process happens to run.
+ */
 export interface FileSystem {
   /**
    * The UTF-8 text of the file at `path`.
@@ -49,16 +53,30 @@ export interface FileSystem {
   readLink(path: string): string;
   /** The entries of the directory at `path`. */
   list(path: string): readonly DirectoryEntry[];
-  /** Writes `text` to the file at `path`, whose directory exists. */
+  /**
+   * Writes `text` to the file at `path`, whose directory exists.
+   *
+   * @throws when `path` is not absolute.
+   */
   write(path: string, text: string): void;
-  /** Removes the file or the whole directory at `path`. */
-  remove(path: string): void;
-  /** Creates the directory at `path` and every missing parent. */
+  /**
+   * Atomically publishes a new file at `path`, whose directory exists.
+   *
+   * @throws the runtime's error, `EEXIST`, when anything is already at `path`.
+   * @throws when `path` is not absolute.
+   */
+  writeNew(path: string, text: string): void;
+  /**
+   * Creates the directory at `path` and every missing parent.
+   *
+   * @throws when `path` is not absolute.
+   */
   makeDirectory(path: string): void;
   /**
    * Creates a symlink at `path`, whose directory exists, holding the target text `target`.
    *
    * @throws the runtime's error, `EEXIST`, when anything is already at `path`.
+   * @throws when `path` is not absolute; `target` may be relative, read from the link's directory.
    */
   makeLink(path: string, target: string): void;
 }
