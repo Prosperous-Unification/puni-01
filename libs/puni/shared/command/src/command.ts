@@ -8,9 +8,10 @@ export interface Io {
 
 /**
  * The exit code of a command: 0 success, 1 a judgement failed or the repository is defective, 2
- * the command line named something the repository does not have. A pass-through command, once it
- * has started the command it passes through, returns that command's own exit code, 0 to 255,
- * unchanged; so the type is every exit code a process can have.
+ * the command line is refused or names something the repository does not have; 3, an unexpected
+ * failure, is never a command's own ({@link unexpectedFailureExitCode}). A pass-through command
+ * that has started the command it passes through returns that command's own exit code, 0 to
+ * 255, unchanged; so the type is every exit code a process can have.
  */
 export type CommandExitCode = number;
 

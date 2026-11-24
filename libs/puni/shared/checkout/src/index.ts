@@ -45,4 +45,5 @@ export {
   repositoryTypes,
 } from './registry';
 export { indexDirectory, indexFile, renderIndex } from './render-index';
+export { placePage, type WikiSection, wikiSections } from './wiki-sections';
 export { countWords } from './word-count';

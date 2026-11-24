@@ -7,8 +7,10 @@ import cliPackage from '../package.json' with { type: 'json' };
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 /**
- * The file the `build` target writes. The `test` target depends on `build`, so under Nx this is
- * the bundle of the source under test; run alone, the test refuses a missing bundle.
+ * The file the `build` target writes: the app's own code in one file, its packages left to
+ * `node_modules` (`--packages external`), because configurable-tree-traversal's ESM entry requires
+ * its CommonJS file at run time. The `test` target depends on `build`, so under Nx this is the
+ * bundle of the source under test; run alone, the test refuses a missing bundle.
  */
 const bundle = new URL('../../../../dist/apps/puni/cli/puni.js', import.meta.url).pathname;
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
@@ -55,7 +57,7 @@ describe('the built puni.js', () => {
     runGit(join(parent, 'shop-records'), ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 24 rules, no findings.\n',
+      stdout: 'ok: system-state, 27 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({

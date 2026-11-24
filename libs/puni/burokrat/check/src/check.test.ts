@@ -16,7 +16,7 @@ import {
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
+import { agentsWordBudget, indexWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
 import { digestRulesSection } from './agents-rules';
 import {
   type CheckHost,
@@ -43,8 +43,10 @@ import {
   requireReadFirst,
   requireReadWhen,
   requireScope,
+  requireSection,
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
+import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
@@ -260,9 +262,10 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'index.current',
       path: 'wiki/index',
-      message: 'cannot be generated: 2 index.read-when, index.read-first or index.scope findings',
+      message:
+        'cannot be generated: 2 index.read-when, index.read-first, index.scope or index.section findings',
       remedy:
-        'fix the index.read-when, index.read-first and index.scope findings, then run `bun run puni burokrat wiki index`',
+        'fix the index.read-when, index.read-first, index.scope and index.section findings, then run `bun run puni burokrat wiki index`',
     },
   ],
   [
@@ -307,6 +310,68 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.scope',
       path: 'libs/two/project.json',
       message: 'project two has no scope:<name> tag',
+    },
+  ],
+  [
+    'a page in a directory that is no section',
+    requireSection,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/ops/deploy.md',
+        '---\ntitle: Deploy\nread-when: deploying\n---\n',
+      );
+    },
+    {
+      rule: 'index.section',
+      path: 'wiki/ops/deploy.md',
+      message: 'lies in wiki/ops/, which is not wiki/ or a section (wiki/concepts/, wiki/how-to/)',
+    },
+  ],
+  [
+    'a page nested below a section',
+    requireSection,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/how-to/ops/deploy.md',
+        '---\ntitle: Deploy\nread-when: deploying\n---\n',
+      );
+    },
+    {
+      rule: 'index.section',
+      path: 'wiki/how-to/ops/deploy.md',
+      message:
+        'lies in wiki/how-to/ops/, which is not wiki/ or a section (wiki/concepts/, wiki/how-to/)',
+    },
+  ],
+  [
+    'a page over budget',
+    limitPageWords,
+    () => {
+      writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget + 1));
+    },
+    {
+      rule: 'docs.words',
+      path: 'wiki/how-to/deploy.md',
+      message: `has ${String(pageWordBudget + 1)} words; at most ${String(pageWordBudget)}`,
+    },
+  ],
+  [
+    'a page naming a symbol no source file holds',
+    judgeDocSymbols,
+    () => {
+      writeRepositoryFile(root, 'libs/two/src/index.ts', 'export const renderIndex = 1;\n');
+      writeRepositoryFile(
+        root,
+        'wiki/how-to/deploy.md',
+        '---\ntitle: Deploy\nread-when: deploying\n---\n\nCall `renderIndex`, then `renderPages(pages)`; in prose, renderGone is no symbol.\n',
+      );
+    },
+    {
+      rule: 'docs.symbols',
+      path: 'wiki/how-to/deploy.md',
+      message: 'names renderPages, which no source file holds',
     },
   ],
   [
@@ -708,6 +773,24 @@ describe('each rule finds its breach', () => {
 });
 
 describe('rule boundaries', () => {
+  test('docs.words holds a page of exactly the budget and judges only wiki pages', () => {
+    writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget));
+    writeRepositoryFile(root, 'README.md', words(pageWordBudget + 1));
+    expect(judge(limitPageWords)).toEqual([]);
+  });
+
+  test('docs.symbols accepts a symbol only a JSON, YAML or shell file holds', () => {
+    writeRepositoryFile(root, 'config/settings.json', '{ "retryLimit": 3 }\n');
+    writeRepositoryFile(root, 'config/ci.yml', 'cacheKey: x\n');
+    writeRepositoryFile(root, 'bin/run.sh', 'PUNI_HOME=/x\n');
+    writeRepositoryFile(
+      root,
+      'wiki/how-to/deploy.md',
+      '---\ntitle: Deploy\nread-when: deploying\n---\n\nSet `retryLimit`, `cacheKey` and `PUNI_HOME`.\n',
+    );
+    expect(judge(judgeDocSymbols)).toEqual([]);
+  });
+
   test('a repository without nx.json holds no workspace: nx.sync and ci.gate judge nothing', () => {
     rmSync(join(root, 'nx.json'));
     rmSync(join(root, '.github'), { recursive: true });
@@ -941,7 +1024,7 @@ describe('a link target the file system cannot describe is missing, not a crash'
     writeFileSync(join(root, 'wiki/index'), 'x\n');
     expect(runCheck({ project: 'one' })).toEqual({
       code: 0,
-      stdout: 'ok: system-state, project one, 9 rules, no findings.\n',
+      stdout: 'ok: system-state, project one, 11 rules, no findings.\n',
     });
   });
 });

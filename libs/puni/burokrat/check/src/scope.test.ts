@@ -17,7 +17,7 @@ import {
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
+import { agentsWordBudget, indexWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { formatFinding } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
@@ -125,7 +125,12 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'wiki/ops/tools.md',
-        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope` and `demo burokrat nope`.\n',
+        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`.\n',
+      );
+      writeRepositoryFile(
+        root,
+        'wiki/how-to/long.md',
+        `---\ntitle: Long\nread-when: reading long\n---\n\n${'word '.repeat(pageWordBudget)}\n`,
       );
       rmSync(join(root, '.github'), { recursive: true });
     },
@@ -200,6 +205,7 @@ describe('every project check, the cross-project check and the whole-level rules
         'index.read-first',
         'index.read-when',
         'index.scope',
+        'index.section',
         'index.words',
         'links.resolve',
         'readme.exists',
@@ -208,6 +214,8 @@ describe('every project check, the cross-project check and the whole-level rules
         'project.targets',
         'docs.paths',
         'docs.commands',
+        'docs.symbols',
+        'docs.words',
         'agents.records',
         'ci.gate',
         'agents.rules',
