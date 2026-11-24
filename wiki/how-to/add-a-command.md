@@ -19,7 +19,7 @@ The first leaf of a group with none also adds what step 3 of
 1. `contract.ts`: the request type `{ readonly kind: '<sub-group> <leaf>'; … }`, any new
    capability, and the command key in the `…Exports` interface: `<role><Group><Leaf>Command`.
 2. `<leaf>.command.ts`: export `<leaf>Parser`, an Optique parser yielding the request, and
-   `create<Leaf>Command`, a factory destructuring what it uses and returning a `Command` whose
+   `create<Leaf>Command`, a factory destructuring what it uses and returning a [`Command`](../../libs/puni/shared/command/src/command.ts#Command) whose
    `run(request, io)` writes through `io` and returns the exit code. JSDoc says every outcome.
 3. The work goes in a `.feature.ts` with its rules and resources, failures in `failures.ts`. A leaf
    that only prints needs none; a leaf that files a record builds on `@puni/shared-records`, as
@@ -30,7 +30,7 @@ The first leaf of a group with none also adds what step 3 of
    does. The brief, one sentence in Optique's `message` template, is the leaf's line in help. If the new leaf makes the group's brief untrue, rewrite it; if it makes the
    library's `metadata.readWhen` or `metadata.readFirst` untrue, rewrite them as
    [documentation](../concepts/documentation.md#how-an-agent-finds-it) says.
-5. `module.ts`: register each service and add the command key to its exported service keys, as
+5. `module.ts`: register each service and add the command key to `exportedServiceKeys`, as
    [dependency injection](../concepts/dependency-injection.md) says. `module.check.ts`: supply
    any new requirement.
 

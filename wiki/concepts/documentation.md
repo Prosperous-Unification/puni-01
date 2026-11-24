@@ -27,7 +27,7 @@ gives every export; only what spans libraries is a wiki page.
 Each layer is short, and names the next:
 
 1. `AGENTS.md`, read every session: the rules, the gate, and the map's command.
-2. The root of the map, `bun run puni burokrat wiki map`, which the SessionStart hook of
+2. The root of the map, `bun run puni burokrat wiki map`, which the `SessionStart` hook of
    `.claude/settings.json` prints into every Claude Code session (or the error that stopped it,
    with its fix): a "Read when" line per page, by section, and a line per top-level partition.
 3. A section or partition, `bun run puni burokrat wiki map <name>`: a "Read when" line per page,

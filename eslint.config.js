@@ -9,7 +9,7 @@ import { builtinModules } from 'node:module';
 /**
  * File kinds and the one direction between them (command → feature → rule → resource → port),
  * declared by suffix. Wiring names (`contract`, `failures`, `group`, `index`, `module`,
- * `module.check`) count only at the root of a library's `src`; any other library file with no suffix is
+ * `module.check`) count only at a library's `src/` root; any other library file with no suffix is
  * domain: pure code that imports no other kind and no runtime. Tests and the testing library are
  * free of the kind blocks; no other file imports a test, and every file is barred from another
  * library's files, from dynamic imports and from `process.exit`. Library code reads no clock but
@@ -31,7 +31,7 @@ const forbiddenKinds = {
   domain: kinds,
 };
 
-/** Each wiring name at the root of a library's `src` and the kinds its file may not import. */
+/** Each wiring name at a library's `src/` root and the kinds its file may not import. */
 const forbiddenByWiring = {
   contract: kinds,
   failures: kinds,
@@ -252,7 +252,7 @@ function libraryBlock(kind) {
   };
 }
 
-/** The block of the wiring file `name` at the root of each library's `src`. */
+/** The block of the wiring file `name` at each library's `src/` root. */
 function wiringBlock(name) {
   return {
     files: wiringRoots(name),
@@ -268,6 +268,28 @@ function wiringBlock(name) {
 }
 
 const bannedNames = ['data', 'result', 'obj', 'tmp', 'item', 'handle'];
+
+/**
+ * The libraries tagged `type:plugin`, the tech-specific side of a shared interface: only they
+ * import a language's compiler, so the core stays free of it. The lint test pins this list to
+ * the tags.
+ */
+const pluginLibraries = ['libs/puni/shared/nx', 'libs/puni/shared/typescript'];
+const compilerMessage =
+  'only a type:plugin library imports the TypeScript compiler; reach it through its interface';
+const compilerImports = {
+  files: ['libs/**/*.ts', 'apps/**/*.ts'],
+  ignores: pluginLibraries.map((library) => `${library}/**`),
+  rules: {
+    '@typescript-eslint/no-restricted-imports': [
+      'error',
+      {
+        paths: [{ name: 'typescript', message: compilerMessage }],
+        patterns: [{ group: ['@typescript/*'], message: compilerMessage }],
+      },
+    ],
+  },
+};
 
 export default tseslint.config(
   { ignores: ['dist/', '.nx/', 'node_modules/', '.worktrees/'] },
@@ -356,11 +378,16 @@ export default tseslint.config(
       '@typescript-eslint/no-invalid-void-type': 'off',
     },
   },
+  compilerImports,
   ...Object.keys(forbiddenKinds).map(libraryBlock),
   ...Object.keys(forbiddenByWiring).map(wiringBlock),
   {
-    // Repositories live in the adapters library, so its module.ts is the one that registers them.
-    files: ['libs/puni/shared/adapters/src/module.ts'],
+    // Repositories live in the adapters library, and in a plugin library the one that loads its
+    // tool, so their module.ts files are the ones that register them.
+    files: [
+      'libs/puni/shared/adapters/src/module.ts',
+      ...pluginLibraries.map((library) => `${library}/src/module.ts`),
+    ],
     rules: {
       ...restrictImports(
         ...libraryImports(forbidKinds('module.ts', ['port']), false),

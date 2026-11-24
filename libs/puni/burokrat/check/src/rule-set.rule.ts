@@ -133,8 +133,8 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
  * repository, judging only the references that leave the linking file's project (a symlink's
- * target among them), and, before epoch 3, the symbols documentation names, which a project
- * check leaves to this run.
+ * target among them), and the symbols documentation names, which a project check leaves to
+ * this run.
  */
 export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
@@ -142,6 +142,7 @@ export const crossProjectRules: readonly Rule[] = [
   judgeDocPaths,
   judgeDocSymbols,
   judgeDocReferences,
+  judgeDocSpans,
   judgeEntryKinds,
 ];
 
@@ -171,7 +172,7 @@ export const checkRules: CheckRules = {
  * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
  * listed.
  */
-export const retiredRules: Readonly<Record<string, number>> = { 'docs.symbols': 3 };
+export const retiredRules: Readonly<Record<string, number>> = {};
 
 /** The latest rules epoch of {@link checkRules}. */
 export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

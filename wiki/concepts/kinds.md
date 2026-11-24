@@ -18,7 +18,7 @@ each kind may import ([`forbiddenKinds`](../../eslint.config.js#forbiddenKinds),
 - **rule** (`.rule.ts`): one judgement, from a reading to findings.
 - **resource** (`.resource.ts`): the invariants of one aggregate.
 - **repository** (`.repository.ts`): runtime access implementing a port, in
-  `libs/puni/shared/adapters`.
+  `libs/puni/shared/adapters`, or loading a plugin library's tool, in that library.
 - **port** (`.port.ts`): an interface a repository implements, in `libs/puni/shared/ports`.
 - **wiring**: `contract.ts`, `failures.ts`, `group.ts`, `index.ts`, `module.ts`,
   `module.check.ts`. `module.ts` imports only files of a kind and the wiring, so nothing it
@@ -28,7 +28,7 @@ each kind may import ([`forbiddenKinds`](../../eslint.config.js#forbiddenKinds),
 The direction is command → feature → rule → resource → port. A command sees its feature only as a
 `contract.ts` type; `module.ts` joins them. Only repositories and the app reach the runtime,
 ambient time and the console included: library code that needs the time declares `clock: Clock`
-in its requirements, as `records.resource.ts` does, and prints only through a command's `Io`.
+in its requirements, as `records.resource.ts` does, and prints only through a command's [`Io`](../../libs/puni/shared/command/src/command.ts#Io).
 
 Which libraries there are and what they may import of each other is
 [libraries](libraries.md); how `module.ts` joins the kinds is

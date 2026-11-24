@@ -16,7 +16,7 @@ const runLog: RecordAddLeaf<'run log'> = {
 export const runLogParser = recordAddParser(runLog);
 
 /**
- * The `run log` command: files the run in `bur/assessments` of the records repository as
+ * The `run log` command: files the run in `bur/assessments/` of the records repository as
  * `createRecordAddCommand` of `@puni/shared-records` says, every outcome and exit code included.
  */
 export const createRunLogCommand = createRecordAddCommand(runLog);

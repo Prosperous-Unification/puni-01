@@ -87,30 +87,29 @@ export function isSymbolName(word: string): boolean {
   );
 }
 
-/** The extension that makes a dotted span a file name (`render-map.ts`, `puni.json`). */
-const fileExtension = /\.(?:[cm]?[jt]sx?|json|md|ya?ml|toml|sh|txt|lock)$/u;
-
-/**
- * The code symbol an inline code span names, or `undefined` when it reads as anything else: the
- * span is one name or a dotted chain of names, `()` after it allowed (`listCommands()`,
- * `CheckRules.sets`), whose first name reads as a symbol by {@link isSymbolName} and whose last is no
- * file extension. So a key path (`metadata.readWhen`), a member of a runtime object
- * (`process.exitCode`), a file name, a path, a command, a flag and a single word are not.
- */
-export function readSymbolSpan(span: string): string | undefined {
-  const chain = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?:\(\))?$/u.exec(span)?.[1];
-  if (chain === undefined || fileExtension.test(chain)) return undefined;
-  return isSymbolName(chain.split('.')[0] ?? '') ? chain : undefined;
+/** One piece of code in a text, and the 0-based line of the text it stands on. */
+export interface CodeLine {
+  readonly offset: number;
+  readonly code: string;
 }
 
 /**
- * The inline code spans of the Markdown `text` that are not the text of a link: those outside
- * fenced code blocks, once every inline link is dropped from its line.
+ * Every piece of code in `text` with its line: each inline code span outside fenced blocks, on
+ * one line, and, when `fenced`, each line of a fenced block.
  */
-export function listUnlinkedCode(text: string): string[] {
-  return splitFences(text).prose.flatMap((line) =>
-    [...line.replace(/\[[^\]]*\]\([^)]*\)/gu, '').matchAll(/`([^`]+)`/gu)].map(
-      (span) => span[1] ?? '',
-    ),
-  );
+export function listCodeLines(text: string, fenced: boolean): CodeLine[] {
+  const pieces: CodeLine[] = [];
+  let inFence = false;
+  for (const [offset, line] of text.split('\n').entries()) {
+    if (/^\s*(```|~~~)/u.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      if (fenced) pieces.push({ offset, code: line });
+      continue;
+    }
+    for (const span of line.matchAll(/`([^`]+)`/gu)) pieces.push({ offset, code: span[1] ?? '' });
+  }
+  return pieces;
 }

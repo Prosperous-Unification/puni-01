@@ -317,6 +317,45 @@ describe('the plugin boundary', () => {
     expect(await readAllowedTags('apps/puni/cli/src/x.ts', 'scope:app')).toEqual(['*']);
   });
 
+  test.each([
+    ['a shared library', 'libs/puni/shared/checkout/src/x.ts', "import ts from 'typescript';"],
+    ['a group', `${check}/x.ts`, "import type ts from 'typescript';"],
+    ['a test', `${check}/x.test.ts`, "import { version } from '@typescript/old';"],
+    ['the app', 'apps/puni/cli/src/x.ts', "import ts from 'typescript';"],
+  ])('%s importing the TypeScript compiler is refused', async (_name, path, source) => {
+    expect(await lintRules(path, `${source}\nexport {};`)).toContain(
+      '@typescript-eslint/no-restricted-imports',
+    );
+  });
+
+  test('a plugin library may import the TypeScript compiler', async () => {
+    expect(
+      await lintRules(
+        'libs/puni/shared/typescript/src/x.ts',
+        "import type ts from 'typescript';\n\n/** A. */\nexport type A = typeof ts;",
+      ),
+    ).not.toContain('@typescript-eslint/no-restricted-imports');
+  });
+
+  test('the libraries free to import the compiler are those tagged type:plugin', async () => {
+    const plugins: string[] = [];
+    for (const path of new Bun.Glob('libs/**/project.json').scanSync({ cwd: root })) {
+      const project = (await Bun.file(join(root, path)).json()) as { tags?: string[] };
+      if (project.tags?.includes('type:plugin') === true)
+        plugins.push(path.replace('/project.json', ''));
+    }
+    for (const library of plugins) {
+      const config = (await eslint.calculateConfigForFile(join(root, library, 'src/x.ts'))) as {
+        rules?: Record<string, unknown>;
+      };
+      expect([library, config.rules?.['@typescript-eslint/no-restricted-imports']]).toEqual([
+        library,
+        undefined,
+      ]);
+    }
+    expect(plugins.sort()).toEqual(['libs/puni/shared/nx', 'libs/puni/shared/typescript']);
+  });
+
   test.each(['nx', 'typescript'])('the %s library is a plugin', async (name) => {
     const project: unknown = await Bun.file(
       join(root, `libs/puni/shared/${name}/project.json`),

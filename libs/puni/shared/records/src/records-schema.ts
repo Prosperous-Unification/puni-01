@@ -4,7 +4,7 @@ export { type RecordKind, recordDirectories, recordKinds } from '@puni/shared-ch
 
 /**
  * The top level of a records repository: each allowed name and whether it is a directory.
- * `dash` holds anything and is not inspected; `nav` and `bur` hold only kind directories.
+ * `dash/` holds anything and is not inspected; `nav/` and `bur/` hold only kind directories.
  */
 export const recordsTopLevel: Readonly<Record<string, 'file' | 'directory'>> = {
   '.github': 'directory',

@@ -28,7 +28,7 @@ a planned group with none, such as `libs/puni/dash/mcp`, for one without.
 4. `root-parser.ts`: `command('<group>', <group>Parser, { brief })` in the role's parser, inside an
    `or(…)` once the role has two groups; then step 6 of
    [adding a command](add-a-command.md#in-the-app) per leaf.
-5. `composition.ts`, once it has a module: the module in the last withInstalledModules call.
+5. `composition.ts`, once it has a module: the module in the last `withInstalledModules`.
 6. `main.ts`, once it has leaves: the `…Exports` type in
    [`CommandExports`](../../apps/puni/cli/src/main.ts#CommandExports), then step 7 of
    [adding a command](add-a-command.md#in-the-app) per leaf. A bare group needs no case:
