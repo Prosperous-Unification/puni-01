@@ -1,3 +1,4 @@
+import type { ReviewCriterion } from './review-record';
 import type {
   CheckoutFiles,
   CheckoutFilesResource,
@@ -22,6 +23,8 @@ export interface RecordDraft {
   readonly summary: string;
   /** The system-state commit the record was written against. */
   readonly commit: string;
+  /** Markdown body supplied directly. */
+  readonly body?: string | undefined;
   /**
    * The absolute path of the file holding the body; without one the body is `# <title>`, then a
    * `## <heading>` for each of `sections`, each section empty.
@@ -49,6 +52,7 @@ export interface RecordsCatalog {
    * records rules require, each value trimmed and judged by them, then the body. Nothing is
    * committed.
    *
+   * @throws RecordBodyRefused when a structured review's body is invalid, or both body sources are supplied.
    * @throws RecordValueRefused naming the key and its expected form when a value is refused.
    * @throws RecordTitleUnsluggable when the title has no letter or digit.
    * @throws RecordExists when the file already exists.
@@ -106,4 +110,24 @@ export interface RecordsRequirements {
 export interface RecordsExports {
   readonly recordsCatalog: RecordsCatalog;
   readonly recordFiling: RecordFiling;
+  readonly reviewTemplates: ReviewTemplates;
+}
+
+/** An exact criteria-map version. */
+export interface ReviewTemplateReference {
+  readonly id: string;
+  readonly version: string;
+}
+
+/** A versioned map whose criterion IDs are stable within that version. */
+export interface ReviewTemplate extends ReviewTemplateReference {
+  readonly criteria: readonly ReviewCriterion[];
+}
+
+/** The criteria maps shipped by PUNI and those in a governed repository. */
+export interface ReviewTemplates {
+  /** Lists available template versions, sorted by ID then numeric version. */
+  list(root: string): readonly ReviewTemplateReference[];
+  /** Loads a named version, or the highest version of an ID when omitted. */
+  load(root: string, id: string, version?: string): ReviewTemplate;
 }

@@ -34,6 +34,8 @@
       "@puni/burokrat-repo": ["./libs/puni/burokrat/repo/src/index.ts"],
       "@puni/burokrat-adr": ["./libs/puni/burokrat/adr/src/index.ts"],
       "@puni/burokrat-change": ["./libs/puni/burokrat/change/src/index.ts"],
+      "@puni/burokrat-skills": ["./libs/puni/burokrat/skills/src/index.ts"],
+      "@puni/burokrat-review": ["./libs/puni/burokrat/review/src/index.ts"],
       "@puni/burokrat-assess": ["./libs/puni/burokrat/assess/src/index.ts"],
       "@puni/dash-ops": ["./libs/puni/dash/ops/src/index.ts"],
       "@puni/dash-run": ["./libs/puni/dash/run/src/index.ts"],

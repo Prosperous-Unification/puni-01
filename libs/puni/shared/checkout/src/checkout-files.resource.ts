@@ -79,6 +79,31 @@ function normaliseWritten(path: string, type: RepositoryType, directory: boolean
   return normal;
 }
 
+/** Makes each missing parent of a new file, checking directory types without following links. */
+function ensureCreateParents(fileSystem: FileSystem, root: string, path: string): void {
+  const parents = ['.'];
+  const directory = posix.dirname(path);
+  if (directory !== '.') {
+    for (const segment of directory.split('/')) {
+      parents.push(posix.join(parents.at(-1) ?? '.', segment));
+    }
+  }
+  for (const parent of parents) {
+    const absolute = join(root, parent);
+    const kind = fileSystem.stat(absolute, 'no-follow');
+    if (kind === 'directory') continue;
+    if (kind !== 'absent') refuse(path, `${parent} is a ${kind}; expected a directory`);
+    fileSystem.makeDirectory(absolute);
+    if (fileSystem.stat(absolute, 'no-follow') !== 'directory') {
+      refuse(path, `${parent} did not become a directory`);
+    }
+  }
+  for (const parent of parents) {
+    const kind = fileSystem.stat(join(root, parent), 'no-follow');
+    if (kind !== 'directory') refuse(path, `${parent} is ${kind}; expected a directory`);
+  }
+}
+
 /** The files of `listing`, sorted by their bytes; a failure is the one defect of every listing. */
 function requireListed(listing: GitListing): string[] {
   if ('failure' in listing) {
@@ -144,6 +169,17 @@ function openCheckout(
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
+    createFile(path, text) {
+      const normal = normaliseWritten(path, type, false);
+      ensureCreateParents(fileSystem, root, normal);
+      try {
+        fileSystem.writeNew(join(root, normal), text);
+        return 'created';
+      } catch (cause) {
+        if (cause instanceof Error && 'code' in cause && cause.code === 'EEXIST') return 'exists';
+        throw cause;
+      }
+    },
     remove(path) {
       fileSystem.remove(join(root, normaliseWritten(path, type, false)));
     },
@@ -171,6 +207,7 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
     listVisible: (scope) => listStaged().filter((path) => ownsPath(scope, path)),
     listVisibleEntries: () => listStaged().map((path) => ({ path, kind: 'file' })),
     write: readOnly,
+    createFile: readOnly,
     remove: readOnly,
     removeEmptyDirectories: readOnly,
   };

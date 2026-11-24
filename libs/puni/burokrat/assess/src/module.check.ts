@@ -14,6 +14,7 @@ DiBag.createBuilder()
   .withInstalledModules([burokratAssessModule])
   .withServices({
     checkoutRegistry: () => requirements.checkoutRegistry,
+    reviewTemplates: () => requirements.reviewTemplates,
     fileSystem: () => requirements.fileSystem,
     git: () => requirements.git,
   })

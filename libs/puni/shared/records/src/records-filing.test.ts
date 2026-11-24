@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { checkoutModule, FileUnreadable, parseFrontMatter } from '@puni/shared-checkout';
+import {
+  CheckoutPathRefused,
+  checkoutModule,
+  FileUnreadable,
+  parseFrontMatter,
+} from '@puni/shared-checkout';
 import { closeAfterEach, type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { RecordDraft } from './contract';
@@ -25,12 +30,33 @@ const draft: RecordDraft = {
   commit: 'abc1234',
 };
 
-function open(tree: MemoryTree = {}, now?: Date) {
-  const host = memoryHost(tree, now === undefined ? {} : { now });
+function open(
+  tree: MemoryTree = {},
+  options: {
+    readonly now?: Date;
+    readonly beforeBodyRead?: (host: ReturnType<typeof memoryHost>) => void;
+    readonly afterMakeDirectory?: (path: string, host: ReturnType<typeof memoryHost>) => void;
+  } = {},
+) {
+  const host = memoryHost(tree, options.now === undefined ? {} : { now: options.now });
+  const fileSystem = host.services.fileSystem();
   const container = track(
     DiBag.createBuilder()
       .withInstalledModules([checkoutModule, recordsModule])
-      .withServices(host.services)
+      .withServices({
+        ...host.services,
+        fileSystem: (): typeof fileSystem => ({
+          ...fileSystem,
+          readText(path) {
+            if (path === '/notes/body.md') options.beforeBodyRead?.(host);
+            return fileSystem.readText(path);
+          },
+          makeDirectory(path) {
+            fileSystem.makeDirectory(path);
+            options.afterMakeDirectory?.(path, host);
+          },
+        }),
+      })
       .buildContainer(),
   );
   const files = container.resolve('checkoutFiles').open('/r', 'system-records');
@@ -89,7 +115,7 @@ describe('recordsCatalog.file', () => {
     const zone = process.env['TZ'];
     process.env['TZ'] = 'Pacific/Kiritimati';
     try {
-      expect(open({}, new Date('2031-04-05T23:30:00Z')).file()).toStartWith(
+      expect(open({}, { now: new Date('2031-04-05T23:30:00Z') }).file()).toStartWith(
         'nav/plans/2031-04-05-',
       );
     } finally {
@@ -157,6 +183,42 @@ describe('recordsCatalog.file', () => {
           'nav/plans/2031-04-05-run-k3s-first-steps.md already exists in the records repository; a record is never overwritten, so give another title or wait a day',
     );
     expect(host.nodes.get(existing)).toBe('kept');
+  });
+
+  test('a record filed while the draft is read is kept', () => {
+    const path = '/r/nav/plans/2031-04-05-run-k3s-first-steps.md';
+    const { host, file } = open(
+      { '/notes/body.md': 'New draft.' },
+      {
+        beforeBodyRead({ nodes }) {
+          nodes.set(path, 'Concurrent record.');
+        },
+      },
+    );
+    throws(() => file({ bodyFile: '/notes/body.md' }), RecordExists);
+    expect(host.nodes.get(path)).toBe('Concurrent record.');
+  });
+
+  test.each(['nav', 'nav/plans'])('refuses a symlink at %s before publishing a record', (path) => {
+    const { host, file } = open({
+      [`/r/${path}`]: { symlink: '/outside' },
+      '/outside': { directory: true },
+    });
+    throws(() => file(), CheckoutPathRefused);
+    expect([...host.nodes.keys()]).toEqual([`/r/${path}`, '/outside']);
+  });
+
+  test('checks a newly made parent again before creating its child', () => {
+    const { host, file } = open(
+      { '/r/existing': 'Keep.', '/outside': { directory: true } },
+      {
+        afterMakeDirectory(path, { nodes }) {
+          if (path === '/r/nav') nodes.set(path, { symlink: '/outside' });
+        },
+      },
+    );
+    throws(() => file(), CheckoutPathRefused);
+    expect(host.nodes.has('/r/nav/plans')).toBe(false);
   });
 
   test('a missing body file is refused; one that cannot be read is FileUnreadable', () => {

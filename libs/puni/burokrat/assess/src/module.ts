@@ -5,6 +5,8 @@ import { createOutcomeAssessment } from './outcome-assessment.feature';
 import { createOutcomesCommand } from './outcomes.command';
 import { createRateCards } from './rate-card.resource';
 
+import { createTemplatesCommand } from './templates.command';
+
 /** `puni burokrat assess`; the host supplies `checkoutRegistry`, `fileSystem` and `git`. */
 export const burokratAssessModule = DiBag.createBuilder()
   .withServices({
@@ -13,8 +15,11 @@ export const burokratAssessModule = DiBag.createBuilder()
     harnessLogs: createHarnessLogs,
   })
   .withServices({ outcomeAssessment: createOutcomeAssessment })
-  .withServices({ burokratAssessOutcomesCommand: createOutcomesCommand })
+  .withServices({
+    burokratAssessOutcomesCommand: createOutcomesCommand,
+    burokratAssessTemplatesCommand: createTemplatesCommand,
+  })
   .buildModule({
-    exportedServiceKeys: ['burokratAssessOutcomesCommand'],
+    exportedServiceKeys: ['burokratAssessOutcomesCommand', 'burokratAssessTemplatesCommand'],
     moduleLabel: 'puni-burokrat-assess',
   });

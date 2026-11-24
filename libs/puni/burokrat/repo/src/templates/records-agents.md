@@ -20,7 +20,9 @@ no directory that is not named here.
 - `bur/`: what was decided, measured or retired. `adr/` holds decisions that
   are hard to reverse, surprising, and had real alternatives, with the options
   they rejected, `assessments/` holds measured results and run output worth
-  keeping, `archive/` holds material retired from `{{name}}`.
+  keeping, `findings/` holds scored code reviews, `assessment-reviews/` holds
+  reviews using a versioned assessment template, and `archive/` holds material
+  retired from `{{name}}`.
 - `dash/`: what running development and operations needs now, in any
   format.
 
