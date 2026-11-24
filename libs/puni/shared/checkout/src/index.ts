@@ -1,3 +1,9 @@
+export {
+  agentsSections,
+  agentsTemplates,
+  type MarkdownHeading,
+  readHeadings,
+} from './agents-headings';
 export { compareBytes } from './byte-order';
 export type {
   CheckoutEntry,
@@ -36,7 +42,7 @@ export {
 export { commitMessagePath, leavesRoot } from './paths';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
 export { nameProject, readProjectFiles } from './project-files';
-export { readRulesSection } from './rules-section';
+export { readRulesSection, rulesSectionTitle } from './rules-section';
 export { seedFiles } from './seed-files';
 export {
   formatRegistry,

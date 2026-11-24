@@ -1,9 +1,9 @@
-import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
+import type { FileSystem, Git, GitIndexEntry, PathKind } from '@puni/shared-ports';
 import type { IndexDrift, IndexSources } from './index-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
-export type { FileSystem, Git, GitListing, PathKind } from '@puni/shared-ports';
+export type { FileSystem, Git, GitIndexEntry, GitListing, PathKind } from '@puni/shared-ports';
 
 /** What the checkout module needs from its host. */
 export interface CheckoutRequirements {
@@ -78,6 +78,13 @@ export interface CheckoutFiles {
   listVisible(scope: CheckScope): readonly string[];
   /** Every path git shows that exists in the working tree, of whatever kind. */
   listVisibleEntries(): readonly CheckoutEntry[];
+  /**
+   * The entries of the git index that `scope` owns, each by the kind its mode names, whatever the
+   * working tree holds there: the one listing that shows a symlink's target as git records it,
+   * and a gitlink at all. A staged or commit view lists none, since its visible files already
+   * read each symlink as its target text.
+   */
+  listIndexEntries(scope: CheckScope): readonly GitIndexEntry[];
   /**
    * Writes `text` at `path` in the checkout's write area, creating its directories, replacing a
    * file there. A system-state checkout writes only inside `wiki/index/`; a records checkout only

@@ -8,6 +8,8 @@ export type {
   GitChange,
   GitCommit,
   GitCommits,
+  GitIndexEntries,
+  GitIndexEntry,
   GitListing,
   GitMerge,
   GitMerges,

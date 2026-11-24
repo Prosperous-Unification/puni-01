@@ -14,7 +14,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
+import { isAbsolute } from 'node:path';
 import type { DirectoryEntry, FileSystem, PathKind } from '@puni/shared-ports';
+import { PathNotAbsolute } from './failures';
 
 interface Described {
   isFile(): boolean;
@@ -72,7 +74,20 @@ function* readLines(path: string): Generator<string> {
   }
 }
 
-/** The {@link FileSystem} of this machine, through `node:fs` and `node:os`. */
+/**
+ * `path`, which a method changing the file system is given.
+ *
+ * @throws PathNotAbsolute when it is relative.
+ */
+function requireAbsolute(path: string): string {
+  if (!isAbsolute(path)) throw new PathNotAbsolute({ details: { path } });
+  return path;
+}
+
+/**
+ * The {@link FileSystem} of this machine, through `node:fs` and `node:os`. A relative path to a
+ * method that changes the file system throws `PathNotAbsolute`.
+ */
 export function createNodeFileSystem(): FileSystem {
   return {
     readText: (path) => readFileSync(path, 'utf8'),
@@ -95,16 +110,16 @@ export function createNodeFileSystem(): FileSystem {
         kind: kindOf(entry),
       })),
     write(path, text) {
-      writeFileSync(path, text);
+      writeFileSync(requireAbsolute(path), text);
     },
     remove(path) {
-      rmSync(path, { recursive: true });
+      rmSync(requireAbsolute(path), { recursive: true });
     },
     makeDirectory(path) {
-      mkdirSync(path, { recursive: true });
+      mkdirSync(requireAbsolute(path), { recursive: true });
     },
     makeLink(path, target) {
-      symlinkSync(target, path);
+      symlinkSync(target, requireAbsolute(path));
     },
   };
 }
