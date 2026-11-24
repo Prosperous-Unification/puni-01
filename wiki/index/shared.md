@@ -10,4 +10,4 @@
 - changing how the file system, git, child processes or the clock are reached on this machine: [puni-shared-adapters](../../libs/puni/shared/adapters/src/index.ts)
 - changing the records schema or how record files are listed, read and filed: [puni-shared-records](../../libs/puni/shared/records/src/contract.ts)
 - changing what the code may ask of the file system, git, child processes or the clock: [puni-shared-ports](../../libs/puni/shared/ports/src/index.ts)
-- writing a test that needs a memory host or a real repository pair: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)
+- writing a test that needs a memory host, a real repository pair or a temporary directory: [puni-shared-testing](../../libs/puni/shared/testing/src/index.ts)

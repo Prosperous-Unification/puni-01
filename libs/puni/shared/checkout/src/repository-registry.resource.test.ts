@@ -1,11 +1,11 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { findDefect, type Finding } from '@puni/shared-failures';
 import {
   fixtureRemotes,
   nodeHostModule,
-  removeFixture,
+  removeScratchDirectoriesAfterEach,
   writeRepositoryFile,
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
@@ -19,6 +19,8 @@ import {
 } from './registry';
 import { makeRegistryPair, type RegistryPair } from './registry.test-host';
 
+const scratchDirectories = removeScratchDirectoriesAfterEach();
+
 let pair: RegistryPair = { state: '', records: '' };
 
 const container = DiBag.createBuilder()
@@ -30,11 +32,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  pair = makeRegistryPair();
-});
-
-afterEach(() => {
-  removeFixture(pair.state);
+  pair = makeRegistryPair(scratchDirectories);
 });
 
 function findRepository(cwd: string): Repository {

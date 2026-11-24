@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, symlinkSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
 import { checkoutModule, formatRegistry, indexDirectory, renderIndex } from '@puni/shared-checkout';
@@ -7,7 +6,9 @@ import { recordDirectories, recordKinds } from '@puni/shared-records';
 import {
   fixtureRemotes,
   nodeHostModule,
+  removeScratchPath,
   runGit,
+  type ScratchDirectoryOwner,
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
@@ -35,6 +36,7 @@ export const fixtureNx = { sync: { globalGenerators: ['@puni/nx-sync:wiki-index'
  * the checkout resources over this machine.
  *
  * @throws Error when the sources have defects; fixtures are expected to be valid here.
+ * @throws ScratchRemovalRefused when `root` does not lie below this process's scratch root.
  */
 export async function regenerateIndex(root: string): Promise<void> {
   const container = DiBag.createBuilder()
@@ -45,7 +47,7 @@ export async function regenerateIndex(root: string): Promise<void> {
     const sources = container.resolve('checkoutWikiIndex').readSources(files);
     if (sources.defects.length > 0)
       throw new Error(`fixture defects: ${JSON.stringify(sources.defects)}`);
-    rmSync(join(root, indexDirectory), { recursive: true, force: true });
+    removeScratchPath(join(root, indexDirectory));
     for (const [path, text] of renderIndex(sources.entries, fixtureCommands)) {
       writeRepositoryFile(root, path, text);
     }
@@ -121,10 +123,12 @@ export interface RepositoryPair {
 
 /**
  * A fresh pair in one temporary directory: `demo` (system-state) and `demo-records`
- * (system-records), each passing every rule of its type. `removeFixture` deletes both.
+ * (system-records), each passing every rule of its type. `scratchDirectories` removes both.
  */
-export async function makeRepositoryPair(): Promise<RepositoryPair> {
-  const parent = mkdtempSync(join(tmpdir(), 'puni-pair-'));
+export async function makeRepositoryPair(
+  scratchDirectories: ScratchDirectoryOwner,
+): Promise<RepositoryPair> {
+  const parent = scratchDirectories.createDirectory('puni-pair-');
   const pair = { state: join(parent, 'demo'), records: join(parent, 'demo-records') };
   await buildStateRepository(pair.state);
   buildRecordsRepository(pair.records);
@@ -132,13 +136,15 @@ export async function makeRepositoryPair(): Promise<RepositoryPair> {
 }
 
 /** The system-state repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRepository(): Promise<string> {
-  return (await makeRepositoryPair()).state;
+export async function makeRepository(scratchDirectories: ScratchDirectoryOwner): Promise<string> {
+  return (await makeRepositoryPair(scratchDirectories)).state;
 }
 
 /** The records repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRecordsRepository(): Promise<string> {
-  return (await makeRepositoryPair()).records;
+export async function makeRecordsRepository(
+  scratchDirectories: ScratchDirectoryOwner,
+): Promise<string> {
+  return (await makeRepositoryPair(scratchDirectories)).records;
 }
 
 /** Front matter for a fixture record: every required key, valid for `path`, then `extra`. */
