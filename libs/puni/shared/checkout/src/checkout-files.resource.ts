@@ -6,6 +6,7 @@ import type {
   CommitCheckout,
   FileSystem,
   Git,
+  GitIndexEntry,
   GitListing,
   NewCheckout,
   NewCheckoutPlace,
@@ -114,6 +115,25 @@ function requireListed(listing: GitListing): string[] {
   return [...listing.files].sort(compareBytes);
 }
 
+/**
+ * Asks git for the index entries of `root` once, on the first call, and answers every later call
+ * the same; a failure is the one defect of every listing.
+ */
+function listIndexOnce(git: Git, root: string): () => readonly GitIndexEntry[] {
+  let listed: readonly GitIndexEntry[] | undefined;
+  return () => {
+    if (listed !== undefined) return listed;
+    const entries = git.listIndexEntries(root);
+    if ('failure' in entries) {
+      throw new CheckoutUnlistable({
+        details: { rule: 'repository.git', path: '.', reason: entries.failure },
+      });
+    }
+    listed = [...entries.entries].sort((left, right) => compareBytes(left.path, right.path));
+    return listed;
+  };
+}
+
 /** Asks `list` once, on the first call, and answers every later call the same. */
 function listOnce(list: () => GitListing): () => string[] {
   let listed: string[] | undefined;
@@ -127,6 +147,7 @@ function openCheckout(
   git: Git,
 ): CheckoutFiles {
   const listGit = listOnce(() => git.listVisibleFiles(root));
+  const listIndex = listIndexOnce(git, root);
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
     fileSystem.stat(absolute(path), 'no-follow');
@@ -155,6 +176,7 @@ function openCheckout(
         const kind = describe(path);
         return kind === 'absent' ? [] : [{ path, kind }];
       }),
+    listIndexEntries: (scope) => listIndex().filter(({ path }) => ownsPath(scope, path)),
     readHeadCommit() {
       const head = git.readHeadCommit(root);
       if ('failure' in head) {
@@ -206,6 +228,7 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
     isShown: (path) => isShownIn(listStaged(), path, () => true),
     listVisible: (scope) => listStaged().filter((path) => ownsPath(scope, path)),
     listVisibleEntries: () => listStaged().map((path) => ({ path, kind: 'file' })),
+    listIndexEntries: () => [],
     write: readOnly,
     createFile: readOnly,
     remove: readOnly,
@@ -251,6 +274,7 @@ function openCommits(
       isShown: (path) => isShownIn(paths, path, () => true),
       listVisible: (scope) => paths.filter((path) => ownsPath(scope, path)),
       listVisibleEntries: () => paths.map((path) => ({ path, kind: 'file' })),
+      listIndexEntries: () => [],
       write: readOnly,
       remove: readOnly,
       removeEmptyDirectories: readOnly,

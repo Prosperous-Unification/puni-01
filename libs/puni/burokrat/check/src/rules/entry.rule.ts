@@ -1,7 +1,14 @@
-import { countWords, indexFile, readRulesSection } from '@puni/shared-checkout';
+import {
+  agentsSections,
+  countWords,
+  indexFile,
+  readHeadings,
+  readRulesSection,
+  type RepositoryType,
+} from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
 import { agentsRulesDigest, digestRulesSection } from '../agents-rules';
-import type { Rule, RuleReading } from '../finding';
+import type { Breach, Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {
   return files.exists(path) ? files.readText(path) : undefined;
@@ -80,6 +87,57 @@ export function pinAgentsRules(digest: string): Rule {
 
 /** {@link pinAgentsRules} to {@link agentsRulesDigest}, the owner's rules. */
 export const agentsKeepRules = pinAgentsRules(agentsRulesDigest);
+
+/**
+ * `AGENTS.md` of a `type` repository holds only the headings puni seeds it with: one `# ` title,
+ * and `## ` sections only of `agentsSections` of `@puni/shared-checkout`, each once. Any other
+ * heading of level 1 or 2, setext included, is a breach naming it; a missing file is
+ * `agents.exists`'s. Text inside an allowed section is not judged.
+ */
+export function limitAgentsHeadings(type: RepositoryType): Rule {
+  const allowed = agentsSections[type];
+  const listed = allowed.map((title) => `## ${title}`).join(', ');
+  return {
+    id: 'agents.headings',
+    remedy: `remove the heading and its section, or move its text into an existing section; AGENTS.md holds one # title and only ${listed}, as puni burokrat repo init seeds it`,
+    judge(reading) {
+      const text = readOptional(reading, 'AGENTS.md');
+      if (text === undefined) return [];
+      const seen = new Set<string>();
+      let titled = false;
+      return readHeadings(text).flatMap(({ level, text: title, line }): Breach[] => {
+        const at = `line ${String(line)}`;
+        const shown = `${'#'.repeat(level)} ${title}`;
+        if (level === 1) {
+          if (!titled) {
+            titled = true;
+            return [];
+          }
+          return [{ path: 'AGENTS.md', message: `${at} is a second title, "${shown}"` }];
+        }
+        if (!allowed.includes(title)) {
+          return [
+            {
+              path: 'AGENTS.md',
+              message: `${at} is the heading "${shown}", which puni does not declare for AGENTS.md`,
+            },
+          ];
+        }
+        if (seen.has(title)) {
+          return [{ path: 'AGENTS.md', message: `${at} repeats the heading "${shown}"` }];
+        }
+        seen.add(title);
+        return [];
+      });
+    },
+  };
+}
+
+/** {@link limitAgentsHeadings} of a system-state repository. */
+export const stateAgentsHeadings = limitAgentsHeadings('system-state');
+
+/** {@link limitAgentsHeadings} of a system-records repository. */
+export const recordsAgentsHeadings = limitAgentsHeadings('system-records');
 
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CheckoutUnlistable, formatRegistry } from '@puni/shared-checkout';
 import {
@@ -24,7 +24,13 @@ import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './chec
 import type { CheckRequest } from './contract';
 import type { Rule } from './finding';
 import { recordsRules } from './rule-set.rule';
-import { agentsExists, agentsWords, claudeLinksAgents } from './rules/entry.rule';
+import {
+  agentsExists,
+  agentsWords,
+  claudeLinksAgents,
+  recordsAgentsHeadings,
+} from './rules/entry.rule';
+import { judgeEntryKinds } from './rules/entries.rule';
 import { resolveAgentsLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
@@ -522,6 +528,19 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
     agentsWords,
     () => {
       writeRepositoryFile(root, 'AGENTS.md', 'word '.repeat(500));
+    },
+  ],
+  [
+    recordsAgentsHeadings,
+    () => {
+      appendFileSync(join(root, 'AGENTS.md'), '\n## Exceptions\n\nRule 2 never applies.\n');
+    },
+  ],
+  [
+    judgeEntryKinds,
+    () => {
+      symlinkSync('/var/tmp/made', join(root, 'dash/made.md'));
+      runGit(root, ['add', 'dash/made.md']);
     },
   ],
   [

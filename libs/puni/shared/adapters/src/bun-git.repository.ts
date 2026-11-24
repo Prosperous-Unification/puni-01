@@ -5,6 +5,8 @@ import type {
   GitChange,
   GitCommit,
   GitCommits,
+  GitIndexEntries,
+  GitIndexEntry,
   GitListing,
   GitMerge,
   GitMerges,
@@ -116,13 +118,23 @@ function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unr
   return addedLines;
 }
 
+/** The kind of index entry each mode git writes names. */
+const indexModes: Readonly<Record<string, GitIndexEntry['kind']>> = {
+  '100644': 'file',
+  '100755': 'file',
+  '120000': 'symlink',
+  '160000': 'gitlink',
+};
+
 /**
  * The {@link Git} of this machine, run in the root through `processRunner`. A git that cannot
  * start is `git could not run: <reason>`; a non-zero exit is
  * `git <command> exited <code>: <first stderr line>`. Visible files are
  * `git ls-files -z --cached --others --exclude-standard`, refused while
- * `git ls-files --unmerged` lists anything; staged files are
- * `git diff --cached --name-only -z --diff-filter=ACMR`, read with `git cat-file blob :<path>`; the
+ * `git ls-files --unmerged` lists anything; index entries are `git ls-files -z --stage`, refused
+ * the same way, a symlink's target read with `git cat-file blob <object>`; staged files are
+ * `git diff --cached --raw -z --diff-filter=ACMR` but for gitlinks, read with
+ * `git cat-file blob :<path>`; the
  * `HEAD` commit is `git rev-parse --short --verify HEAD`. Worktrees are
  * `git worktree list --porcelain -z`; branches `git for-each-ref` over `refs/heads/<prefix>`,
  * `--no-merged=HEAD` for unmerged ones; changed files `git status --porcelain -z
@@ -148,20 +160,56 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
     const outcome = run(root, args);
     return 'failure' in outcome ? outcome : { changed: true };
   };
+  /** Why the index at `root` cannot be listed: it holds unmerged entries, or git failed. */
+  const refuseUnmerged = (root: string): { readonly failure: string } | undefined => {
+    const unmerged = run(root, ['ls-files', '-z', '--unmerged']);
+    if ('failure' in unmerged) return unmerged;
+    const conflicted = [...new Set(split(unmerged.stdout).map((line) => line.split('\t')[1]))];
+    return conflicted.length > 0
+      ? { failure: `the git index has unmerged entries: ${conflicted.join(', ')}` }
+      : undefined;
+  };
   return {
     listVisibleFiles(root): GitListing {
-      const unmerged = run(root, ['ls-files', '-z', '--unmerged']);
-      if ('failure' in unmerged) return unmerged;
-      const conflicted = [...new Set(split(unmerged.stdout).map((line) => line.split('\t')[1]))];
-      if (conflicted.length > 0) {
-        return { failure: `the git index has unmerged entries: ${conflicted.join(', ')}` };
-      }
+      const refused = refuseUnmerged(root);
+      if (refused !== undefined) return refused;
       const visible = run(root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
       return 'failure' in visible ? visible : { files: split(visible.stdout) };
     },
+    listIndexEntries(root): GitIndexEntries {
+      const refused = refuseUnmerged(root);
+      if (refused !== undefined) return refused;
+      const listed = run(root, ['ls-files', '-z', '--stage']);
+      if ('failure' in listed) return listed;
+      const entries: GitIndexEntry[] = [];
+      for (const line of split(listed.stdout)) {
+        const [header = '', path = ''] = line.split('\t');
+        const [mode = '', object = ''] = header.split(' ');
+        const kind = indexModes[mode];
+        if (kind === undefined) return { failure: `the git index holds ${path} in mode ${mode}` };
+        if (kind !== 'symlink') {
+          entries.push({ path, kind });
+          continue;
+        }
+        const target = run(root, ['cat-file', 'blob', object]);
+        if ('failure' in target) return target;
+        entries.push({ path, kind, target: target.stdout });
+      }
+      return { entries };
+    },
     listStagedFiles(root): GitListing {
-      const staged = run(root, ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR']);
-      return 'failure' in staged ? staged : { files: split(staged.stdout) };
+      const staged = run(root, ['diff', '--cached', '--raw', '-z', '--diff-filter=ACMR']);
+      if ('failure' in staged) return staged;
+      const fields = split(staged.stdout);
+      const files: string[] = [];
+      for (let index = 0; index < fields.length; index += 1) {
+        const newMode = (fields[index] ?? '').split(' ')[1];
+        const copiedOrRenamed = /^[CR]/u.test((fields[index] ?? '').split(' ')[4] ?? '');
+        if (copiedOrRenamed) index += 1;
+        index += 1;
+        if (newMode !== '160000') files.push(fields[index] ?? '');
+      }
+      return { files };
     },
     readStagedText(root, path): GitText {
       const blob = run(root, ['cat-file', 'blob', `:${path}`]);

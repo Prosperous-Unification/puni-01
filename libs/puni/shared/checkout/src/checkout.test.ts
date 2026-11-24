@@ -110,6 +110,27 @@ describe('checkoutFiles over a memory file system', () => {
     expect(files.listVisibleEntries()).toContainEqual({ path: 'CLAUDE.md', kind: 'symlink' });
   });
 
+  test('a scope lists the index entries it owns, a symlink with its target, a gitlink', () => {
+    const { container } = openHost(
+      { ...tree, '/r/libs/two/vendor': { directory: true } },
+      { gitlinks: ['/r/libs/two/vendor'] },
+    );
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    const projects = container.resolve('checkoutProjectScope').list(files);
+    const two = projects.find((project) => project.name === 'two');
+    if (two === undefined) throw new Error('two is not a project');
+    expect(files.listIndexEntries({ kind: 'project', project: two, projects })).toEqual([
+      { path: 'libs/two/a.md', kind: 'file' },
+      { path: 'libs/two/project.json', kind: 'file' },
+      { path: 'libs/two/vendor', kind: 'gitlink' },
+    ]);
+    expect(files.listIndexEntries(repositoryScope)).toContainEqual({
+      path: 'CLAUDE.md',
+      kind: 'symlink',
+      target: 'README.md',
+    });
+  });
+
   test.each(['../outside.md', '/etc/hostname', 'a/../../x'])('the path %s is refused', (path) => {
     const files = openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(caught(() => files.readText(path))).toBeInstanceOf(CheckoutPathRefused);
@@ -205,6 +226,7 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['listVisible', (files: Files) => files.listVisible(repositoryScope)],
     ['listVisibleEntries', (files: Files) => files.listVisibleEntries()],
+    ['listIndexEntries', (files: Files) => files.listIndexEntries(repositoryScope)],
     ['the project listing', (files: Files, projects: Projects) => projects.list(files)],
   ] as const)('a git failure makes %s throw the one repository.git defect', (_name, list) => {
     const { container } = openHost(tree, { gitFailure: 'git exploded' });
@@ -242,6 +264,7 @@ describe('the staged view of a checkout', () => {
     );
     const staged = container.resolve('checkoutFiles').openStaged('/r');
     expect(staged.listVisible(repositoryScope)).toEqual(['a.md']);
+    expect(staged.listIndexEntries(repositoryScope)).toEqual([]);
     expect(staged.readText('a.md')).toBe('index');
     expect(caught(() => staged.readText('b.md'))).toBeInstanceOf(StagedTextUnreadable);
     expect(

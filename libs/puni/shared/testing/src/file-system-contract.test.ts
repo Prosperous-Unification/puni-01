@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { chmodSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
@@ -9,6 +17,16 @@ import { createMemoryFileSystem, type MemoryTree } from './memory-host';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
 const scratchDirectories = removeScratchDirectoriesAfterAll();
+
+/** Whether anything, a dangling symlink included, is at the absolute `path` on this machine. */
+function lstatOrAbsent(path: string): 'present' | 'absent' {
+  try {
+    lstatSync(path);
+    return 'present';
+  } catch {
+    return 'absent';
+  }
+}
 
 /** The tree every implementation is judged over, by path below its root. */
 const tree: MemoryTree = {
@@ -190,6 +208,33 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     }
     expect(fileSystem.readText(at('a.md'))).toBe('a');
     fileSystem.remove(at('made'));
+  });
+
+  test('refuses a relative path to every change, changing nothing where the process runs', () => {
+    const probe = 'puni-relative-probe';
+    const changes: readonly (() => void)[] = [
+      () => {
+        fileSystem.write(probe, 'x');
+      },
+      () => {
+        fileSystem.writeNew(probe, 'x');
+      },
+      () => {
+        fileSystem.makeDirectory(probe);
+      },
+      () => {
+        fileSystem.makeLink(probe, at('a.md'));
+      },
+      () => {
+        fileSystem.remove(probe);
+      },
+    ];
+    try {
+      for (const change of changes) throws(change, /is not an absolute path/u);
+      expect(lstatOrAbsent(join(process.cwd(), probe))).toBe('absent');
+    } finally {
+      rmSync(join(process.cwd(), probe), { force: true, recursive: true });
+    }
   });
 });
 
