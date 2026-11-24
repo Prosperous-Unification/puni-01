@@ -60,6 +60,13 @@ export interface FileSystem {
    */
   write(path: string, text: string): void;
   /**
+   * Atomically publishes a new file at `path`, whose directory exists.
+   *
+   * @throws the runtime's error, `EEXIST`, when anything is already at `path`.
+   * @throws when `path` is not absolute.
+   */
+  writeNew(path: string, text: string): void;
+  /**
    * Removes the file or the whole directory at `path`.
    *
    * @throws when `path` is not absolute.

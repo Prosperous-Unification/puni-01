@@ -72,7 +72,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     );
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 12 rules, no findings.\n',
+      stdout: 'ok: system-records, 13 rules, no findings.\n',
       stderr: '',
     });
     const again = runPuni(add, state);

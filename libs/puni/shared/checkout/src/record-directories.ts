@@ -8,6 +8,8 @@ export const recordDirectories = {
   research: 'nav/research',
   adr: 'bur/adr',
   assessment: 'bur/assessments',
+  finding: 'bur/findings',
+  'assessment-review': 'bur/assessment-reviews',
   archive: 'bur/archive',
 } as const;
 
@@ -20,5 +22,7 @@ export const recordKinds: readonly RecordKind[] = [
   'research',
   'adr',
   'assessment',
+  'finding',
+  'assessment-review',
   'archive',
 ];

@@ -28,6 +28,7 @@ import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
+  judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
@@ -96,6 +97,7 @@ export const recordsRules: readonly LeveledRule[] = [
   judgeRecordsLayout,
   judgeRecordNames,
   judgeRecordFrontMatter,
+  judgeReviewRecords,
   judgeSupersession,
   forbidPlaintextSecrets,
   forbidRecordsAddresses,

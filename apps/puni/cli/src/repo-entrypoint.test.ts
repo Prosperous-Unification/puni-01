@@ -61,7 +61,7 @@ describe('burokrat repo init through the entrypoint, in an empty temporary direc
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 12 rules, no findings.\n',
+      stdout: 'ok: system-records, 13 rules, no findings.\n',
       stderr: '',
     });
   });

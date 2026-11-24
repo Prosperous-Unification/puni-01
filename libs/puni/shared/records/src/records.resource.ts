@@ -11,17 +11,20 @@ import { describeCause } from '@puni/shared-failures';
 import type { RecordDraft, RecordsCatalog, RecordsRequirements } from './contract';
 import {
   BodyFileMissing,
+  RecordBodyRefused,
   RecordExists,
   RecordTitleUnsluggable,
   RecordValueRefused,
 } from './failures';
 import { fieldOrder, formatRecord, type RecordFields, slugifyTitle } from './record-text';
 import { judgeRecordValue, recordKeyForms } from './record-values';
+import { judgeReviewBody } from './review-markdown';
 
 /**
- * The body of `draft`: its body file's text, or without one `# <title>` and an empty
+ * The body of `draft`: inline Markdown, its body file's text, or `# <title>` and an empty
  * `## <heading>` section for each of its `sections`.
  *
+ * @throws RecordBodyRefused when both body sources are supplied.
  * @throws BodyFileMissing when the body file names nothing.
  * @throws FileUnreadable when it exists but cannot be read.
  */
@@ -30,7 +33,13 @@ function readBody(
   title: string,
   fileSystem: RecordsRequirements['fileSystem'],
 ): string {
-  const { bodyFile, sections = [] } = draft;
+  const { body, bodyFile, sections = [] } = draft;
+  if (body !== undefined) {
+    if (bodyFile !== undefined) {
+      throw new RecordBodyRefused({ details: { problem: 'must have only one source' } });
+    }
+    return body;
+  }
   if (bodyFile === undefined) {
     return [`# ${title}`, ...sections.map((heading) => `## ${heading}`)].join('\n\n');
   }
@@ -82,7 +91,12 @@ export function createRecordsCatalog({
       }
       if (slug === '') throw new RecordTitleUnsluggable({ details: { title } });
       if (files.describe(path) !== 'absent') throw new RecordExists({ details: { path } });
-      files.write(path, formatRecord(fields, readBody(draft, title, fileSystem)));
+      const body = readBody(draft, title, fileSystem);
+      const problem = judgeReviewBody(draft.kind, body);
+      if (problem !== undefined) throw new RecordBodyRefused({ details: { problem } });
+      if (files.createFile(path, formatRecord(fields, body)) === 'exists') {
+        throw new RecordExists({ details: { path } });
+      }
       return path;
     },
   };

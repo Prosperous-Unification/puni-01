@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { checkoutModule, formatRegistry } from '@puni/shared-checkout';
+import { recordsModule } from '@puni/shared-records';
 import type { GitMerge } from '@puni/shared-ports';
 import {
   closeAfterEach,
@@ -224,7 +225,7 @@ function assess(
 ) {
   const container = track(
     DiBag.createBuilder()
-      .withInstalledModules([checkoutModule, burokratAssessModule])
+      .withInstalledModules([checkoutModule, recordsModule, burokratAssessModule])
       .withServices(memoryHost(fixture, hostOptions).services)
       .buildContainer(),
   );

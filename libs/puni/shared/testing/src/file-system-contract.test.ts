@@ -177,6 +177,22 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     expect(fileSystem.stat(at('x'), 'no-follow')).toBe('absent');
   });
 
+  test('creates a new file without replacing anything already there', () => {
+    const path = at('new.txt');
+    fileSystem.writeNew(path, 'first');
+    for (const taken of [path, at('empty'), at('dangling')]) {
+      throws(
+        () => {
+          fileSystem.writeNew(taken, 'second');
+        },
+        { code: 'EEXIST' },
+      );
+    }
+    expect(fileSystem.readText(path)).toBe('first');
+    expect(fileSystem.stat(at('dangling'), 'no-follow')).toBe('symlink');
+    expect(fileSystem.list(root).some(({ name }) => name.startsWith('.puni-write-'))).toBe(false);
+  });
+
   test('makes a symlink holding its target text; anything already there is EEXIST', () => {
     fileSystem.makeLink(at('made'), 'a.md');
     expect(fileSystem.stat(at('made'), 'no-follow')).toBe('symlink');
@@ -199,6 +215,9 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     const changes: readonly (() => void)[] = [
       () => {
         fileSystem.write(probe, 'x');
+      },
+      () => {
+        fileSystem.writeNew(probe, 'x');
       },
       () => {
         fileSystem.makeDirectory(probe);

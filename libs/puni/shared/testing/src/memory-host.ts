@@ -185,6 +185,11 @@ export function createMemoryFileSystem(
     write(path, text) {
       nodes.set(requireAbsolute(path), text);
     },
+    writeNew(path, text) {
+      if (kindAt(requireAbsolute(path)) !== 'absent') throw new MemoryFileError('EEXIST', path);
+      if (kindAt(follow(dirname(path))) !== 'directory') throw new MemoryFileError('ENOENT', path);
+      nodes.set(path, text);
+    },
     remove(path) {
       requireAbsolute(path);
       for (const key of [...nodes.keys()]) {

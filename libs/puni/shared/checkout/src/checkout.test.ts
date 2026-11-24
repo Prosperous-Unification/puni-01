@@ -152,6 +152,8 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['nav/plans/2031-04-05-a.md', true],
     ['bur/archive/2031-04-05-a.md', true],
+    ['bur/findings/2031-04-05-a.md', true],
+    ['bur/assessment-reviews/2031-04-05-a.md', true],
     ['nav/plans/deep/2031-04-05-a.md', false],
     ['nav/plans', false],
     ['nav/other/a.md', false],
@@ -170,7 +172,7 @@ describe('checkoutFiles over a memory file system', () => {
       return;
     }
     expect(caught(write)).toMatchObject({
-      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/archive), the only place a system-records checkout writes`,
+      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive), the only place a system-records checkout writes`,
     });
     expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
   });
@@ -270,5 +272,8 @@ describe('the staged view of a checkout', () => {
         staged.write('wiki/index/index.md', 'x');
       }),
     ).toBeInstanceOf(CheckoutPathRefused);
+    expect(caught(() => staged.createFile('wiki/index/local.md', 'x'))).toBeInstanceOf(
+      CheckoutPathRefused,
+    );
   });
 });
