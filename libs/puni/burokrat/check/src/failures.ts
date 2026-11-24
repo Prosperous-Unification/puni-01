@@ -20,3 +20,9 @@ export const CommitRangeRefused = defineException({
   message: ({ range }: { range: string }) =>
     `--commits ${JSON.stringify(range)} is not a range <base>..<head> of two revisions`,
 });
+
+/** `--merged` without `--commits`, the range it describes: a refused command line. */
+export const MergedNeedsCommits = defineException({
+  tag: 'puni/burokrat-check/MergedNeedsCommits',
+  message: '--merged describes the range of --commits; give it with --commits',
+});

@@ -32,6 +32,7 @@ describe('burokratParser', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -43,6 +44,7 @@ describe('burokratParser', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -54,6 +56,7 @@ describe('burokratParser', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -65,6 +68,7 @@ describe('burokratParser', () => {
         crossProjectLinks: false,
         staged: false,
         commits: 'main..HEAD',
+        merged: false,
       },
     ],
     ['repo init --name shop', { kind: 'repo init', name: 'shop', owner: undefined }],

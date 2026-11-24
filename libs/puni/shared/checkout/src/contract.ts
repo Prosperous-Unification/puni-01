@@ -114,10 +114,16 @@ export interface NewCheckout {
   link(path: string, target: string): void;
 }
 
-/** One commit of a range seen as a checkout: its abbreviated hash, and its view. */
+/**
+ * One commit of a range seen as checkouts: its full hash, the short hash to print, the view of
+ * the lines it adds, and the view of its message alone, so that no path it adds can stand in for
+ * the message.
+ */
 export interface CommitCheckout {
-  readonly commit: string;
+  readonly fullHash: string;
+  readonly shortHash: string;
   readonly files: CheckoutFiles;
+  readonly message: CheckoutFiles;
 }
 
 /** Opens checkouts. */
@@ -133,10 +139,11 @@ export interface CheckoutFilesResource {
    */
   openStaged(root: string): CheckoutFiles;
   /**
-   * The commits `head` reaches and `base` does not, oldest first, each as a view of what it adds:
-   * its visible files are the paths it adds a line to, each read as those lines at their line
-   * numbers with every other line empty, and `commitMessagePath`, read as its message. A
-   * merge adds what it holds beyond its first parent. Describing, existence and the `HEAD`
+   * The commits `head` reaches and `base` does not, oldest first, each as two views. In `files`
+   * the visible files are the paths it adds a line to, each read as those lines at their line
+   * numbers with every other line empty; in `message` the one visible file is
+   * `commitMessagePath`, read as its message. A merge adds what it holds beyond its first
+   * parent. Describing, existence and the `HEAD`
    * commit still look at the working tree, and every write is refused.
    *
    * @throws RevisionUnknown when `base` or `head` names no commit.

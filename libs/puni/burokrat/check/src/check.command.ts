@@ -7,12 +7,17 @@ import {
   repositoryTypes,
 } from '@puni/shared-checkout';
 import type { CheckRequest, RepositoryCheck } from './contract';
-import { CommitRangeRefused, ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+import {
+  CommitRangeRefused,
+  MergedNeedsCommits,
+  ProjectScopeRefused,
+  ScopeOptionsConflict,
+} from './failures';
 import { formatFinding } from './finding';
 
 /**
  * `check [--repo TYPE] [--project NAME | --cross-project-links | --staged | --commits
- * BASE..HEAD]`: judges one repository of the project against the rule set of its type, or one
+ * BASE..HEAD [--merged]]`: judges one repository of the project against the rule set of its type, or one
  * part of it.
  */
 export const checkParser = object({
@@ -38,6 +43,9 @@ export const checkParser = object({
       description: message`Judge what each commit of the range adds, and its message, for secrets.`,
     }),
   ),
+  merged: option('--merged', {
+    description: message`The --commits range is merged history, never rewritten: remedies say so.`,
+  }),
 });
 
 /**
@@ -45,9 +53,10 @@ export const checkParser = object({
  * finding of `--commits` as `<rule-id> <commit>:<path>: …`, then a summary naming the type and
  * scope, and returns 1; with no finding it prints one `ok` line and returns 0. A `project` that
  * names no project, a scoping option when the judged repository is not `system-state`, two
- * scoping options, or a `--commits` that is no range or names no commit, prints one `error: `
- * line to `stderr` and returns 2: the command line is wrong, so nothing was judged. A file the check needs that cannot be
- * read prints one `error: ` line naming it and returns 1: nothing can be judged until it can.
+ * scoping options, a `--commits` that is no range or names no commit, or `--merged` without it,
+ * prints one `error: ` line to `stderr` and returns 2: the command line is wrong, so nothing was
+ * judged. A file the check needs that cannot be read prints one `error: ` line naming it and
+ * returns 1: nothing can be judged until it can.
  */
 export function createCheckCommand({
   repositoryCheck,
@@ -69,6 +78,7 @@ export function createCheckCommand({
           caught instanceof ProjectScopeRefused ||
           caught instanceof ScopeOptionsConflict ||
           caught instanceof CommitRangeRefused ||
+          caught instanceof MergedNeedsCommits ||
           caught instanceof RevisionUnknown;
         if (!refused) throw caught;
         io.stderr(`error: ${caught.message}\n`);

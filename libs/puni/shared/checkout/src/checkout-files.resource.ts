@@ -199,22 +199,16 @@ function openCommits(
       },
     });
   }
-  const working = openCheckout(root, 'system-state', fileSystem, git);
+  const workingTree = openCheckout(root, 'system-state', fileSystem, git);
   const readOnly = (path: string): never => refuse(path, 'a commit view writes nothing');
-  return listed.commits.map(({ hash, message, added }) => {
-    const texts = new Map<string, string[]>([[commitMessagePath, message.split('\n')]]);
-    for (const { path, line, text } of added) {
-      const lines = texts.get(path) ?? [];
-      while (lines.length < line) lines.push('');
-      lines[line - 1] = text;
-      texts.set(path, lines);
-    }
-    const paths = [...texts.keys()].sort(compareBytes);
+  /** A read-only view whose visible files are the keys of `linesByPath`, read as their lines. */
+  const view = (shortHash: string, linesByPath: ReadonlyMap<string, readonly string[]>) => {
+    const paths = [...linesByPath.keys()].sort(compareBytes);
     const files: CheckoutFiles = {
-      ...working,
+      ...workingTree,
       readText(path) {
-        const lines = texts.get(normalise(path));
-        if (lines === undefined) refuse(path, `is not a path commit ${hash} adds to`);
+        const lines = linesByPath.get(normalise(path));
+        if (lines === undefined) refuse(path, `is not a path commit ${shortHash} adds to`);
         return lines.join('\n');
       },
       isShown: (path) => isShownIn(paths, path, () => true),
@@ -224,7 +218,22 @@ function openCommits(
       remove: readOnly,
       removeEmptyDirectories: readOnly,
     };
-    return { commit: hash, files };
+    return files;
+  };
+  return listed.commits.map(({ fullHash, shortHash, message, addedLines }) => {
+    const addedLinesByPath = new Map<string, string[]>();
+    for (const { path, line, text } of addedLines) {
+      const lines = addedLinesByPath.get(path) ?? [];
+      while (lines.length < line) lines.push('');
+      lines[line - 1] = text;
+      addedLinesByPath.set(path, lines);
+    }
+    return {
+      fullHash,
+      shortHash,
+      files: view(shortHash, addedLinesByPath),
+      message: view(shortHash, new Map([[commitMessagePath, message.split('\n')]])),
+    };
   });
 }
 

@@ -16,7 +16,12 @@ import {
   type ReferenceReach,
   type Rule,
 } from './finding';
-import { CommitRangeRefused, ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+import {
+  CommitRangeRefused,
+  MergedNeedsCommits,
+  ProjectScopeRefused,
+  ScopeOptionsConflict,
+} from './failures';
 import { crossProjectRules, type ruleSets, secretRules } from './rule-set.rule';
 
 /** What one run judges, chosen by the request's options. */
@@ -25,7 +30,12 @@ type CheckMode =
   | { readonly kind: 'project'; readonly name: string }
   | { readonly kind: 'cross-project' }
   | { readonly kind: 'staged' }
-  | { readonly kind: 'commits'; readonly base: string; readonly head: string };
+  | {
+      readonly kind: 'commits';
+      readonly base: string;
+      readonly head: string;
+      readonly merged: boolean;
+    };
 
 /** A run: the scope it lists files in, the references it reaches, its rules and its label. */
 interface RunPlan {
@@ -39,7 +49,8 @@ const needsState = new Set<CheckMode['kind']>(['project', 'cross-project']);
 
 /**
  * The ends of `range`, `<base>..<head>`: two non-empty revisions around one `..`, which no
- * revision name holds; a symmetric `...` is refused.
+ * revision name holds; a symmetric `...`, and an end starting `^`, which would negate it, are
+ * refused.
  *
  * @throws CommitRangeRefused when `range` is not that.
  */
@@ -51,7 +62,9 @@ function parseCommitRange(range: string): { readonly base: string; readonly head
     rest.length > 0 ||
     base === '' ||
     head === '' ||
-    head.startsWith('.')
+    head.startsWith('.') ||
+    base.startsWith('^') ||
+    head.startsWith('^')
   ) {
     throw new CommitRangeRefused({ details: { range } });
   }
@@ -59,16 +72,27 @@ function parseCommitRange(range: string): { readonly base: string; readonly head
 }
 
 /**
- * `finding`, made in what `commit` adds, as the range check prints it: its path prefixed with the
- * commit, its remedy saying that the commit is public and how to take it out of the branch.
+ * `finding`, made in the commit `shortHash`, as the range check prints it: its path prefixed with
+ * the commit, its remedy saying that the commit is public and how to take it out: on a branch not
+ * yet merged, by rewriting the branch from `base`; in `merged` history, which is never rewritten,
+ * by a pull request removing it.
  */
-function locateInCommit(finding: Finding, commit: string, base: string): Finding {
+function locateInCommit(
+  finding: Finding,
+  shortHash: string,
+  base: string,
+  merged: boolean,
+): Finding {
+  const removal = merged
+    ? `${shortHash} is merged, so it is public and stays in history: rotate any credential it exposed, and open a pull request that removes it`
+    : `${shortHash} is pushed, so it is public: rotate any credential it exposed, and before merge rewrite the branch so that no commit holds it (\`git rebase -i ${base}\`, edit ${shortHash}, \`git push --force-with-lease\`)`;
   return {
     ...finding,
-    path: `${commit}:${finding.path}`,
-    remedy: `${finding.remedy}; ${commit} is pushed, so it is public: rotate any credential it exposed, and before merge rewrite the branch so that no commit holds it (\`git rebase -i ${base}\`, edit ${commit}, \`git push --force-with-lease\`)`,
+    path: `${shortHash}:${finding.path}`,
+    remedy: `${finding.remedy}; ${removal}`,
   };
 }
+
 function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
   const modes: (readonly [string, CheckMode])[] = [];
   if (request.project !== undefined) {
@@ -79,7 +103,10 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
   }
   if (request.staged === true) modes.push(['--staged', { kind: 'staged' }]);
   if (request.commits !== undefined) {
-    modes.push(['--commits', { kind: 'commits', ...parseCommitRange(request.commits) }]);
+    const range = parseCommitRange(request.commits);
+    modes.push(['--commits', { kind: 'commits', ...range, merged: request.merged === true }]);
+  } else if (request.merged === true) {
+    throw new MergedNeedsCommits();
   }
   if (modes.length > 1) {
     throw new ScopeOptionsConflict({ details: { options: modes.map(([option]) => option) } });
@@ -115,8 +142,9 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
  * project check, the cross-project check and the `whole`-level rules together find what the
  * whole check finds. With `staged`, the staged files as the index holds them, by the
  * {@link secretRules} of the type. With `commits`, what each commit of the range adds and its
- * message, by the same rules, each finding's path `<commit>:<path>` and its remedy saying how to
- * take the commit out of the branch. Findings are sorted by their printed form.
+ * message, judged apart, by the same rules, each finding's path `<commit>:<path>` and its remedy
+ * saying how to take the commit out: by rewriting the branch, or, with `merged`, by a pull
+ * request. Findings are sorted by their printed form.
  */
 export function createRepositoryCheck({
   checkoutRegistry,
@@ -189,10 +217,12 @@ export function createRepositoryCheck({
           const commits = checkoutFiles.openCommits(root, mode.base, mode.head);
           const count = `${String(commits.length)} ${commits.length === 1 ? 'commit' : 'commits'}`;
           summary = `${type}, commits ${mode.base}..${mode.head}, ${count}, ${countRules(rules)}`;
-          findings = commits.flatMap(({ commit, files }) =>
-            rules
-              .flatMap((rule) => applyRule(rule, { ...reading, files }))
-              .map((finding) => locateInCommit(finding, commit, mode.base)),
+          findings = commits.flatMap(({ shortHash, files, message }) =>
+            [files, message]
+              .flatMap((view) =>
+                rules.flatMap((rule) => applyRule(rule, { ...reading, files: view })),
+              )
+              .map((finding) => locateInCommit(finding, shortHash, mode.base, mode.merged)),
           );
         } else {
           const files =

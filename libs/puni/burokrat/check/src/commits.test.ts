@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeFixture, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
@@ -129,7 +129,7 @@ describe('check --commits', () => {
     );
   });
 
-  test.each(['HEAD', 'base...HEAD', '..HEAD', 'base..', 'a..b..c'])(
+  test.each(['HEAD', 'base...HEAD', '..HEAD', 'base..', 'a..b..c', '^base..HEAD', 'base..^HEAD'])(
     '%s is no range: refused with exit 2',
     (range) => {
       expect(host.runCheck({ commits: range }, root)).toEqual({
@@ -162,5 +162,83 @@ describe('check --commits', () => {
     const run = host.runCheck({ commits: 'base..HEAD' }, root);
     expect(run.code).toBe(1);
     expect(run.stdout).toStartWith('repository.git .: ');
+  });
+
+  test('with --merged the remedy opens a removal pull request and rewrites nothing', () => {
+    const added = addThenRemove('apps/one/src/env.ts', githubToken);
+    expect(host.runCheck({ commits: 'base..HEAD', merged: true }, root).stdout).toBe(
+      `secrets.plaintext ${added}:apps/one/src/env.ts: line 2 holds what looks like a GitHub token; fix: ${credentialRemedy}; ${added} is merged, so it is public and stays in history: rotate any credential it exposed, and open a pull request that removes it\nfail: system-state, commits base..HEAD, 2 commits, 2 rules, 1 finding.\n`,
+    );
+  });
+
+  test('--merged without --commits is refused', () => {
+    expect(host.runCheck({ merged: true }, root)).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: 'error: --merged describes the range of --commits; give it with --commits\n',
+    });
+  });
+
+  test('a file named like the message entry cannot stand in for the message', () => {
+    writeRepositoryFile(root, '(commit message)', 'nothing here\n');
+    const hash = commit(`deploy\n\nused ${githubToken} for it`);
+    expect(host.runCheck({ commits: 'base..HEAD' }, root).stdout).toStartWith(
+      `secrets.plaintext ${hash}:(commit message): line 3 holds what looks like a GitHub token;`,
+    );
+  });
+
+  test('a credential or an address in a file name is a finding in the paths entry, naming no path', () => {
+    writeRepositoryFile(root, `apps/one/${githubToken}.txt`, 'x\n');
+    writeRepositoryFile(root, `apps/one/${forbiddenAddress}.txt`, 'x\n');
+    const hash = commit('names');
+    const findings = host
+      .runCheck({ commits: 'base..HEAD' }, root)
+      .stdout.split('\n')
+      .filter((line) => line.startsWith('secrets.'))
+      .map((line) => line.split('; fix:')[0]);
+    expect(findings).toEqual([
+      `secrets.addresses ${hash}:(paths): line 1 holds an IPv4 address`,
+      `secrets.plaintext ${hash}:(paths): line 2 holds what looks like a GitHub token`,
+    ]);
+    const tree = host.runCheck({}, root).stdout;
+    expect(tree).toContain('secrets.addresses (paths): line ');
+    expect(tree).toContain('secrets.plaintext (paths): line ');
+  });
+
+  test('a line holding a NUL hides no later line of the file, in either scan', () => {
+    writeRepositoryFile(root, 'apps/one/mixed.bin', `\0binary\x01\0\n${githubToken}\n`);
+    const hash = commit('mixed');
+    expect(host.runCheck({ commits: 'base..HEAD' }, root).stdout).toStartWith(
+      `secrets.plaintext ${hash}:apps/one/mixed.bin: line 2 holds what looks like a GitHub token;`,
+    );
+    expect(host.runCheck({}, root).stdout).toStartWith(
+      'secrets.plaintext apps/one/mixed.bin: line 2 holds what looks like a GitHub token;',
+    );
+  });
+
+  test('a UTF-16 file is decoded and judged, in either scan', () => {
+    const utf16 = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(`notes\n${githubToken}\n`, 'utf16le'),
+    ]);
+    writeFileSync(join(root, 'apps/one/notes.txt'), utf16);
+    const hash = commit('utf-16');
+    expect(host.runCheck({ commits: 'base..HEAD' }, root).stdout).toStartWith(
+      `secrets.plaintext ${hash}:apps/one/notes.txt: line 2 holds what looks like a GitHub token;`,
+    );
+    expect(host.runCheck({}, root).stdout).toStartWith(
+      'secrets.plaintext apps/one/notes.txt: line 2 holds what looks like a GitHub token;',
+    );
+  });
+
+  test('a binary attribute committed after the credential exempts nothing', () => {
+    writeRepositoryFile(root, 'apps/one/key.dat', `${githubToken}\n`);
+    const added = commit('add');
+    writeRepositoryFile(root, '.gitattributes', '*.dat binary\n');
+    rmSync(join(root, 'apps/one/key.dat'));
+    commit('mark binary, remove');
+    expect(host.runCheck({ commits: 'base..HEAD' }, root).stdout).toStartWith(
+      `secrets.plaintext ${added}:apps/one/key.dat: line 1 holds what looks like a GitHub token;`,
+    );
   });
 });

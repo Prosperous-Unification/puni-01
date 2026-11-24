@@ -39,13 +39,15 @@ export interface GitAddedLine {
 }
 
 /**
- * One commit of a range: its hash abbreviated as git does, its whole message, and the lines it
- * adds against its first parent, or against nothing for a commit with no parent.
+ * One commit of a range: its full hash, the short hash git abbreviates it to (for display only,
+ * since a ref may share its name), its whole message, and the lines it adds against its first
+ * parent, or against nothing for a commit with no parent.
  */
 export interface GitCommit {
-  readonly hash: string;
+  readonly fullHash: string;
+  readonly shortHash: string;
   readonly message: string;
-  readonly added: readonly GitAddedLine[];
+  readonly addedLines: readonly GitAddedLine[];
 }
 
 /**
@@ -98,8 +100,9 @@ export interface Git {
   listMerges(root: string, revisions: string, ancestry: GitAncestry): GitMerges;
   /**
    * The commits `head` reaches and `base` does not in the repository at `root`, as
-   * `git log base..head` lists them, oldest first, each with the lines it adds. A `base` or
-   * `head` naming no commit is `unknown`, naming it.
+   * `git log base..head` lists them, oldest first, each with the lines it adds, read as text
+   * whatever attributes the repository gives a path. A `base` or `head` naming no commit is
+   * `unknown`, naming it.
    */
   listCommits(root: string, base: string, head: string): GitCommits;
   /** Adds a worktree at `path`, checking out a new `branch` that starts at the commit `from`. */

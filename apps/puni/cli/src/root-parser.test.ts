@@ -71,6 +71,7 @@ describe('readInvocation', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -82,6 +83,7 @@ describe('readInvocation', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -93,6 +95,7 @@ describe('readInvocation', () => {
         crossProjectLinks: false,
         staged: false,
         commits: undefined,
+        merged: false,
       },
     ],
   ] as const)('%s selects %j', (line, request) => {
@@ -149,7 +152,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] [\n       --commits BASE..HEAD] | wiki [index [--print]] | repo [init --name NAME [--owner OWNER]] |\n       adr [add --title TEXT --topics LIST --summary TEXT [--body-file PATH]] | change | assess [\n       outcomes --since INSTANT --until INSTANT [--rate-card PATH] [--claude-projects DIR...] [\n       --codex-sessions DIR...] [--json]])]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] [\n       --commits BASE..HEAD] [--merged] | wiki [index [--print]] | repo [init --name NAME [--owner\n       OWNER]] | adr [add --title TEXT --topics LIST --summary TEXT [--body-file PATH]] | change |\n       assess [outcomes --since INSTANT --until INSTANT [--rate-card PATH] [--claude-projects DIR...\n       ] [--codex-sessions DIR...] [--json]])]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });

@@ -20,6 +20,8 @@ export interface CheckRequest {
   readonly crossProjectLinks?: boolean | undefined;
   readonly staged?: boolean | undefined;
   readonly commits?: string | undefined;
+  /** Whether the `commits` range is merged history, which is never rewritten. */
+  readonly merged?: boolean | undefined;
 }
 
 /** What one check found: a summary naming what was judged, and every finding sorted. */
@@ -42,6 +44,7 @@ export interface RepositoryCheck {
    * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks`, `staged`
    *   and `commits` is given.
    * @throws CommitRangeRefused when `commits` is not `<base>..<head>`.
+   * @throws MergedNeedsCommits when `merged` is given without `commits`.
    * @throws RevisionUnknown when an end of `commits` names no commit.
    */
   check(request: CheckRequest, cwd: string): CheckVerdict;

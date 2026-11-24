@@ -14,12 +14,14 @@ read-when: the gate fails, or a finding names a rule you do not know
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word
   budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`.
-- **`puni burokrat check --commits <base>..HEAD`**, in `gate:affected` (a pull request's commits)
-  and in CI after `gate` on a push to main (the pushed commits), prints
-  `<rule> <commit>:<path>: <message>; fix: <remedy>`: that commit adds a credential or an address,
-  or its message holds one, though a later commit may have removed it. The commit is public once
-  pushed, so rotate a credential first, then rewrite the branch as the remedy says. Locally it
-  needs `NX_BASE`: `NX_BASE=origin/main bun run gate:affected`.
+- **`puni burokrat check --commits <base>..<head>`** runs in `gate:affected` over a pull
+  request's commits, in CI's `pushed-commits` job over every push to any branch or tag, and over
+  a merge group. It prints `<rule> <commit>:<path>: <message>; fix: <remedy>`: that commit adds a
+  credential or an address, in a file, a file name (`(paths)`) or its message
+  (`(commit message)`), though a later commit may have removed it. A pushed commit is public, so
+  rotate a credential first, then do what the remedy says: rewrite an unmerged branch, or, with
+  `--merged` (main and tags), open a pull request removing it. Locally it needs `NX_BASE`:
+  `NX_BASE=origin/main bun run gate:affected`.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of
   `eslint.config.js` refused the code and why.

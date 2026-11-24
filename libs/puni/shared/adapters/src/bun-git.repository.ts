@@ -75,23 +75,23 @@ function unquotePath(printed: string): string | undefined {
  * a patch git would not print is the line it cannot read.
  */
 function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unreadable: string } {
-  const added: GitAddedLine[] = [];
+  const addedLines: GitAddedLine[] = [];
   let path: string | undefined;
-  let oldLeft = 0;
-  let newLeft = 0;
-  let next = 0;
+  let removedLinesLeft = 0;
+  let addedLinesLeft = 0;
+  let nextLineNumber = 0;
   for (const line of patch.split('\n')) {
-    if (oldLeft > 0 || newLeft > 0) {
+    if (removedLinesLeft > 0 || addedLinesLeft > 0) {
       const mark = line[0];
       if (mark === '\\') continue;
-      if (mark === '-' && oldLeft > 0) {
-        oldLeft -= 1;
+      if (mark === '-' && removedLinesLeft > 0) {
+        removedLinesLeft -= 1;
         continue;
       }
-      if (mark !== '+' || newLeft === 0 || path === undefined) return { unreadable: line };
-      added.push({ path, line: next, text: line.slice(1) });
-      newLeft -= 1;
-      next += 1;
+      if (mark !== '+' || addedLinesLeft === 0 || path === undefined) return { unreadable: line };
+      addedLines.push({ path, line: nextLineNumber, text: line.slice(1) });
+      addedLinesLeft -= 1;
+      nextLineNumber += 1;
       continue;
     }
     if (line.startsWith('+++ ')) {
@@ -105,13 +105,15 @@ function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unr
     if (line.startsWith('@@ ')) {
       const counts = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/u.exec(line);
       if (counts === null) return { unreadable: line };
-      oldLeft = Number(counts[1] ?? '1');
-      next = Number(counts[2]);
-      newLeft = Number(counts[3] ?? '1');
+      removedLinesLeft = Number(counts[1] ?? '1');
+      nextLineNumber = Number(counts[2]);
+      addedLinesLeft = Number(counts[3] ?? '1');
     }
   }
-  if (oldLeft > 0 || newLeft > 0) return { unreadable: 'the patch ends inside a hunk' };
-  return added;
+  if (removedLinesLeft > 0 || addedLinesLeft > 0) {
+    return { unreadable: 'the patch ends inside a hunk' };
+  }
+  return addedLines;
 }
 
 /**
@@ -128,14 +130,19 @@ function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unr
  * with the revisions after `--end-of-options`, the time the committer time; the changes are `git worktree add -b`, `git worktree remove [--force]`
  * and `git branch -d` or `-D`. A commit range is checked end by end with
  * `git rev-parse --verify --quiet <rev>^{commit}`, whose exit 1 is an unknown revision, then listed
- * with `git rev-list --reverse --abbrev-commit`; each commit's message is `git show -s --format=format:%B`,
- * its added lines `git diff-tree -p -U0 --root --diff-merges=first-parent --no-renames`, with
- * fixed `a/` and `b/` prefixes and no external diff or text conversion. Every revision follows
- * `--end-of-options`, so none is read as an option.
+ * by full and short hash with `git rev-list --reverse --format='%H %h'`; git is asked only by full
+ * hash after that, so no ref named like a short hash can stand in for a commit. A commit's message
+ * is what `git cat-file commit` holds after its header; its added lines are
+ * `git diff-tree -p -U0 --root --text --diff-merges=first-parent --no-renames`, with fixed `a/` and
+ * `b/` prefixes, no external diff or text conversion, no global attributes file and the empty tree
+ * as the attribute source, so no `.gitattributes`, in any commit, can mark a path binary or
+ * otherwise change what is printed. Every revision follows `--end-of-options`, so none is read as
+ * an option.
  */
 export function createBunGit({ processRunner }: { processRunner: ProcessRunner }): Git {
-  const run = (root: string, args: readonly string[]): GitRun =>
-    readRun(args, processRunner.run(['git', ...args], { cwd: root }));
+  const runWith = (root: string, globals: readonly string[], args: readonly string[]): GitRun =>
+    readRun(args, processRunner.run(['git', ...globals, ...args], { cwd: root }));
+  const run = (root: string, args: readonly string[]): GitRun => runWith(root, [], args);
   const split = (stdout: string): string[] => stdout.split('\0').filter((path) => path !== '');
   const change = (root: string, args: readonly string[]): GitChange => {
     const outcome = run(root, args);
@@ -251,52 +258,59 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
         const verified = readRun(verify, outcome);
         if ('failure' in verified) return verified;
       }
+      const emptyTree = run(root, ['hash-object', '-t', 'tree', '/dev/null']);
+      if ('failure' in emptyTree) return emptyTree;
       const listed = run(root, [
         'rev-list',
         '--reverse',
-        '--abbrev-commit',
+        '--no-commit-header',
+        '--format=%H %h',
         '--end-of-options',
         `${base}..${head}`,
         '--',
       ]);
       if ('failure' in listed) return listed;
       const commits: GitCommit[] = [];
-      for (const hash of listed.stdout.split('\n').filter((line) => line !== '')) {
-        const message = run(root, [
-          'show',
-          '-s',
-          '--format=format:%B',
-          '--end-of-options',
-          hash,
-          '--',
-        ]);
-        if ('failure' in message) return message;
-        const patch = run(root, [
-          'diff-tree',
-          '-p',
-          '-U0',
-          '-r',
-          '--root',
-          '--no-commit-id',
-          '--diff-merges=first-parent',
-          '--no-renames',
-          '--no-ext-diff',
-          '--no-textconv',
-          '--no-color',
-          '--src-prefix=a/',
-          '--dst-prefix=b/',
-          '--end-of-options',
-          hash,
-          '--',
-        ]);
+      for (const line of listed.stdout.split('\n').filter((listedLine) => listedLine !== '')) {
+        const [fullHash, shortHash, ...rest] = line.split(' ');
+        if (fullHash === undefined || shortHash === undefined || rest.length > 0) {
+          return { failure: `git rev-list printed an unexpected line: ${JSON.stringify(line)}` };
+        }
+        const raw = run(root, ['cat-file', 'commit', fullHash]);
+        if ('failure' in raw) return raw;
+        const bodyStart = raw.stdout.indexOf('\n\n');
+        const message = bodyStart === -1 ? '' : raw.stdout.slice(bodyStart + 2);
+        const patch = runWith(
+          root,
+          ['-c', 'core.attributesFile=/dev/null', `--attr-source=${emptyTree.stdout.trim()}`],
+          [
+            'diff-tree',
+            '-p',
+            '-U0',
+            '-r',
+            '--root',
+            '--text',
+            '--no-commit-id',
+            '--diff-merges=first-parent',
+            '--no-renames',
+            '--no-ext-diff',
+            '--no-textconv',
+            '--no-color',
+            '--src-prefix=a/',
+            '--dst-prefix=b/',
+            '--end-of-options',
+            fullHash,
+            '--',
+          ],
+        );
         if ('failure' in patch) return patch;
-        const added = readAddedLines(patch.stdout);
-        if ('unreadable' in added) {
+        const addedLines = readAddedLines(patch.stdout);
+        if ('unreadable' in addedLines) {
           return {
-            failure: `git diff-tree printed an unexpected line for ${hash}: ${JSON.stringify(added.unreadable)}`,
+            failure: `git diff-tree printed an unexpected line for ${fullHash}: ${JSON.stringify(addedLines.unreadable)}`,
           };
         }
-        commits.push({ hash, message: message.stdout, added });
+        commits.push({ fullHash, shortHash, message, addedLines });
       }
       return { commits };
     },
