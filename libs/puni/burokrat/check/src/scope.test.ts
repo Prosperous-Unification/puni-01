@@ -16,11 +16,7 @@ import { type CheckHost, openCheckHost } from './check.test-host';
 import { appliesAt } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
-import {
-  fixturePurposes,
-  formatFixtureRegistry,
-  makeRepository,
-} from './repository-pair.test-host';
+import { fixturePurposes, makeRepository } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -45,8 +41,7 @@ function listProjects() {
 
 /** The fixture repository pinned at epoch 2, with a second project, `two`. */
 function makeTwoProjectRepository(): string {
-  const repository = makeRepository(scratchDirectories);
-  writeRepositoryFile(repository, 'puni.json', formatFixtureRegistry(2));
+  const repository = makeRepository(scratchDirectories, 2);
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
@@ -137,6 +132,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
     () => {
       rmSync(join(root, 'AGENTS.md'));
       writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
+      writeRepositoryFile(root, 'wiki/index/index.md', '# Wiki index\n');
       for (const index of Array.from({ length: 20 }, (_, at) => String(at))) {
         writeProject(root, `libs/many${index}`, `many${index}`, {
           readWhen: `changing ${'many '.repeat(18)}things`,
@@ -195,6 +191,7 @@ describe('every project check and the cross-project check are the whole check', 
         'history.date',
         'history.records',
         'index.purpose',
+        'index.leftover',
         'index.read-first',
         'index.read-when',
         'index.scope',

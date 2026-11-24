@@ -37,7 +37,7 @@ export function createWikiMapPrinter({
       };
     }
     const files = checkoutFiles.open(repository.root, repository.type);
-    const sources = readMapSources(files, projectSources);
+    const sources = readMapSources(files, projectSources, repository.registry.rules);
     if (sources.defects.length > 0) {
       const named = sources.defects.map(
         (defect) => `${defect.path}: ${defect.message}; fix: ${defect.remedy}`,

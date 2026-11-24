@@ -179,7 +179,11 @@ export interface ProjectScopeResource {
  * composes the sources a repository is read with as the `projectSources` list.
  */
 export interface ProjectSource {
-  readProjects(files: CheckoutFiles): ProjectReading;
+  /**
+   * The projects of `files` as a repository pinned at the rules epoch `epoch` declares them: a
+   * setting a later epoch introduced is ignored below it, as the puni of that epoch ignored it.
+   */
+  readProjects(files: CheckoutFiles, epoch: number): ProjectReading;
   /**
    * How a project of this source is given a deeper partition, as a remedy names it: the setting
    * that places it, in words a reader of the source's files knows.

@@ -13,6 +13,7 @@ import {
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { nxModule } from './module';
+import { metadataIndexEpoch } from './nx-projects.resource';
 import {
   invalidJsonRemedy,
   missingDirectoryRemedy,
@@ -48,7 +49,7 @@ const one = {
   readFirst: 'apps/one/src/a.ts',
 };
 
-function readMemory(tree: MemoryTree) {
+function readMemory(tree: MemoryTree, epoch = 2) {
   const host = memoryHost(tree);
   const container = track(
     DiBag.createBuilder()
@@ -57,7 +58,7 @@ function readMemory(tree: MemoryTree) {
       .buildContainer(),
   );
   const files = container.resolve('checkoutFiles').open('/r', 'system-state');
-  return container.resolve('nxProjectSource').readProjects(files);
+  return container.resolve('nxProjectSource').readProjects(files, epoch);
 }
 
 /** The defects of `one` when its `project.json` holds `metadata` and `tags`. */
@@ -81,6 +82,20 @@ describe('the Nx project source', () => {
       ),
     });
     expect(placed).toEqual({ projects: [{ ...one, index: ['dash', 'ops'] }], defects: [] });
+  });
+
+  test('below rules epoch 2 metadata.index is ignored, valid or not, as the puni of epoch 1 did', () => {
+    for (const index of [['dash', 'ops'], 'not an array']) {
+      const tree = {
+        ...workspace,
+        '/r/apps/one/project.json': project('one', {
+          readWhen: 'changing one',
+          readFirst: 'src/a.ts',
+          index,
+        }),
+      };
+      expect(readMemory(tree, metadataIndexEpoch - 1)).toEqual({ projects: [one], defects: [] });
+    }
   });
 
   test.each([[[]], ['dash'], [['Dash']], [['dash', '']], [['dash/ops']], [[1]]])(
@@ -201,7 +216,7 @@ describe('the Nx project source', () => {
         .buildContainer(),
     );
     const files = container.resolve('checkoutFiles').open(root, 'system-state');
-    expect(container.resolve('nxProjectSource').readProjects(files)).toEqual({
+    expect(container.resolve('nxProjectSource').readProjects(files, 2)).toEqual({
       projects: [{ ...one, readFirst: 'apps/one/src/index.ts' }],
       defects: [],
     });

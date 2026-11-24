@@ -150,13 +150,11 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     expect(fileSystem.homeDirectory()).toStartWith('/');
   });
 
-  test('writes, makes directories and removes a whole directory', () => {
+  test('writes and makes directories', () => {
     fileSystem.makeDirectory(at('x/y'));
     fileSystem.write(at('x/y/z.md'), 'z');
     expect(fileSystem.list(at('x'))).toEqual([{ name: 'y', kind: 'directory' }]);
     expect(fileSystem.readText(at('x/y/z.md'))).toBe('z');
-    fileSystem.remove(at('x'));
-    expect(fileSystem.stat(at('x'), 'no-follow')).toBe('absent');
   });
 
   test('makes a symlink holding its target text; anything already there is EEXIST', () => {
@@ -173,7 +171,6 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
       );
     }
     expect(fileSystem.readText(at('a.md'))).toBe('a');
-    fileSystem.remove(at('made'));
   });
 });
 

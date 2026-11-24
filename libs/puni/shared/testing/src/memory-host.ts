@@ -99,6 +99,11 @@ export function createMemoryFileSystem(
   options: Pick<MemoryHostOptions, 'home' | 'modified'> = {},
 ): FileSystem & {
   readonly nodes: Map<string, MemoryNode>;
+  /**
+   * Removes the node at `path` and everything below it: the fake's own step for what git does
+   * when it removes a linked worktree, since the file-system port removes nothing.
+   */
+  removeTree(path: string): void;
 } {
   const nodes = new Map<string, MemoryNode>(Object.entries(tree));
   const isDirectory = (path: string): boolean => {
@@ -166,7 +171,7 @@ export function createMemoryFileSystem(
     write(path, text) {
       nodes.set(path, text);
     },
-    remove(path) {
+    removeTree(path) {
       for (const key of [...nodes.keys()]) {
         if (key === path || key.startsWith(`${path}/`)) nodes.delete(key);
       }
@@ -230,7 +235,7 @@ export function createMemoryGit(
       if (index <= 0) return { failure: `${path} is not a linked worktree` };
       if (!force && changedIn(path).length > 0) return { failure: `${path} has changes` };
       repository.worktrees.splice(index, 1);
-      fileSystem.remove(path);
+      fileSystem.removeTree(path);
       return { changed: true };
     },
     deleteBranch(root, branch, force): GitChange {

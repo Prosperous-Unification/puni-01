@@ -41,6 +41,7 @@ import {
 } from './rules/entry.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
+  forbidGeneratedIndex,
   limitIndexWords,
   requirePurposes,
   requireReadFirst,
@@ -56,11 +57,7 @@ import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
 import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
-import {
-  fixtureAgentsRules,
-  formatFixtureRegistry,
-  makeRepository,
-} from './repository-pair.test-host';
+import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -76,8 +73,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  root = makeRepository(scratchDirectories);
-  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(2));
+  root = makeRepository(scratchDirectories, 2);
 });
 
 /** The system-state rules that apply at the fixture's pin, epoch 2. */
@@ -157,6 +153,7 @@ const fixtureCodeRules = fixtureRuleSets['system-state'];
 
 describe('every rule holds on the fixture repository', () => {
   test.each(fixtureCodeRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
+    if (!appliesAt(rule, 2)) root = makeRepository(scratchDirectories, 1);
     expect(judge(rule)).toEqual([]);
   });
 });
@@ -398,6 +395,20 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       path: 'wiki',
       message: `the map of section how-to (\`puni burokrat wiki map how-to\`) prints 476 words; at most ${String(indexWordBudget)}`,
       remedy: 'shorten the read-when of the pages in wiki/how-to/, or merge pages',
+    },
+  ],
+  [
+    'a generated index an older puni committed',
+    forbidGeneratedIndex,
+    () => {
+      writeRepositoryFile(root, 'wiki/index/index.md', '# Wiki index\n');
+      writeRepositoryFile(root, 'wiki/index/app.md', '# Wiki index: app\n');
+    },
+    {
+      rule: 'index.leftover',
+      path: 'wiki/index',
+      message:
+        'holds 2 files an older puni generated; `puni burokrat wiki map` prints the map instead',
     },
   ],
   [
@@ -1111,7 +1122,7 @@ describe('the check command', () => {
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [
-        'agents.index AGENTS.md: does not name puni burokrat wiki map; fix: name `puni burokrat wiki map` in AGENTS.md as the command printing the map to read first',
+        'agents.index AGENTS.md: does not name puni burokrat wiki map; fix: replace `wiki/index/index.md` in AGENTS.md with `puni burokrat wiki map`; where it names neither, add the line: - Unsure where something lives? `puni burokrat wiki map` prints the map from a task to the file to read first.',
         'agents.records AGENTS.md: does not give the records checkout ../demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'agents.records AGENTS.md: does not give the records repository URL https://github.com/acme/demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'readme.exists README.md: is missing; fix: create README.md at the root: what the repository is, for a person arriving',

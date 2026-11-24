@@ -73,7 +73,7 @@ const mapCommand = formatMapCommand('puni');
 export const agentsNamesMap: Rule = {
   id: 'agents.index',
   since: 2,
-  remedy: `name \`${mapCommand}\` in AGENTS.md as the command printing the map to read first`,
+  remedy: `replace \`${indexFile}\` in AGENTS.md with \`${mapCommand}\`; where it names neither, add the line: - Unsure where something lives? \`${mapCommand}\` prints the map from a task to the file to read first.`,
   judge(reading) {
     const text = readOptional(reading, 'AGENTS.md');
     if (text === undefined || text.includes(mapCommand)) return [];

@@ -50,9 +50,12 @@ export const checkParser = object({
   }),
 });
 
-/** The line naming the rules a repository's pin leaves unapplied, and how to apply them. */
+/**
+ * The line naming the rules that epochs after the repository's pin add or change, an older
+ * variant of an id perhaps applying meanwhile, and how to take them.
+ */
 function formatNewer({ pin, ids }: NewerRules): string {
-  return `newer: puni.json pins rules epoch ${String(pin)}, so ${ids.join(', ')} ${ids.length === 1 ? 'is' : 'are'} not applied; run ${rulesUpgradeCommand}\n`;
+  return `newer: puni.json pins rules epoch ${String(pin)}; later epochs add or change: ${ids.join(', ')}; run ${rulesUpgradeCommand}\n`;
 }
 
 /**

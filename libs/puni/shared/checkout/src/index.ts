@@ -24,6 +24,7 @@ export {
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
 export {
+  generatedIndexDirectory,
   type MapPage,
   type MapProject,
   type MapSources,

@@ -21,6 +21,7 @@ import {
 } from './rules/entry.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
+  forbidGeneratedIndex,
   limitIndexWords,
   requirePurposes,
   requireReadFirst,
@@ -50,9 +51,9 @@ const at =
   (rule: Rule): LeveledRule => ({ level, rule });
 
 /**
- * The rules for a `system-state` repository. Entry files, the map (its sources, every
- * `project.json`, which the root project's check reads, its purposes and its budget) and the CI
- * workflow are repository-level; the per-file and per-project rules are project-level.
+ * The rules for a `system-state` repository. Entry files, the map (its sources, which the root
+ * project's check reads across every project, its purposes, its budget and a leftover generated
+ * index) and the CI workflow are repository-level; the per-file and per-project rules are project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
@@ -68,6 +69,7 @@ export const codeRules: readonly LeveledRule[] = [
     matchRecordsLocation,
     requireCiGate,
     requirePurposes,
+    forbidGeneratedIndex,
     requireReadWhen,
     requireReadFirst,
     requireScope,
@@ -134,8 +136,9 @@ export const checkRules: CheckRules = {
 };
 
 /**
- * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
- * only ids a repository's verdict may lose when it raises its pin.
+ * The rule objects ended by an `until` with no successor, by id, at that epoch: the only ids a
+ * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
+ * listed.
  */
 export const retiredRules: Readonly<Record<string, number>> = {};
 

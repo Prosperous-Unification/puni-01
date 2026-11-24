@@ -37,7 +37,7 @@ function runHook(project: string) {
 
 /** The line the hook prints when it cannot print the map. */
 const fallback =
-  'The wiki map could not be printed (see above); run bun install, then bun run puni burokrat wiki map.\n';
+  'The wiki map could not be printed: if a package is missing run bun install; otherwise fix what the error above names, then run bun run puni burokrat wiki map.\n';
 
 /**
  * Claude Code adds what a `SessionStart` hook prints to the session's context, so every session

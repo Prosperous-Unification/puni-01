@@ -28,8 +28,8 @@ Each layer is short, and names the next:
 
 1. `AGENTS.md`, read every session: the rules, the gate, and the map's command.
 2. The root of the map, `bun run puni burokrat wiki map`, which the `SessionStart` hook of
-   `.claude/settings.json` prints into every Claude Code session (or what stopped it, and to run
-   `bun install`): a "Read when" line per page, by section, and a line per top-level partition.
+   `.claude/settings.json` prints into every Claude Code session (or the error that stopped it
+   and how to fix it): a "Read when" line per page, by section, and a line per top-level partition.
 3. A section or partition, `bun run puni burokrat wiki map <name>`: a "Read when" line per page,
    or per library placed there, linking its `readFirst`, and the partitions below.
 4. The page, or the library's `readFirst` file and the JSDoc on its exports.

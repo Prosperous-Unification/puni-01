@@ -1,13 +1,18 @@
 import { posix } from 'node:path';
-import { leavesRoot } from '@puni/shared-checkout';
+import { generatedIndexDirectory, leavesRoot } from '@puni/shared-checkout';
 
 /**
  * Whether the file at `path` is documentation the docs rules judge: `AGENTS.md`, `README.md`, or
- * Markdown under `wiki/`.
+ * Markdown under `wiki/` outside the generated index an older puni wrote, which
+ * `index.leftover` reports instead.
  */
 export function isDocumentation(path: string): boolean {
   if (path === 'AGENTS.md' || path === 'README.md') return true;
-  return path.startsWith('wiki/') && path.endsWith('.md');
+  return (
+    path.startsWith('wiki/') &&
+    path.endsWith('.md') &&
+    !path.startsWith(`${generatedIndexDirectory}/`)
+  );
 }
 
 /** The Markdown of `text` split into the lines of fenced code blocks and the prose between them. */

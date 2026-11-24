@@ -1,5 +1,7 @@
 import {
   formatMapCommand,
+  generatedIndexDirectory,
+  repositoryScope,
   indexWordBudget,
   judgePurposes,
   listPartitions,
@@ -15,8 +17,8 @@ import {
 } from '@puni/shared-checkout';
 import type { Breach, Rule, RuleReading } from '../finding';
 
-function readSources({ files, projectSources }: RuleReading): MapSources {
-  return readMapSources(files, projectSources);
+function readSources({ files, projectSources, registry }: RuleReading): MapSources {
+  return readMapSources(files, projectSources, registry.rules);
 }
 
 /** The argument that prints `level`, `undefined` for the root. */
@@ -105,6 +107,31 @@ export const requirePurposes: Rule = {
     return judgePurposes(sources.projects, reading.registry.map, sources.defects.length === 0).map(
       ({ message, remedy }) => ({ path: 'puni.json', message, remedy }),
     );
+  },
+};
+
+/** The index file AGENTS.md and README.md named before the map was printed. */
+const generatedIndexFile = `${generatedIndexDirectory}/index.md`;
+
+/**
+ * From rules epoch 2 the map is printed, never committed: a `wiki/index/` an older puni generated
+ * is a leftover, one finding however many files it holds.
+ */
+export const forbidGeneratedIndex: Rule = {
+  id: 'index.leftover',
+  since: 2,
+  remedy: `run \`git rm -r ${generatedIndexDirectory}\`, then replace each \`${generatedIndexFile}\` in AGENTS.md and README.md with \`${formatMapCommand('puni')}\``,
+  judge({ files }) {
+    const left = files
+      .listVisible(repositoryScope)
+      .filter((path) => path.startsWith(`${generatedIndexDirectory}/`));
+    if (left.length === 0) return [];
+    return [
+      {
+        path: generatedIndexDirectory,
+        message: `holds ${String(left.length)} ${left.length === 1 ? 'file' : 'files'} an older puni generated; \`${formatMapCommand('puni')}\` prints the map instead`,
+      },
+    ];
   },
 };
 

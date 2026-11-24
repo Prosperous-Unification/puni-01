@@ -51,8 +51,6 @@ export interface FileSystem {
   list(path: string): readonly DirectoryEntry[];
   /** Writes `text` to the file at `path`, whose directory exists. */
   write(path: string, text: string): void;
-  /** Removes the file or the whole directory at `path`. */
-  remove(path: string): void;
   /** Creates the directory at `path` and every missing parent. */
   makeDirectory(path: string): void;
   /**

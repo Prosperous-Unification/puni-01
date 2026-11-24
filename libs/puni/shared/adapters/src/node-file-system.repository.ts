@@ -8,7 +8,6 @@ import {
   readSync,
   readFileSync,
   readlinkSync,
-  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -96,9 +95,6 @@ export function createNodeFileSystem(): FileSystem {
       })),
     write(path, text) {
       writeFileSync(path, text);
-    },
-    remove(path) {
-      rmSync(path, { recursive: true });
     },
     makeDirectory(path) {
       mkdirSync(path, { recursive: true });
