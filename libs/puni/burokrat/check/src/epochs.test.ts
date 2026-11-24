@@ -21,7 +21,14 @@ import {
   type Rule,
 } from './finding';
 import { fixtureAgentsRules, makeRepositoryPair } from './repository-pair.test-host';
-import { checkRules, latestRulesEpoch, retiredRules } from './rule-set.rule';
+import {
+  checkRules,
+  codeRules,
+  crossProjectRules,
+  latestRulesEpoch,
+  recordsRules,
+  retiredRules,
+} from './rule-set.rule';
 import { pinAgentsRules } from './rules/entry.rule';
 
 /** A rule that finds `path` wherever it exists, under `id`, from `since` (until `until`). */
@@ -119,6 +126,13 @@ function pin(rules: number): void {
   writeFileSync(agents, readFileSync(agents, 'utf8').replace(fixtureAgentsRules, secondRules));
 }
 
+/** The production counts each mode applies at pin 1, before the later rules here. */
+const stateCount = codeRules.length;
+const projectCount = codeRules.filter(({ level }) => level === 'project').length;
+const crossCount = crossProjectRules.length;
+const recordsCount = recordsRules.length;
+const n = String;
+
 const newer = (ids: string) =>
   `newer: puni.json pins rules epoch 1, so ${ids} not applied; run puni burokrat repo upgrade\n`;
 const later = (id: string) => `${id} later.md: exists; fix: remove later.md`;
@@ -127,20 +141,20 @@ const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     'whole',
     {},
-    `ok: system-state, 28 rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 29 rules, 2 findings.\n`,
+    `ok: system-state, ${n(stateCount + 1)} rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, ${n(stateCount + 2)} rules, 2 findings.\n`,
   ],
   [
     '--project one',
     { project: 'one' },
-    `ok: system-state, project one, 11 rules, no findings.\n${newer('demo.also, demo.later are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, project one, 13 rules, 2 findings.\n`,
+    `ok: system-state, project one, ${n(projectCount)} rules, no findings.\n${newer('demo.also, demo.later are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, project one, ${n(projectCount + 2)} rules, 2 findings.\n`,
   ],
   [
     '--cross-project-links',
     { crossProjectLinks: true },
-    `ok: system-state, cross-project links, 3 rules, no findings.\n${newer('demo.cross is')}`,
-    `${later('demo.cross')}\nfail: system-state, cross-project links, 4 rules, 1 finding.\n`,
+    `ok: system-state, cross-project links, ${n(crossCount)} rules, no findings.\n${newer('demo.cross is')}`,
+    `${later('demo.cross')}\nfail: system-state, cross-project links, ${n(crossCount + 1)} rules, 1 finding.\n`,
   ],
   [
     '--staged',
@@ -157,8 +171,8 @@ const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     '--repo system-records',
     { repo: 'system-records' },
-    `ok: system-records, 10 rules, no findings.\n${newer('demo.records is')}`,
-    'demo.records AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, 11 rules, 1 finding.\n',
+    `ok: system-records, ${n(recordsCount)} rules, no findings.\n${newer('demo.records is')}`,
+    `demo.records AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, ${n(recordsCount + 1)} rules, 1 finding.\n`,
   ],
 ];
 
@@ -196,7 +210,7 @@ describe('check at a rules pin', () => {
   test('a retired rule applies before its until and is neither applied nor newer after', () => {
     writeFileSync(join(state, 'retired.md'), 'x\n');
     expect(host.runCheck({}, state).stdout).toStartWith(
-      'demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, 28 rules, 1 finding.\n',
+      `demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, ${n(stateCount + 1)} rules, 1 finding.\n`,
     );
     pin(2);
     expect(host.runCheck({}, state).stdout).not.toContain('demo.retired');

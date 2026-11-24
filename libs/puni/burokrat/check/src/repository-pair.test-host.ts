@@ -170,9 +170,10 @@ export function writeRecord(
   root: string,
   path: string,
   fields: Readonly<Record<string, string>>,
+  body = 'Body.',
 ): void {
   const lines = Object.entries(fields).map(([key, value]) => `${key}: ${value}`);
-  writeRepositoryFile(root, path, ['---', ...lines, '---', '', 'Body.', ''].join('\n'));
+  writeRepositoryFile(root, path, ['---', ...lines, '---', '', body, ''].join('\n'));
 }
 
 /** The fixture records repository's first record, superseded by {@link supersedingRecord}. */

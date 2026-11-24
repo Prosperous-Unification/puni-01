@@ -1,6 +1,20 @@
 /** Paths relative to the repository root, or why git gave none. */
 export type GitListing = { readonly files: readonly string[] } | { readonly failure: string };
 
+/**
+ * One entry of a git index, by the kind its mode names: a regular file, executable or not; a
+ * symlink, with the target text the index holds for it; or a gitlink, a commit of another
+ * repository recorded in place of a directory.
+ */
+export type GitIndexEntry =
+  | { readonly path: string; readonly kind: 'file' }
+  | { readonly path: string; readonly kind: 'symlink'; readonly target: string }
+  | { readonly path: string; readonly kind: 'gitlink' };
+
+/** The entries of a git index by path, or why git gave none. */
+export type GitIndexEntries =
+  { readonly entries: readonly GitIndexEntry[] } | { readonly failure: string };
+
 /** The text of one file as git holds it, or why git gave none. */
 export type GitText = { readonly text: string } | { readonly failure: string };
 
@@ -70,7 +84,15 @@ export interface Git {
    * unmerged entries, is a `failure` naming the reason, never an empty or doubled list.
    */
   listVisibleFiles(root: string): GitListing;
-  /** The files added, copied, modified or renamed in the index of the repository at `root`. */
+  /**
+   * The entries of the index of the repository at `root`, sorted by path. An index holding
+   * unmerged entries, or an entry of a mode git does not write, is a `failure` naming them.
+   */
+  listIndexEntries(root: string): GitIndexEntries;
+  /**
+   * The files and symlinks added, copied, modified or renamed in the index of the repository at
+   * `root`; a gitlink, which has no text, is not one.
+   */
   listStagedFiles(root: string): GitListing;
   /** The text the index of the repository at `root` holds for `path`. */
   readStagedText(root: string, path: string): GitText;

@@ -110,6 +110,27 @@ describe('checkoutFiles over a memory file system', () => {
     expect(files.listVisibleEntries()).toContainEqual({ path: 'CLAUDE.md', kind: 'symlink' });
   });
 
+  test('a scope lists the index entries it owns, a symlink with its target, a gitlink', () => {
+    const { container } = openHost(
+      { ...tree, '/r/libs/two/vendor': { directory: true } },
+      { gitlinks: ['/r/libs/two/vendor'] },
+    );
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    const projects = container.resolve('checkoutProjectScope').list(files);
+    const two = projects.find((project) => project.name === 'two');
+    if (two === undefined) throw new Error('two is not a project');
+    expect(files.listIndexEntries({ kind: 'project', project: two, projects })).toEqual([
+      { path: 'libs/two/a.md', kind: 'file' },
+      { path: 'libs/two/project.json', kind: 'file' },
+      { path: 'libs/two/vendor', kind: 'gitlink' },
+    ]);
+    expect(files.listIndexEntries(repositoryScope)).toContainEqual({
+      path: 'CLAUDE.md',
+      kind: 'symlink',
+      target: 'README.md',
+    });
+  });
+
   test.each(['../outside.md', '/etc/hostname', 'a/../../x'])('the path %s is refused', (path) => {
     const files = openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(caught(() => files.readText(path))).toBeInstanceOf(CheckoutPathRefused);
@@ -166,6 +187,8 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['nav/plans/2031-04-05-a.md', true],
     ['bur/archive/2031-04-05-a.md', true],
+    ['bur/findings/2031-04-05-a.md', true],
+    ['bur/assessment-reviews/2031-04-05-a.md', true],
     ['nav/plans/deep/2031-04-05-a.md', false],
     ['nav/plans', false],
     ['nav/other/a.md', false],
@@ -184,7 +207,7 @@ describe('checkoutFiles over a memory file system', () => {
       return;
     }
     expect(caught(write)).toMatchObject({
-      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/archive), the only place a system-records checkout writes`,
+      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive), the only place a system-records checkout writes`,
     });
     expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
   });
@@ -238,6 +261,7 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['listVisible', (files: Files) => files.listVisible(repositoryScope)],
     ['listVisibleEntries', (files: Files) => files.listVisibleEntries()],
+    ['listIndexEntries', (files: Files) => files.listIndexEntries(repositoryScope)],
     ['the project listing', (files: Files, projects: Projects) => projects.list(files)],
   ] as const)('a git failure makes %s throw the one repository.git defect', (_name, list) => {
     const { container } = openHost(tree, { gitFailure: 'git exploded' });
@@ -275,6 +299,7 @@ describe('the staged view of a checkout', () => {
     );
     const staged = container.resolve('checkoutFiles').openStaged('/r');
     expect(staged.listVisible(repositoryScope)).toEqual(['a.md']);
+    expect(staged.listIndexEntries(repositoryScope)).toEqual([]);
     expect(staged.readText('a.md')).toBe('index');
     expect(caught(() => staged.readText('b.md'))).toBeInstanceOf(StagedTextUnreadable);
     expect(
@@ -282,5 +307,8 @@ describe('the staged view of a checkout', () => {
         staged.write('wiki/index/index.md', 'x');
       }),
     ).toBeInstanceOf(CheckoutPathRefused);
+    expect(caught(() => staged.createFile('wiki/index/local.md', 'x'))).toBeInstanceOf(
+      CheckoutPathRefused,
+    );
   });
 });

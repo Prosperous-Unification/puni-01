@@ -14,15 +14,34 @@ describe('burokratParser', () => {
     });
   });
 
-  test.each(['repo', 'adr', 'change', 'assess'])('a bare %s asks for its help', (group) => {
-    expect(parse(burokratParser, [group])).toEqual({
-      success: true,
-      value: { kind: 'help', path: [group] },
-    });
-  });
+  test.each(['repo', 'adr', 'change', 'assess', 'review', 'skills'])(
+    'a bare %s asks for its help',
+    (group) => {
+      expect(parse(burokratParser, [group])).toEqual({
+        success: true,
+        value: { kind: 'help', path: [group] },
+      });
+    },
+  );
 
   test.each([
     ['wiki index', { kind: 'wiki index', print: false }],
+    ['skills install --platform claude', { kind: 'skills install', platform: 'claude' }],
+    [
+      'review start --request r.json --state s.json',
+      { kind: 'review start', request: 'r.json', state: 's.json' },
+    ],
+    ['review next --state s.json', { kind: 'review next', state: 's.json' }],
+    [
+      'review submit --state s.json --result r.json',
+      { kind: 'review submit', state: 's.json', responseFile: 'r.json' },
+    ],
+    [
+      'review file --state s.json --title T --topics a --summary S',
+      { kind: 'review file', state: 's.json', title: 'T', topics: 'a', summary: 'S' },
+    ],
+    ['assess templates --json', { kind: 'assess templates', json: true }],
+
     [
       'check',
       {
@@ -102,6 +121,8 @@ describe('burokratParser', () => {
     'stray',
     '--bogus',
     'wiki stray',
+    'review submit --state s.json',
+    'skills install --platform unknown',
     'wiki --bogus',
     'wiki index --check',
     'check --bogus',
