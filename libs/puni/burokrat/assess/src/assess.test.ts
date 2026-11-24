@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { checkoutModule, formatRegistry } from '@puni/shared-checkout';
+import { recordsModule } from '@puni/shared-records';
 import type { GitMerge } from '@puni/shared-ports';
 import {
   closeAfterEach,
@@ -149,7 +150,7 @@ const lines = (...entries: readonly string[]) => `${entries.join('\n')}\n`;
  * 500,000 on main and 100,000 on a branch no outcome merged.
  */
 const tree: MemoryTree = {
-  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${state}/card.json`]: JSON.stringify(card),
   [`${claudeProjects}/-w-demo/s1.jsonl`]: lines(
     claudeLink('s1'),
@@ -224,7 +225,7 @@ function assess(
 ) {
   const container = track(
     DiBag.createBuilder()
-      .withInstalledModules([checkoutModule, burokratAssessModule])
+      .withInstalledModules([checkoutModule, recordsModule, burokratAssessModule])
       .withServices(memoryHost(fixture, hostOptions).services)
       .buildContainer(),
   );

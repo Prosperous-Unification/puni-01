@@ -5,23 +5,52 @@ import { type MemoryHost, nodeHostModule } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { createCheckCommand } from './check.command';
 import type { CheckRequest } from './contract';
-import { applyRule, type Finding, type ReferenceReach, type Rule } from './finding';
-import { createRepositoryCheck } from './repository-check.feature';
+import {
+  applyRule,
+  type CheckRules,
+  type Finding,
+  type ReferenceReach,
+  type Rule,
+} from './finding';
+import { createLatestRules, createRepositoryCheck } from './repository-check.feature';
 import { fixtureAgentsRulesDigest, fixtureCommands } from './repository-pair.test-host';
-import { ruleSets } from './rule-set.rule';
-import { agentsKeepRules, pinAgentsRules } from './rules/entry.rule';
+import { checkRules } from './rule-set.rule';
+import { pinAgentsRules } from './rules/entry.rule';
 
-/** `agents.rules` pinned to the fixtures' rules section, not this repository's. */
-export const fixtureAgentsKeepRules = pinAgentsRules(fixtureAgentsRulesDigest);
+/**
+ * {@link checkRules} judging the fixtures' rules section, not this repository's: the
+ * `agents.rules` rules made of `digests` in place of the production ones, at the same level.
+ */
+export function fixtureCheckRules(
+  digests: Readonly<Record<number, string>> = { 1: fixtureAgentsRulesDigest },
+): CheckRules {
+  const state = checkRules.sets['system-state'].filter(({ rule }) => rule.id !== 'agents.rules');
+  return {
+    ...checkRules,
+    sets: {
+      ...checkRules.sets,
+      'system-state': [
+        ...state,
+        ...pinAgentsRules(digests).map((rule) => ({ level: 'repository' as const, rule })),
+      ],
+    },
+    agentsRulesDigests: digests,
+  };
+}
 
-/** {@link ruleSets} with {@link fixtureAgentsKeepRules} in place of the production `agents.rules`. */
-export const fixtureRuleSets: typeof ruleSets = {
-  'system-state': ruleSets['system-state'].map(({ level, rule }) => ({
-    level,
-    rule: rule === agentsKeepRules ? fixtureAgentsKeepRules : rule,
-  })),
-  'system-records': ruleSets['system-records'],
-};
+const fixtureRules = fixtureCheckRules();
+
+/** The rule sets of {@link fixtureCheckRules}. */
+export const fixtureRuleSets = fixtureRules.sets;
+
+function findAgentsRule(): Rule {
+  const found = fixtureRuleSets['system-state'].find(({ rule }) => rule.id === 'agents.rules');
+  if (found === undefined) throw new Error('the fixture rule set has no agents.rules');
+  return found.rule;
+}
+
+/** The one `agents.rules` rule of {@link fixtureRuleSets}. */
+export const fixtureAgentsKeepRules: Rule = findAgentsRule();
 
 /** One run of the check command: its exit code and what it printed. */
 export interface CheckRun {
@@ -30,20 +59,28 @@ export interface CheckRun {
   readonly stderr: string;
 }
 
+/** The version the check host's program source names. */
+export const fixtureVersion = '9.8.7';
+
 /**
- * The check module's services, judging by {@link fixtureRuleSets}, with the checkout and records
- * modules they need and `commands` as the command catalog, over this machine, or over the memory host services `memory` put in its place. Its
- * owner closes it.
+ * The check module's services, judging by `rules` ({@link fixtureCheckRules} unless given),
+ * with the checkout and records modules they need, `commands` as the command catalog and a
+ * program of {@link fixtureVersion}, over this machine, or over the memory host services
+ * `memory` put in its place. Its owner closes it.
  */
 export function openCheckHost(
   memory?: MemoryHost['services'],
   commands: readonly CommandBrief[] = fixtureCommands,
+  rules: CheckRules = fixtureRules,
 ) {
   const machine = DiBag.createBuilder()
     .withInstalledModules([nodeHostModule, checkoutModule, recordsModule])
-    .withServices({ commandCatalog: () => ({ list: () => commands }) })
-    .withServices({ checkRuleSets: () => fixtureRuleSets })
-    .withServices({ repositoryCheck: createRepositoryCheck })
+    .withServices({
+      commandCatalog: () => ({ list: () => commands }),
+      programSource: () => ({ directory: '/nowhere', version: fixtureVersion }),
+    })
+    .withServices({ checkRules: () => rules })
+    .withServices({ repositoryCheck: createRepositoryCheck, latestRules: createLatestRules })
     .withServices({ burokratCheckCommand: createCheckCommand })
     .buildContainer();
   const container =

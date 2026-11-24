@@ -19,7 +19,7 @@ const records = '/w/demo-records';
 const filed = 'nav/plans/2031-04-05-first-plan.md';
 
 const pair: MemoryTree = {
-  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${records}/AGENTS.md`]: '# records\n',
 };
 

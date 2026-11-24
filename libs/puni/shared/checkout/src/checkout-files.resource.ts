@@ -6,6 +6,7 @@ import type {
   CommitCheckout,
   FileSystem,
   Git,
+  GitIndexEntry,
   GitListing,
   NewCheckout,
   NewCheckoutPlace,
@@ -44,39 +45,93 @@ function normalise(path: string): string {
 interface WriteArea {
   readonly description: string;
   holdsFile(normal: string): boolean;
+  /** Where the checkout removes files, which may be less than where it writes them. */
+  readonly removedDescription: string;
+  removesFile(normal: string): boolean;
   holdsDirectory(normal: string): boolean;
 }
+
+/** How a path is changed: a file written or removed, or a directory emptied. */
+type Change = 'write' | 'remove' | 'directory';
 
 const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
- * The write area of a checkout of each type: a system-state checkout writes only the generated
- * index, anywhere below `wiki/index/`, and may remove a file standing where `wiki/index` belongs;
- * a records checkout writes only record files, directly inside a kind directory, and empties no
- * directory.
+ * The files a system-state checkout writes outside the generated index: the registry and the
+ * entry file whose rules section follows its `rules` pin.
  */
+const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md'];
+
+/**
+ * The write area of a checkout of each type: a system-state checkout writes only the generated
+ * index, anywhere below `wiki/index/`, and the {@link pinnedFiles}, and removes only index
+ * files and a file standing where `wiki/index` belongs; a records checkout writes and removes
+ * only record files, directly inside a kind directory, and empties no directory.
+ */
+const inIndex = (normal: string): boolean =>
+  normal === indexDirectory || normal.startsWith(`${indexDirectory}/`);
+
+const inKindDirectory = (normal: string): boolean =>
+  kindDirectories.includes(posix.dirname(normal));
+
 const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
   'system-state': {
-    description: `inside ${indexDirectory}/`,
-    holdsFile: (normal) => normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
-    holdsDirectory: (normal) =>
-      normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
+    description: `inside ${indexDirectory}/ or ${pinnedFiles.join(' or ')}`,
+    holdsFile: (normal) => pinnedFiles.includes(normal) || inIndex(normal),
+    removedDescription: `inside ${indexDirectory}/`,
+    removesFile: inIndex,
+    holdsDirectory: inIndex,
   },
   'system-records': {
     description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
+    holdsFile: inKindDirectory,
+    removedDescription: `directly inside a kind directory (${kindDirectories.join(', ')})`,
+    removesFile: inKindDirectory,
     holdsDirectory: () => false,
   },
 };
 
-/** `path` normalised, refused unless the write area of a `type` checkout holds it. */
-function normaliseWritten(path: string, type: RepositoryType, directory: boolean): string {
+/** `path` normalised, refused unless the write area of a `type` checkout allows `change` there. */
+function normaliseWritten(path: string, type: RepositoryType, change: Change): string {
   const normal = normalise(path);
   const area = writeAreas[type];
-  if (!(directory ? area.holdsDirectory(normal) : area.holdsFile(normal))) {
-    refuse(path, `is not ${area.description}, the only place a ${type} checkout writes`);
+  const allowed =
+    change === 'write'
+      ? area.holdsFile(normal)
+      : change === 'remove'
+        ? area.removesFile(normal)
+        : area.holdsDirectory(normal);
+  if (!allowed) {
+    const [where, verb] =
+      change === 'remove' ? [area.removedDescription, 'removes'] : [area.description, 'writes'];
+    refuse(path, `is not ${where}, the only place a ${type} checkout ${verb}`);
   }
   return normal;
+}
+
+/** Makes each missing parent of a new file, checking directory types without following links. */
+function ensureCreateParents(fileSystem: FileSystem, root: string, path: string): void {
+  const parents = ['.'];
+  const directory = posix.dirname(path);
+  if (directory !== '.') {
+    for (const segment of directory.split('/')) {
+      parents.push(posix.join(parents.at(-1) ?? '.', segment));
+    }
+  }
+  for (const parent of parents) {
+    const absolute = join(root, parent);
+    const kind = fileSystem.stat(absolute, 'no-follow');
+    if (kind === 'directory') continue;
+    if (kind !== 'absent') refuse(path, `${parent} is a ${kind}; expected a directory`);
+    fileSystem.makeDirectory(absolute);
+    if (fileSystem.stat(absolute, 'no-follow') !== 'directory') {
+      refuse(path, `${parent} did not become a directory`);
+    }
+  }
+  for (const parent of parents) {
+    const kind = fileSystem.stat(join(root, parent), 'no-follow');
+    if (kind !== 'directory') refuse(path, `${parent} is ${kind}; expected a directory`);
+  }
 }
 
 /** The files of `listing`, sorted by their bytes; a failure is the one defect of every listing. */
@@ -87,6 +142,25 @@ function requireListed(listing: GitListing): string[] {
     });
   }
   return [...listing.files].sort(compareBytes);
+}
+
+/**
+ * Asks git for the index entries of `root` once, on the first call, and answers every later call
+ * the same; a failure is the one defect of every listing.
+ */
+function listIndexOnce(git: Git, root: string): () => readonly GitIndexEntry[] {
+  let listed: readonly GitIndexEntry[] | undefined;
+  return () => {
+    if (listed !== undefined) return listed;
+    const entries = git.listIndexEntries(root);
+    if ('failure' in entries) {
+      throw new CheckoutUnlistable({
+        details: { rule: 'repository.git', path: '.', reason: entries.failure },
+      });
+    }
+    listed = [...entries.entries].sort((left, right) => compareBytes(left.path, right.path));
+    return listed;
+  };
 }
 
 /** Asks `list` once, on the first call, and answers every later call the same. */
@@ -102,6 +176,7 @@ function openCheckout(
   git: Git,
 ): CheckoutFiles {
   const listGit = listOnce(() => git.listVisibleFiles(root));
+  const listIndex = listIndexOnce(git, root);
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
     fileSystem.stat(absolute(path), 'no-follow');
@@ -130,6 +205,7 @@ function openCheckout(
         const kind = describe(path);
         return kind === 'absent' ? [] : [{ path, kind }];
       }),
+    listIndexEntries: (scope) => listIndex().filter(({ path }) => ownsPath(scope, path)),
     readHeadCommit() {
       const head = git.readHeadCommit(root);
       if ('failure' in head) {
@@ -140,15 +216,26 @@ function openCheckout(
       return head.text;
     },
     write(path, text) {
-      const normal = normaliseWritten(path, type, false);
+      const normal = normaliseWritten(path, type, 'write');
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
+    createFile(path, text) {
+      const normal = normaliseWritten(path, type, 'write');
+      ensureCreateParents(fileSystem, root, normal);
+      try {
+        fileSystem.writeNew(join(root, normal), text);
+        return 'created';
+      } catch (cause) {
+        if (cause instanceof Error && 'code' in cause && cause.code === 'EEXIST') return 'exists';
+        throw cause;
+      }
+    },
     remove(path) {
-      fileSystem.remove(join(root, normaliseWritten(path, type, false)));
+      fileSystem.remove(join(root, normaliseWritten(path, type, 'remove')));
     },
     removeEmptyDirectories(directory) {
-      removeEmptyBelow(normaliseWritten(directory, type, true));
+      removeEmptyBelow(normaliseWritten(directory, type, 'directory'));
     },
   };
 }
@@ -170,7 +257,9 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
     isShown: (path) => isShownIn(listStaged(), path, () => true),
     listVisible: (scope) => listStaged().filter((path) => ownsPath(scope, path)),
     listVisibleEntries: () => listStaged().map((path) => ({ path, kind: 'file' })),
+    listIndexEntries: () => [],
     write: readOnly,
+    createFile: readOnly,
     remove: readOnly,
     removeEmptyDirectories: readOnly,
   };
@@ -214,6 +303,7 @@ function openCommits(
       isShown: (path) => isShownIn(paths, path, () => true),
       listVisible: (scope) => paths.filter((path) => ownsPath(scope, path)),
       listVisibleEntries: () => paths.map((path) => ({ path, kind: 'file' })),
+      listIndexEntries: () => [],
       write: readOnly,
       remove: readOnly,
       removeEmptyDirectories: readOnly,

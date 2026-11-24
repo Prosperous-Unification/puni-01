@@ -13,6 +13,8 @@ import { assessParser } from '@puni/burokrat-assess';
 import { changeParser } from '@puni/burokrat-change';
 import { checkParser } from '@puni/burokrat-check';
 import { repoParser } from '@puni/burokrat-repo';
+import { reviewParser } from '@puni/burokrat-review';
+import { skillsParser } from '@puni/burokrat-skills';
 import { wikiParser } from '@puni/burokrat-wiki';
 import { admissionParser } from '@puni/dash-admission';
 import { authorityParser } from '@puni/dash-authority';
@@ -95,11 +97,17 @@ export const burokratParser = map(
         brief: message`Judge the repository against its rules.`,
       }),
       command('wiki', wikiParser, { brief: message`Generate the wiki index.` }),
-      command('repo', repoParser, { brief: message`Set up repositories for puni to govern.` }),
+      command('repo', repoParser, {
+        brief: message`Set up the repositories puni governs, and raise their rules pin.`,
+      }),
       command('adr', adrParser, { brief: message`File architecture decision records.` }),
       command('change', changeParser, { brief: message`Archive finished changes.` }),
+      command('skills', skillsParser, { brief: message`Manage PUNI's repository skills.` }),
+      command('review', reviewParser, {
+        brief: message`Review evidence against criteria and file the scored findings.`,
+      }),
       command('assess', assessParser, {
-        brief: message`Assess the outcomes of work and what they cost.`,
+        brief: message`List assessment criteria maps and assess the cost of outcomes.`,
       }),
     ),
   ),
@@ -201,8 +209,36 @@ export type Leaf =
       readonly request: Extract<BurokratRequest, { kind: 'repo init' }>;
     }
   | {
+      readonly kind: 'burokrat repo upgrade';
+      readonly request: Extract<BurokratRequest, { kind: 'repo upgrade' }>;
+    }
+  | {
       readonly kind: 'burokrat adr add';
       readonly request: Extract<BurokratRequest, { kind: 'adr add' }>;
+    }
+  | {
+      readonly kind: 'burokrat assess templates';
+      readonly request: Extract<BurokratRequest, { kind: 'assess templates' }>;
+    }
+  | {
+      readonly kind: 'burokrat skills install';
+      readonly request: Extract<BurokratRequest, { kind: 'skills install' }>;
+    }
+  | {
+      readonly kind: 'burokrat review start';
+      readonly request: Extract<BurokratRequest, { kind: 'review start' }>;
+    }
+  | {
+      readonly kind: 'burokrat review next';
+      readonly request: Extract<BurokratRequest, { kind: 'review next' }>;
+    }
+  | {
+      readonly kind: 'burokrat review submit';
+      readonly request: Extract<BurokratRequest, { kind: 'review submit' }>;
+    }
+  | {
+      readonly kind: 'burokrat review file';
+      readonly request: Extract<BurokratRequest, { kind: 'review file' }>;
     }
   | {
       readonly kind: 'burokrat assess outcomes';
@@ -223,7 +259,14 @@ export const handlerKeys = {
   'burokrat check': 'burokratCheckCommand',
   'burokrat wiki index': 'burokratWikiIndexCommand',
   'burokrat repo init': 'burokratRepoInitCommand',
+  'burokrat repo upgrade': 'burokratRepoUpgradeCommand',
   'burokrat adr add': 'burokratAdrAddCommand',
+  'burokrat assess templates': 'burokratAssessTemplatesCommand',
+  'burokrat skills install': 'burokratSkillsInstallCommand',
+  'burokrat review start': 'burokratReviewStartCommand',
+  'burokrat review next': 'burokratReviewNextCommand',
+  'burokrat review submit': 'burokratReviewSubmitCommand',
+  'burokrat review file': 'burokratReviewFileCommand',
   'burokrat assess outcomes': 'burokratAssessOutcomesCommand',
 } as const satisfies Record<Exclude<Leaf['kind'], 'help'>, string>;
 
@@ -269,8 +312,22 @@ function selectBurokratLeaf(request: BurokratRequest): Leaf {
       return { kind: 'burokrat wiki index', request };
     case 'repo init':
       return { kind: 'burokrat repo init', request };
+    case 'repo upgrade':
+      return { kind: 'burokrat repo upgrade', request };
     case 'adr add':
       return { kind: 'burokrat adr add', request };
+    case 'assess templates':
+      return { kind: 'burokrat assess templates', request };
+    case 'skills install':
+      return { kind: 'burokrat skills install', request };
+    case 'review start':
+      return { kind: 'burokrat review start', request };
+    case 'review next':
+      return { kind: 'burokrat review next', request };
+    case 'review submit':
+      return { kind: 'burokrat review submit', request };
+    case 'review file':
+      return { kind: 'burokrat review file', request };
     case 'assess outcomes':
       return { kind: 'burokrat assess outcomes', request };
   }

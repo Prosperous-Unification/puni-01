@@ -39,7 +39,7 @@ function caught(run: () => unknown): unknown {
   throw new Error('nothing was thrown');
 }
 
-const registry = formatRegistry('system-state', fixtureRemotes);
+const registry = formatRegistry('system-state', fixtureRemotes, 1);
 
 describe('checkoutRegistry over a memory file system', () => {
   test('an invalid puni.json is RegistryInvalid carrying its rule, path and cause', () => {
@@ -110,12 +110,68 @@ describe('checkoutFiles over a memory file system', () => {
     expect(files.listVisibleEntries()).toContainEqual({ path: 'CLAUDE.md', kind: 'symlink' });
   });
 
+  test('a scope lists the index entries it owns, a symlink with its target, a gitlink', () => {
+    const { container } = openHost(
+      { ...tree, '/r/libs/two/vendor': { directory: true } },
+      { gitlinks: ['/r/libs/two/vendor'] },
+    );
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    const projects = container.resolve('checkoutProjectScope').list(files);
+    const two = projects.find((project) => project.name === 'two');
+    if (two === undefined) throw new Error('two is not a project');
+    expect(files.listIndexEntries({ kind: 'project', project: two, projects })).toEqual([
+      { path: 'libs/two/a.md', kind: 'file' },
+      { path: 'libs/two/project.json', kind: 'file' },
+      { path: 'libs/two/vendor', kind: 'gitlink' },
+    ]);
+    expect(files.listIndexEntries(repositoryScope)).toContainEqual({
+      path: 'CLAUDE.md',
+      kind: 'symlink',
+      target: 'README.md',
+    });
+  });
+
   test.each(['../outside.md', '/etc/hostname', 'a/../../x'])('the path %s is refused', (path) => {
     const files = openHost(tree).container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(caught(() => files.readText(path))).toBeInstanceOf(CheckoutPathRefused);
   });
 
-  test('a write outside wiki/index/ is refused and nothing is written', () => {
+  test('a system-state checkout writes puni.json and AGENTS.md, which its rules pin governs', () => {
+    const { host, container } = openHost(tree);
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    files.write('puni.json', 'pinned');
+    files.write('./AGENTS.md', 'rules');
+    expect([host.nodes.get('/r/puni.json'), host.nodes.get('/r/AGENTS.md')]).toEqual([
+      'pinned',
+      'rules',
+    ]);
+    expect(
+      caught(() => {
+        files.write('docs/AGENTS.md', 'x');
+      }),
+    ).toBeInstanceOf(CheckoutPathRefused);
+  });
+
+  test.each(['puni.json', 'AGENTS.md'])(
+    'a system-state checkout writes %s but never removes it',
+    (path) => {
+      const { host, container } = openHost({ ...tree, [`/r/${path}`]: 'kept' });
+      const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+      expect(
+        caught(() => {
+          files.remove(path);
+        }),
+      ).toMatchObject({
+        message: `${path}: is not inside wiki/index/, the only place a system-state checkout removes`,
+      });
+      expect(host.nodes.get(`/r/${path}`)).toBe('kept');
+      files.write('wiki/index/index.md', 'generated');
+      files.remove('wiki/index/index.md');
+      expect(host.nodes.get('/r/wiki/index/index.md')).toBeUndefined();
+    },
+  );
+
+  test('a write outside wiki/index/, puni.json and AGENTS.md is refused, writing nothing', () => {
     const { host, container } = openHost(tree);
     const files = container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(
@@ -131,6 +187,8 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['nav/plans/2031-04-05-a.md', true],
     ['bur/archive/2031-04-05-a.md', true],
+    ['bur/findings/2031-04-05-a.md', true],
+    ['bur/assessment-reviews/2031-04-05-a.md', true],
     ['nav/plans/deep/2031-04-05-a.md', false],
     ['nav/plans', false],
     ['nav/other/a.md', false],
@@ -149,7 +207,7 @@ describe('checkoutFiles over a memory file system', () => {
       return;
     }
     expect(caught(write)).toMatchObject({
-      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/archive), the only place a system-records checkout writes`,
+      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive), the only place a system-records checkout writes`,
     });
     expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
   });
@@ -169,7 +227,7 @@ describe('checkoutFiles over a memory file system', () => {
       }),
     ).toMatchObject({
       message:
-        'nav/plans/2031-04-05-a.md: is not inside wiki/index/, the only place a system-state checkout writes',
+        'nav/plans/2031-04-05-a.md: is not inside wiki/index/ or puni.json or AGENTS.md, the only place a system-state checkout writes',
     });
   });
 
@@ -203,6 +261,7 @@ describe('checkoutFiles over a memory file system', () => {
   test.each([
     ['listVisible', (files: Files) => files.listVisible(repositoryScope)],
     ['listVisibleEntries', (files: Files) => files.listVisibleEntries()],
+    ['listIndexEntries', (files: Files) => files.listIndexEntries(repositoryScope)],
     ['the project listing', (files: Files, projects: Projects) => projects.list(files)],
   ] as const)('a git failure makes %s throw the one repository.git defect', (_name, list) => {
     const { container } = openHost(tree, { gitFailure: 'git exploded' });
@@ -240,6 +299,7 @@ describe('the staged view of a checkout', () => {
     );
     const staged = container.resolve('checkoutFiles').openStaged('/r');
     expect(staged.listVisible(repositoryScope)).toEqual(['a.md']);
+    expect(staged.listIndexEntries(repositoryScope)).toEqual([]);
     expect(staged.readText('a.md')).toBe('index');
     expect(caught(() => staged.readText('b.md'))).toBeInstanceOf(StagedTextUnreadable);
     expect(
@@ -247,5 +307,8 @@ describe('the staged view of a checkout', () => {
         staged.write('wiki/index/index.md', 'x');
       }),
     ).toBeInstanceOf(CheckoutPathRefused);
+    expect(caught(() => staged.createFile('wiki/index/local.md', 'x'))).toBeInstanceOf(
+      CheckoutPathRefused,
+    );
   });
 });

@@ -15,7 +15,7 @@ import {
  */
 export function makeStateRepository(scratchDirectories: ScratchDirectoryOwner): string {
   const root = join(scratchDirectories.createDirectory('puni-cli-'), 'demo');
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
   writeProject(root, 'apps/one', 'one', { readWhen: 'changing one', readFirst: 'src/index.ts' });
   writeRepositoryFile(root, 'libs/.gitkeep', '');
   runGit(root, ['init', '-q']);

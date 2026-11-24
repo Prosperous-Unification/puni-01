@@ -9,6 +9,7 @@ import { listInlineCode } from '../docs';
  */
 export const matchRecordsLocation: Rule = {
   id: 'agents.records',
+  since: 1,
   remedy:
     'give the records repository in AGENTS.md as puni.json registers it: its system-records URL, and `../<name>` for its checkout',
   judge({ files, registry }) {
@@ -83,6 +84,7 @@ function isWorkspace(files: CheckoutFiles): boolean {
  */
 export const requireCiGate: Rule = {
   id: 'ci.gate',
+  since: 1,
   remedy: `run \`bun run gate\` on pushes and \`bun run gate:affected\` on pull requests in ${workflow}, each whole or every \`bun run\` part of it`,
   judge({ files }) {
     if (!isWorkspace(files)) return [];
@@ -113,6 +115,7 @@ const indexSyncGenerator = '@puni/nx-sync:wiki-index';
  */
 export const requireIndexSync: Rule = {
   id: 'nx.sync',
+  since: 1,
   remedy: `restore "sync": { "globalGenerators": ["${indexSyncGenerator}"] } in nx.json; if the generator fails, fix the finding it prints instead`,
   judge({ files }) {
     const path = 'nx.json';

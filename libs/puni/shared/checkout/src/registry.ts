@@ -1,12 +1,19 @@
 import { posix } from 'node:path';
 import { RegistryInvalid } from './failures';
 import { describeValue, isRecord, parseJson, requireOnlyKeys } from './json';
+import { formatJson } from './json-format';
 
 /** The `puni.json` key naming the type of the repository that holds the file. */
 export const thisRepoTypeKey = 'this-repo-type';
 
 /** The `puni.json` key listing every repository of the project. */
 export const allReposKey = 'all-repos';
+
+/** The `puni.json` key holding the rules epoch the project is judged at. */
+export const rulesKey = 'rules';
+
+/** The prefix of a top-level `puni.json` key that the registry tolerates and ignores. */
+export const extensionKeyPrefix = 'x-';
 
 /**
  * The repository types of a project, each listed once in `all-repos` and all required: its
@@ -36,9 +43,14 @@ export interface RepositoryEntry {
   readonly remote: Remote;
 }
 
-/** What `puni.json` declares: the type of the repository holding it, and every repository. */
+/**
+ * What `puni.json` declares: the type of the repository holding it, the rules epoch its
+ * repositories are judged at, and every repository.
+ */
 export interface RepositoryRegistry {
   readonly thisType: RepositoryType;
+  /** The rules epoch: `puni burokrat check` applies only the rules introduced at or before it. */
+  readonly rules: number;
   readonly repos: Readonly<Record<RepositoryType, RepositoryEntry>>;
 }
 
@@ -92,12 +104,25 @@ function readEntry(value: unknown, where: string, refuse: Refuse): RepositoryEnt
 
 /**
  * Parses the text of `puni.json` at `file`, the one typed reader of the project's repository
- * registry: exactly `this-repo-type` (a type listed in `all-repos`) and `all-repos` (a non-empty
- * list of `{ type, remote: { type, url } }`, each of {@link repositoryTypes} exactly once).
+ * registry: exactly `this-repo-type` (a type listed in `all-repos`), `rules` (a positive integer)
+ * and `all-repos` (a non-empty list of `{ type, remote: { type, url } }`, each of
+ * {@link repositoryTypes} exactly once), and any top-level keys starting `x-`, which are ignored.
  *
  * @throws RegistryInvalid naming the file and the problem, with the index of the offending entry.
  */
 export function parseRegistry(text: string, file: string): RepositoryRegistry {
+  return readRegistryDocument(text, file).registry;
+}
+
+/**
+ * The registry `text` declares, and the JSON object it was read from.
+ *
+ * @throws RegistryInvalid as {@link parseRegistry} does.
+ */
+function readRegistryDocument(
+  text: string,
+  file: string,
+): { readonly document: Readonly<Record<string, unknown>>; readonly registry: RepositoryRegistry } {
   const refuse = (problem: string, cause?: unknown): never => {
     const details = { rule: 'repository.config', path: 'puni.json', file, problem } as const;
     throw cause === undefined
@@ -108,7 +133,17 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
   if ('problem' in read) return refuse(read.problem, read.cause);
   const parsed = read.value;
   if (!isRecord(parsed)) return refuse('is not a JSON object');
-  requireOnlyKeys(parsed, [thisRepoTypeKey, allReposKey], '', refuse);
+  requireOnlyKeys(
+    Object.fromEntries(
+      Object.entries(parsed).filter(([key]) => !key.startsWith(extensionKeyPrefix)),
+    ),
+    [thisRepoTypeKey, rulesKey, allReposKey],
+    '',
+    (problem) =>
+      refuse(
+        `${problem} and keys starting ${extensionKeyPrefix} (or upgrade puni, if a newer puni wrote them)`,
+      ),
+  );
   const list = parsed[allReposKey];
   if (!Array.isArray(list) || list.length === 0) {
     return refuse(`${allReposKey} is ${describeValue(list)}; expected a non-empty array`);
@@ -133,27 +168,55 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
       `${thisRepoTypeKey} is ${describeValue(thisType)}; expected a type listed in ${allReposKey}: ${[...byType.keys()].join(', ')}`,
     );
   }
+  const rules = parsed[rulesKey];
+  if (typeof rules !== 'number' || !Number.isSafeInteger(rules) || rules < 1) {
+    const keep =
+      rules === undefined ? ` ("${rulesKey}": 1 keeps the verdict the repository had)` : '';
+    return refuse(
+      `${rulesKey} is ${describeValue(rules)}; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)}${keep}`,
+    );
+  }
   const listed = (type: RepositoryType): RepositoryEntry =>
     byType.get(type) ?? refuse(`${allReposKey} lacks the types ${type}`);
   return {
-    thisType,
-    repos: { 'system-state': listed('system-state'), 'system-records': listed('system-records') },
+    document: parsed,
+    registry: {
+      thisType,
+      rules,
+      repos: {
+        'system-state': listed('system-state'),
+        'system-records': listed('system-records'),
+      },
+    },
   };
 }
 
 /**
- * The text of a `puni.json` declaring `thisType` and every repository type at its remote in
- * `remotes`: what {@link parseRegistry} reads back as the same registry.
+ * The text of a `puni.json` declaring `thisType`, the rules epoch `rules` and every repository
+ * type at its remote in `remotes`: what {@link parseRegistry} reads back as the same registry.
  */
 export function formatRegistry(
   thisType: RepositoryType,
   remotes: Readonly<Record<RepositoryType, string>>,
+  rules: number,
 ): string {
   return JSON.stringify({
     [thisRepoTypeKey]: thisType,
+    [rulesKey]: rules,
     [allReposKey]: repositoryTypes.map((type) => ({
       type,
       remote: { type: 'github', url: remotes[type] },
     })),
   });
+}
+
+/**
+ * The `puni.json` text `text`, which {@link parseRegistry} accepts, with its rules epoch set to
+ * `rules`: every other key and value kept in its order, printed by {@link formatJson}.
+ *
+ * @throws RegistryInvalid naming `file` when `text` is not a valid registry.
+ */
+export function repinRegistry(text: string, file: string, rules: number): string {
+  const { document } = readRegistryDocument(text, file);
+  return formatJson({ ...document, [rulesKey]: rules });
 }

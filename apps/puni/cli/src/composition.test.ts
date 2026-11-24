@@ -7,8 +7,15 @@ import { type CommandContainer, runPuni } from './main';
 const exportedKeys = [
   'burokratAdrAddCommand',
   'burokratAssessOutcomesCommand',
+  'burokratAssessTemplatesCommand',
   'burokratCheckCommand',
   'burokratRepoInitCommand',
+  'burokratRepoUpgradeCommand',
+  'burokratReviewFileCommand',
+  'burokratReviewNextCommand',
+  'burokratReviewStartCommand',
+  'burokratReviewSubmitCommand',
+  'burokratSkillsInstallCommand',
   'burokratWikiIndexCommand',
   'checkoutFiles',
   'checkoutProjectScope',
@@ -25,12 +32,15 @@ const exportedKeys = [
   'dashRunLogCommand',
   'fileSystem',
   'git',
+  'latestRules',
   'navigatorPlanAddCommand',
   'navigatorResearchAddCommand',
   'processRunner',
   'programSource',
   'recordFiling',
   'recordsCatalog',
+  'reviewTemplates',
+  'workingTreeDigest',
 ] as const;
 
 const track = closeAfterEach();

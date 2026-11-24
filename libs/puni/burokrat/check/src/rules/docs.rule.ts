@@ -22,6 +22,7 @@ function listDocumentation({ files, scope }: RuleReading): readonly string[] {
  */
 export const judgeDocPaths: Rule = {
   id: 'docs.paths',
+  since: 1,
   remedy: 'correct the path to one that exists, or remove it',
   judge(reading) {
     const { files, references } = reading;
@@ -159,6 +160,7 @@ function listNxProjects(code: string): string[] {
  */
 export const judgeDocCommands: Rule = {
   id: 'docs.commands',
+  since: 1,
   remedy: 'name a command that `puni --help` lists, or remove it',
   judge(reading) {
     const read = readScripts(reading);

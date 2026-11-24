@@ -9,13 +9,14 @@ Nx owns the task graph: affected projects, caching, ESLint under `lint`, and the
 keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool knows:
 `puni burokrat check` applies the rules of
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
-per project, which across projects and which only on the whole repository. The `gate` and
+per project, which across projects and which only on the whole repository. It applies only the
+rules that apply at the `rules` pin of [puni.json](../puni.json), by their `since` and `until`,
+and names the newer ones; `puni burokrat repo upgrade` raises the pin once the repository passes
+them. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
-`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts: `checks` (sync,
-formatting, Burokrat, typecheck, build), `lint` (`bun lint` first where the Bun has it, then
-one ESLint run over the whole repository) and `test`.
-[ci.yml](../.github/workflows/ci.yml) runs each as its own job; its `gate` job, the check main
+`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts, `checks`, `lint` and
+`test`, which [ci.yml](../.github/workflows/ci.yml) runs as jobs; its `gate` job, the check main
 requires, passes when all three do.
 
 ## When it fails
@@ -37,8 +38,6 @@ requires, passes when all three do.
   rotate a credential first, then do what the remedy says: rewrite an unmerged branch, or, with
   `--merged` (main and tags), open a pull request removing it. Locally it needs `NX_BASE`:
   `NX_BASE=origin/main bun run gate:affected`.
-- **A part over its time budget** in CI nears the cap that would kill it: make it faster or split
-  it; raising the cap is the owner's call.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of
   `eslint.config.js` refused the code and why.

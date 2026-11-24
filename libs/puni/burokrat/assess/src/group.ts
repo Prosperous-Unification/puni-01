@@ -1,6 +1,8 @@
-import { command, map, message, optional } from '@optique/core';
+import { command, map, message, optional, or } from '@optique/core';
 import type { HelpRequest } from '@puni/shared-command';
 import { outcomesParser } from './outcomes.command';
+
+import { templatesParser } from './templates.command';
 
 const helpRequest: HelpRequest = { kind: 'help', path: ['assess'] };
 
@@ -10,9 +12,14 @@ const helpRequest: HelpRequest = { kind: 'help', path: ['assess'] };
  */
 export const assessParser = map(
   optional(
-    command('outcomes', outcomesParser, {
-      brief: message`Say what the agent work of a period cost per accepted outcome.`,
-    }),
+    or(
+      command('outcomes', outcomesParser, {
+        brief: message`Say what the agent work of a period cost per accepted outcome.`,
+      }),
+      command('templates', templatesParser, {
+        brief: message`List versioned assessment criteria maps.`,
+      }),
+    ),
   ),
   (leaf) => leaf ?? helpRequest,
 );

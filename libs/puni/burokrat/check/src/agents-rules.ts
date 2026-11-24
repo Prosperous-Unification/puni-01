@@ -1,11 +1,24 @@
 export { readRulesSection } from '@puni/shared-checkout';
 
 /**
- * The digest of this repository's `AGENTS.md` rules section, by {@link digestRulesSection}. Only
- * the owner, the person agents work for, changes it, and only when the owner has changed the
- * rules: `agents.rules` prints the digest to set here.
+ * The digest, by {@link digestRulesSection}, of the `AGENTS.md` rules section in force from each
+ * rules epoch at which it changed; the one in force at a pin is that of the largest epoch at or
+ * below it. Only the owner, the person agents work for, adds one, and only when the owner has
+ * changed the rules: under the next epoch, with the digest `agents.rules` prints. This
+ * repository's own section is the one in force at its pin.
  */
-export const agentsRulesDigest = '3770cefd54ff429b';
+export const agentsRulesDigests: Readonly<Record<number, string>> = { 1: '3770cefd54ff429b' };
+
+/** The digest of `digests` in force at the rules epoch `pin`, or `undefined` before the first. */
+export function rulesDigestAt(
+  digests: Readonly<Record<number, string>>,
+  pin: number,
+): string | undefined {
+  const epochs = Object.keys(digests)
+    .map(Number)
+    .filter((epoch) => epoch <= pin);
+  return epochs.length === 0 ? undefined : digests[Math.max(...epochs)];
+}
 
 const fnvOffset = 0xcbf29ce484222325n;
 const fnvPrime = 0x100000001b3n;

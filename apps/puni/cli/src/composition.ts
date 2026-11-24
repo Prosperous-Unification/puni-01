@@ -2,6 +2,8 @@ import { burokratAdrModule } from '@puni/burokrat-adr';
 import { burokratAssessModule } from '@puni/burokrat-assess';
 import { burokratCheckModule } from '@puni/burokrat-check';
 import { burokratRepoModule } from '@puni/burokrat-repo';
+import { burokratReviewModule } from '@puni/burokrat-review';
+import { burokratSkillsModule } from '@puni/burokrat-skills';
 import { burokratWikiModule } from '@puni/burokrat-wiki';
 import { dashOpsModule } from '@puni/dash-ops';
 import { dashResourcesModule } from '@puni/dash-resources';
@@ -19,7 +21,7 @@ import { puniProgram } from './root-parser';
  * The one `puni` graph: every module, and the host services they require over this machine.
  * Resolution is lazy, so a run builds only the services of its command. The program source is
  * the directory of this file, or of the bundle built from it, both inside the checkout `puni`
- * runs from.
+ * runs from, and the program's version.
  */
 export const puniGraph = DiBag.createBuilder()
   .withInstalledModules([nodeHostModule])
@@ -35,10 +37,15 @@ export const puniGraph = DiBag.createBuilder()
     burokratRepoModule,
     burokratAdrModule,
     burokratAssessModule,
+    burokratReviewModule,
+    burokratSkillsModule,
   ])
   .withServices({
     commandCatalog: (): CommandCatalog => ({ list: () => listCommands(puniProgram) }),
-    programSource: (): ProgramSource => ({ directory: import.meta.dir }),
+    programSource: (): ProgramSource => ({
+      directory: import.meta.dir,
+      version: puniProgram.version,
+    }),
   });
 
 /** A fresh container of {@link puniGraph}; its owner closes it. */

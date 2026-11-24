@@ -1,5 +1,13 @@
 import type { RepositoryType } from '@puni/shared-checkout';
-import type { LeveledRule, Rule, RuleLevel } from './finding';
+import { agentsRulesDigests } from './agents-rules';
+import {
+  type CheckRules,
+  latestEpoch,
+  type LeveledRule,
+  listEveryRule,
+  type Rule,
+  type RuleLevel,
+} from './finding';
 import { forbidFileHeaders } from './rules/code.rule';
 import {
   agentsExists,
@@ -9,7 +17,10 @@ import {
   claudeLinksAgents,
   readmeExists,
   readmeWords,
+  recordsAgentsHeadings,
+  stateAgentsHeadings,
 } from './rules/entry.rule';
+import { judgeEntryKinds } from './rules/entries.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
   limitIndexWords,
@@ -25,6 +36,7 @@ import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
+  judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
 import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
@@ -51,7 +63,8 @@ export const codeRules: readonly LeveledRule[] = [
     agentsExists,
     agentsWords,
     agentsNamesIndex,
-    agentsKeepRules,
+    ...agentsKeepRules,
+    stateAgentsHeadings,
     claudeLinksAgents,
     readmeExists,
     readmeWords,
@@ -76,6 +89,7 @@ export const codeRules: readonly LeveledRule[] = [
     judgeDocCommands,
     limitPageWords,
     judgeDocSymbols,
+    judgeEntryKinds,
   ].map(at('project')),
   at('whole')(matchGeneratedIndex),
 ];
@@ -85,10 +99,13 @@ export const recordsRules: readonly LeveledRule[] = [
   agentsExists,
   claudeLinksAgents,
   agentsWords,
+  recordsAgentsHeadings,
+  judgeEntryKinds,
   resolveAgentsLinks,
   judgeRecordsLayout,
   judgeRecordNames,
   judgeRecordFrontMatter,
+  judgeReviewRecords,
   judgeSupersession,
   forbidPlaintextSecrets,
   forbidRecordsAddresses,
@@ -102,17 +119,43 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
- * repository, judging only the references that leave the linking file's project, and the
- * symbols documentation names, which a project check leaves to this run.
+ * repository, judging only the references that leave the linking file's project (a symlink's
+ * target among them), and the symbols documentation names, which a project check leaves to this
+ * run.
  */
-export const crossProjectRules: readonly Rule[] = [resolveLinks, judgeDocPaths, judgeDocSymbols];
+export const crossProjectRules: readonly Rule[] = [
+  resolveLinks,
+  judgeDocPaths,
+  judgeDocSymbols,
+  judgeEntryKinds,
+];
 
 /**
  * The rules judging what a commit makes public, by the type of the repository judged: its
  * credentials and its addresses. `check --staged` applies them to the staged files as the git
- * index holds them, and `check --commits` to what each commit of a range adds and to its message.
+ * index holds them, and `check --commits` to what each commit of a range adds and to its message;
+ * either reads a symlink as its target text, as git holds it. Neither judges entry kinds: a
+ * staged gitlink has no text and is not listed, and what a symlink points at is a state of the
+ * tree, which `entries.kind` judges in every other run.
  */
 export const secretRules: Readonly<Record<RepositoryType, readonly Rule[]>> = {
   'system-state': [forbidPlaintextSecrets, forbidStateAddresses],
   'system-records': [forbidPlaintextSecrets, forbidRecordsAddresses],
 };
+
+/** Every rule `puni burokrat check` judges by, as the module supplies it. */
+export const checkRules: CheckRules = {
+  sets: ruleSets,
+  crossProject: crossProjectRules,
+  secrets: secretRules,
+  agentsRulesDigests,
+};
+
+/**
+ * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
+ * only ids a repository's verdict may lose when it raises its pin.
+ */
+export const retiredRules: Readonly<Record<string, number>> = {};
+
+/** The latest rules epoch of {@link checkRules}. */
+export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

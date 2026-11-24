@@ -8,6 +8,8 @@ import {
 import type { AdrExports } from '@puni/burokrat-adr';
 import type { AssessExports } from '@puni/burokrat-assess';
 import type { CheckExports } from '@puni/burokrat-check';
+import type { SkillsExports } from '@puni/burokrat-skills';
+import type { ReviewExports } from '@puni/burokrat-review';
 import type { RepoExports } from '@puni/burokrat-repo';
 import type { WikiExports } from '@puni/burokrat-wiki';
 import type { OpsExports } from '@puni/dash-ops';
@@ -27,7 +29,9 @@ type CommandExports = PlanExports &
   WikiExports &
   RepoExports &
   AdrExports &
-  AssessExports;
+  AssessExports &
+  ReviewExports &
+  SkillsExports;
 
 /** What `runPuni` needs of a container: the command services by their keys. */
 export interface CommandContainer {
@@ -102,7 +106,21 @@ export function runPuni(
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat repo init':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat repo upgrade':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat adr add':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat assess templates':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat skills install':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat review start':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat review next':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat review submit':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat review file':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat assess outcomes':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);

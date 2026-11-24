@@ -24,6 +24,11 @@ export interface Finding {
   readonly remedy: string;
 }
 
+/** The printed form of a finding: `<rule-id> <path>: <message>; fix: <remedy>`. */
+export function formatFinding(finding: Finding): string {
+  return `${finding.rule} ${finding.path}: ${finding.message}; fix: ${finding.remedy}`;
+}
+
 /** A defect kind and the remedy of its occurrences, written once beside the kind. */
 export interface DefectRemedy {
   readonly kind: DefectKind;

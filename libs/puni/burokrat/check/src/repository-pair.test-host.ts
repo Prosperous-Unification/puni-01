@@ -64,7 +64,7 @@ export async function regenerateIndex(root: string): Promise<void> {
  */
 async function buildStateRepository(root: string): Promise<void> {
   mkdirSync(root);
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
@@ -170,9 +170,10 @@ export function writeRecord(
   root: string,
   path: string,
   fields: Readonly<Record<string, string>>,
+  body = 'Body.',
 ): void {
   const lines = Object.entries(fields).map(([key, value]) => `${key}: ${value}`);
-  writeRepositoryFile(root, path, ['---', ...lines, '---', '', 'Body.', ''].join('\n'));
+  writeRepositoryFile(root, path, ['---', ...lines, '---', '', body, ''].join('\n'));
 }
 
 /** The fixture records repository's first record, superseded by {@link supersedingRecord}. */

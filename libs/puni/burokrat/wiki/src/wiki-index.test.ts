@@ -416,7 +416,7 @@ describe('the wiki index command', () => {
   });
 
   test('a puni.json declaring another repository type is refused with one error line and exit 1', () => {
-    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes));
+    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes, 1));
     const before = readFileSync(join(root, indexFile), 'utf8');
     expect(runIndex()).toEqual({
       code: 1,

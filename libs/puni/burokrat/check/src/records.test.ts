@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CheckoutUnlistable, formatRegistry } from '@puni/shared-checkout';
 import {
+  formatReviewBody,
+  isReviewRecordKind,
   optionalRecordKeys,
   recordDirectories,
   recordKinds,
@@ -22,12 +24,19 @@ import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './chec
 import type { CheckRequest } from './contract';
 import type { Rule } from './finding';
 import { recordsRules } from './rule-set.rule';
-import { agentsExists, agentsWords, claudeLinksAgents } from './rules/entry.rule';
+import {
+  agentsExists,
+  agentsWords,
+  claudeLinksAgents,
+  recordsAgentsHeadings,
+} from './rules/entry.rule';
+import { judgeEntryKinds } from './rules/entries.rule';
 import { resolveAgentsLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
+  judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
 import {
@@ -67,6 +76,11 @@ function judge(rule: Rule): Judged[] {
 }
 
 const record = 'bur/adr/2031-04-07-a-decision.md';
+const malformedReview = 'bur/findings/2031-04-07-review.md';
+
+function writeMalformedReview(): void {
+  writeRecord(root, malformedReview, describeRecord(malformedReview));
+}
 
 function writeAdr(extra: Readonly<Record<string, string>> = {}, drop?: string): void {
   const fields = describeRecord(record, extra);
@@ -86,7 +100,19 @@ describe('the fixture records repository passes every records rule', () => {
   test('a record in every kind directory passes', () => {
     for (const kind of recordKinds) {
       const path = `${recordDirectories[kind]}/2031-04-07-one-${kind}.md`;
-      writeRecord(root, path, describeRecord(path));
+      const body = isReviewRecordKind(kind)
+        ? formatReviewBody({
+            subject: 'Review an example',
+            instruction: 'Use the supplied criteria.',
+            criteria: [{ id: 'reliability', goal: 'Reproduce the outcome.' }],
+            ...(kind === 'assessment-review' ? { template: { id: 'design', version: '1' } } : {}),
+            runs: [0],
+            maxRuns: 1,
+            stop: 'run-limit',
+            findings: [],
+          })
+        : undefined;
+      writeRecord(root, path, describeRecord(path), body);
     }
     expect(recordsRules.flatMap(({ rule }) => judge(rule))).toEqual([]);
   });
@@ -96,6 +122,18 @@ describe('the fixture records repository passes every records rule', () => {
     expect(judge(judgeRecordFrontMatter).map((finding) => finding.path)).toEqual([
       'nav/research/2031-04-07-notes.md',
     ]);
+  });
+});
+
+describe('structured review records', () => {
+  test('a malformed review body has a records.review finding', () => {
+    writeMalformedReview();
+    const findings = recordsRules.flatMap(({ rule }) => judge(rule));
+    expect(findings).toContainEqual({
+      rule: 'records.review',
+      path: malformedReview,
+      message: 'must have a # Review section',
+    });
   });
 });
 
@@ -129,6 +167,7 @@ describe('files git ignores', () => {
     ['records.layout', judgeRecordsLayout],
     ['records.name', judgeRecordNames],
     ['records.front-matter', judgeRecordFrontMatter],
+    ['records.review', judgeReviewRecords],
     ['records.supersession', judgeSupersession],
   ] as const)(
     'git failing makes %s throw the repository.git defect, not pass',
@@ -145,7 +184,7 @@ describe('records.layout', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
       else if (name !== 'CLAUDE.md')
-        writeRepositoryFile(root, name, formatRegistry('system-records', fixtureRemotes));
+        writeRepositoryFile(root, name, formatRegistry('system-records', fixtureRemotes, 1));
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });
@@ -165,7 +204,7 @@ describe('records.layout', () => {
     [
       'bur/plans/x.md',
       'bur/plans',
-      'is not a kind directory; bur/ holds only the directories adr, assessments, archive',
+      'is not a kind directory; bur/ holds only the directories adr, assessments, findings, assessment-reviews, archive',
     ],
     [
       'bur/adr/old/x.md',
@@ -420,7 +459,7 @@ describe('the check command on a records repository', () => {
   });
 
   test('a records repository holding its own puni.json is judged as system-records with no option', () => {
-    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes));
+    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes, 1));
     expect(runIn(join(root, 'nav/plans'), {})).toEqual({
       code: 0,
       printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,
@@ -492,6 +531,19 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
     },
   ],
   [
+    recordsAgentsHeadings,
+    () => {
+      appendFileSync(join(root, 'AGENTS.md'), '\n## Exceptions\n\nRule 2 never applies.\n');
+    },
+  ],
+  [
+    judgeEntryKinds,
+    () => {
+      symlinkSync('/var/tmp/made', join(root, 'dash/made.md'));
+      runGit(root, ['add', 'dash/made.md']);
+    },
+  ],
+  [
     resolveAgentsLinks,
     () => {
       writeRepositoryFile(root, 'AGENTS.md', 'See [gone](bur/gone.md).\n');
@@ -515,6 +567,7 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
       writeRepositoryFile(root, record, 'no front matter\n');
     },
   ],
+  [judgeReviewRecords, writeMalformedReview],
   [
     judgeSupersession,
     () => {

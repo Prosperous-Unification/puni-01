@@ -4,6 +4,7 @@ import type { Rule } from '../finding';
 /** No ISO date (`YYYY-MM-DD`) in any visible Markdown file the scope owns. */
 export const forbidDates: Rule = {
   id: 'history.date',
+  since: 1,
   remedy: 'say what is true now without the date; history belongs in a record',
   judge({ files, scope }) {
     return files
@@ -31,6 +32,7 @@ export const forbidDates: Rule = {
  */
 export const confineRecordsName: Rule = {
   id: 'history.records',
+  since: 1,
   remedy: 'remove the name; AGENTS.md alone says where the records live',
   judge({ files, registry, scope }) {
     const records = nameRepository(registry.repos['system-records']);

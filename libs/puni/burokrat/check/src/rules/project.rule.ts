@@ -93,6 +93,7 @@ function judgeTimeouts(
  */
 export const requireProjectTargets: Rule = {
   id: 'project.targets',
+  since: 1,
   remedy:
     'give the project test, lint and typecheck targets (and build for an application), a tsconfig.json including src, and --timeout on every bun test',
   judge({ files, scope }) {
