@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Documenting a change
 read-when: finishing a change that adds, renames or removes something an agent would need to know
 ---
@@ -20,7 +21,8 @@ says where each kind of fact lives. Before committing:
    the whole library. A new export carries JSDoc saying what it is and every outcome it has.
 4. **Change pages by their "Read when".** A fact that fits an existing page's `read-when` goes
    there. One that answers a new question gets a new page in the section its content is, with
-   `title` and `read-when` front matter; the map lists it, so no other page needs to. A page
+   `puni-doc-type: wiki-page`, `title` and `read-when` front matter; the map lists it, so no
+   other page needs to. A page
    past its budget splits along its questions, or sheds what one library owns into that
    library's JSDoc. A page with nothing left that only it holds is deleted.
 5. **Keep out what does not bind.** Why an option was rejected, what was measured, what is

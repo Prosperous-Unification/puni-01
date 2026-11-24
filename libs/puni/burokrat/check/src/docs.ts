@@ -1,10 +1,18 @@
 import { posix } from 'node:path';
-import { generatedIndexDirectory, leavesRoot } from '@puni/shared-checkout';
+import {
+  type CheckoutFiles,
+  type DocTypeName,
+  docTypes,
+  generatedIndexDirectory,
+  isMarkdown,
+  leavesRoot,
+  readDocType,
+} from '@puni/shared-checkout';
 
 /**
- * Whether the file at `path` is documentation the docs rules judge: `AGENTS.md`, `README.md`, or
- * Markdown under `wiki/` outside the generated index an older puni wrote, which
- * `index.leftover` reports instead.
+ * Whether the file at `path` is documentation the docs rules judge by its path, as they do
+ * before rules epoch 4: `AGENTS.md`, `README.md`, or Markdown under `wiki/` outside the generated
+ * index an older puni wrote, which `index.leftover` reports instead.
  */
 export function isDocumentation(path: string): boolean {
   if (path === 'AGENTS.md' || path === 'README.md') return true;
@@ -13,6 +21,39 @@ export function isDocumentation(path: string): boolean {
     path.endsWith('.md') &&
     !path.startsWith(`${generatedIndexDirectory}/`)
   );
+}
+
+/** The document type the Markdown file at `path` declares, or `undefined` when it declares none. */
+export function readDeclaredType(files: CheckoutFiles, path: string): DocTypeName | undefined {
+  if (!isMarkdown(path)) return undefined;
+  const declared = readDocType(files.readText(path));
+  return declared.kind === 'declared' ? declared.type : undefined;
+}
+
+/**
+ * Whether the file at `path` is documentation the docs rules judge by its declared type, as they
+ * do from rules epoch 4: a Markdown file whose type the documentation rules judge (see
+ * `docTypes`), wherever it lies; where it may lie is the `docs.type` rule's.
+ */
+export function isTypedDocumentation(files: CheckoutFiles, path: string): boolean {
+  const type = readDeclaredType(files, path);
+  return type !== undefined && docTypes[type].judgedAs === 'documentation';
+}
+
+/**
+ * How a rule chooses the Markdown it judges: by `path` before rules epoch 4, by declared `type`
+ * from it. A rule that changes its choice ships as two objects, so a repository keeps its verdict
+ * until it raises its pin.
+ */
+export type DocSelection = 'path' | 'type';
+
+/** Whether `selection` makes the file at `path` documentation (see {@link DocSelection}). */
+export function selectsDocumentation(
+  files: CheckoutFiles,
+  path: string,
+  selection: DocSelection,
+): boolean {
+  return selection === 'path' ? isDocumentation(path) : isTypedDocumentation(files, path);
 }
 
 /** The Markdown of `text` split into the lines of fenced code blocks and the prose between them. */

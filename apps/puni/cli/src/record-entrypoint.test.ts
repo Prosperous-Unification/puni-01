@@ -44,7 +44,7 @@ describe.each([
       runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
       records = join(dirname(state), 'demo-records');
       mkdirSync(records);
-      writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+      writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
       symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
       runGit(records, ['init', '-q']);
     });
@@ -56,11 +56,11 @@ describe.each([
       expect(runPuni(add, state)).toEqual({ code: 0, stdout: `${path}\n`, stderr: '' });
       const head = Bun.spawnSync(['git', 'rev-parse', '--short', 'HEAD'], { cwd: state });
       expect(readFileSync(join(records, path), 'utf8')).toBe(
-        `---\nkind: ${kind}\ntitle: First note\ndate: ${today}\ncommit: ${head.stdout.toString().trim()}\ntopics: ops, k3s\nsummary: Start small.\n---\n\n${body}`,
+        `---\npuni-doc-type: record\nkind: ${kind}\ntitle: First note\ndate: ${today}\ncommit: ${head.stdout.toString().trim()}\ntopics: ops, k3s\nsummary: Start small.\n---\n\n${body}`,
       );
       expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
         code: 0,
-        stdout: 'ok: system-records, 13 rules, no findings.\n',
+        stdout: 'ok: system-records, 14 rules, no findings.\n',
         stderr: '',
       });
       expect(runPuni(add, state)).toEqual({

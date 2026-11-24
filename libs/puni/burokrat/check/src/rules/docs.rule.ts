@@ -7,7 +7,13 @@ import {
   repositoryScope,
 } from '@puni/shared-checkout';
 import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
-import { isDocumentation, listCode, listInlineCode, readPathReference } from '../docs';
+import {
+  type DocSelection,
+  listCode,
+  listInlineCode,
+  readPathReference,
+  selectsDocumentation,
+} from '../docs';
 import { findMissingAnchor } from './links.rule';
 
 /**
@@ -20,11 +26,11 @@ export interface DocText {
   readonly at: string;
 }
 
-/** The visible documentation files the scope owns, each whole (see `isDocumentation`). */
-function listDocumentation({ files, scope }: RuleReading): DocText[] {
+/** The visible documentation files the scope owns by `selection`, each whole. */
+function listDocumentation({ files, scope }: RuleReading, selection: DocSelection): DocText[] {
   return files
     .listVisible(scope)
-    .filter(isDocumentation)
+    .filter((path) => selectsDocumentation(files, path, selection))
     .map((path) => ({ path, text: files.readText(path), at: '' }));
 }
 
@@ -44,9 +50,9 @@ export function listDocComments({ files, scope, sources }: RuleReading): DocText
   });
 }
 
-/** The documentation the scope owns, then the doc comments of its source files. */
-function listEveryDocText(reading: RuleReading): DocText[] {
-  return [...listDocumentation(reading), ...listDocComments(reading)];
+/** The documentation the scope owns by `selection`, then the doc comments of its source files. */
+function listEveryDocText(reading: RuleReading, selection: DocSelection): DocText[] {
+  return [...listDocumentation(reading, selection), ...listDocComments(reading)];
 }
 
 /** The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}). */
@@ -88,18 +94,31 @@ export const judgeMarkdownPaths: Rule = {
   since: 1,
   until: 3,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listDocumentation(reading)),
+  judge: (reading) => judgePaths(reading, listDocumentation(reading, 'path')),
 };
 
 /**
  * {@link judgeMarkdownPaths} over the documentation the scope owns and every doc comment of its
  * source files that a source reader reads, a path in a comment named from the repository root.
+ * Epoch 3; {@link judgeTypedDocPaths} chooses the documentation by its declared type.
  */
 export const judgeDocPaths: Rule = {
   id: 'docs.paths',
   since: 3,
+  until: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocText(reading)),
+  judge: (reading) => judgePaths(reading, listEveryDocText(reading, 'path')),
+};
+
+/**
+ * {@link judgeDocPaths} over the Markdown whose declared type the documentation rules judge,
+ * wherever it lies, and every doc comment.
+ */
+export const judgeTypedDocPaths: Rule = {
+  id: 'docs.paths',
+  since: 4,
+  remedy: pathsRemedy,
+  judge: (reading) => judgePaths(reading, listEveryDocText(reading, 'type')),
 };
 
 /** The scripts of the root `package.json`, or the breach of one that cannot be read. */
@@ -260,16 +279,29 @@ export const judgeMarkdownCommands: Rule = {
   since: 1,
   until: 3,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listDocumentation(reading)),
+  judge: (reading) => judgeCommands(reading, listDocumentation(reading, 'path')),
 };
 
 /**
  * {@link judgeMarkdownCommands} over the documentation the scope owns and every doc comment of
- * its source files that a source reader reads.
+ * its source files that a source reader reads. Epoch 3; {@link judgeTypedDocCommands} chooses
+ * the documentation by its declared type.
  */
 export const judgeDocCommands: Rule = {
   id: 'docs.commands',
   since: 3,
+  until: 4,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listEveryDocText(reading)),
+  judge: (reading) => judgeCommands(reading, listEveryDocText(reading, 'path')),
+};
+
+/**
+ * {@link judgeDocCommands} over the Markdown whose declared type the documentation rules judge,
+ * wherever it lies, and every doc comment.
+ */
+export const judgeTypedDocCommands: Rule = {
+  id: 'docs.commands',
+  since: 4,
+  remedy: commandsRemedy,
+  judge: (reading) => judgeCommands(reading, listEveryDocText(reading, 'type')),
 };

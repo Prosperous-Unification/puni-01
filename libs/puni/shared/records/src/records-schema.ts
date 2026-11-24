@@ -1,4 +1,4 @@
-import { recordDirectories, recordKinds } from '@puni/shared-checkout';
+import { docTypeKey, recordDirectories, recordKinds } from '@puni/shared-checkout';
 
 export { type RecordKind, recordDirectories, recordKinds } from '@puni/shared-checkout';
 
@@ -41,8 +41,13 @@ export const requiredRecordKeys = {
   summary: `non-empty text on one line, at most ${String(recordSummaryWordBudget)} words`,
 } as const;
 
-/** The front-matter keys a record may hold, each with its form. */
+/**
+ * The front-matter keys a record may hold, each with its form. The document type is optional
+ * because records filed before records declared it are records by their place; its value is the
+ * `docs.type` rule's.
+ */
 export const optionalRecordKeys = {
   supersedes: 'the repository-relative path of the record this one replaces',
   'superseded-by': 'the repository-relative path of the record that replaces this one',
+  [docTypeKey]: 'record, the document type every record declares',
 } as const;

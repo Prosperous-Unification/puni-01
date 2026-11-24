@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   removeScratchDirectoriesAfterEach,
@@ -59,6 +59,14 @@ describe('the built puni.js', () => {
     expect([init.code, init.stderr]).toEqual([0, '']);
     runGit(state, ['init', '-q']);
     runGit(join(parent, 'shop-records'), ['init', '-q']);
+    const seeded = ['AGENTS.md', 'README.md', '../shop-records/AGENTS.md'].map(
+      (path) => readFileSync(join(state, path), 'utf8').split('\n')[1],
+    );
+    expect(seeded).toEqual([
+      'puni-doc-type: agents',
+      'puni-doc-type: readme',
+      'puni-doc-type: agents',
+    ]);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
       stdout: 'ok: system-state, 31 rules, no findings.\n',
@@ -66,7 +74,7 @@ describe('the built puni.js', () => {
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 13 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
   });
@@ -81,7 +89,7 @@ describe('the built puni.js', () => {
     writeRepositoryFile(
       state,
       'wiki/box.md',
-      '---\ntitle: Box\nread-when: changing the box\n---\n\n[`size`](../libs/x/src/box.ts#size), [`gone`](../libs/x/src/box.ts#gone)\n',
+      '---\npuni-doc-type: wiki-page\ntitle: Box\nread-when: changing the box\n---\n\n[`size`](../libs/x/src/box.ts#size), [`gone`](../libs/x/src/box.ts#gone)\n',
     );
     const run = runPuni(['burokrat', 'check'], state);
     expect([run.code, run.stderr]).toEqual([1, '']);

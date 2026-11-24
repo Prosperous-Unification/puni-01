@@ -180,7 +180,7 @@ describe('the epoch contract', () => {
         .runCheck({}, root)
         .stdout.split('\n')
         .map((line) => line.split(' ')[0])
-        .filter((id) => id !== '' && id !== 'fail:'),
+        .filter((id) => id !== '' && id !== 'fail:' && id !== 'newer:'),
     ).toEqual([
       'docs.commands',
       'docs.comment-links',

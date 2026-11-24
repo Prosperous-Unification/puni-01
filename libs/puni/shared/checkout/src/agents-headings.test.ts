@@ -25,6 +25,22 @@ describe('readHeadings', () => {
   });
 });
 
+describe('readHeadings and front matter', () => {
+  test('the front matter opening the text holds no heading: its closing --- underlines none', () => {
+    expect(readHeadings('---\npuni-doc-type: agents\n---\n\n# Title\n\nText\n---\n')).toEqual([
+      { level: 1, text: 'Title', line: 5 },
+      { level: 2, text: 'Text', line: 7 },
+    ]);
+  });
+
+  test('a --- that opens no front matter is read as before', () => {
+    expect(readHeadings('# T\n---\nkey: v\n---\n')).toEqual([
+      { level: 1, text: 'T', line: 1 },
+      { level: 2, text: 'key: v', line: 3 },
+    ]);
+  });
+});
+
 describe('agentsSections', () => {
   test("are each type's template sections, and the rules section repo init appends to state", () => {
     expect(agentsSections).toEqual({

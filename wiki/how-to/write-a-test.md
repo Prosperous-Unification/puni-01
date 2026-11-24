@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Writing a test
 read-when: deciding which test proves a change, or how a test reaches a module and the host
 ---

@@ -66,7 +66,7 @@ describe('burokrat adr add', () => {
     const { host, run } = open();
     expect(run()).toEqual({ code: 0, stdout: `${filed}\n`, stderr: '' });
     expect(host.nodes.get(`${records}/${filed}`)).toBe(
-      '---\nkind: adr\ntitle: First note\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first one.\n---\n\n# First note\n\n## Decision\n\n## Why\n\n## Options rejected\n',
+      '---\npuni-doc-type: record\nkind: adr\ntitle: First note\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first one.\n---\n\n# First note\n\n## Decision\n\n## Why\n\n## Options rejected\n',
     );
   });
 

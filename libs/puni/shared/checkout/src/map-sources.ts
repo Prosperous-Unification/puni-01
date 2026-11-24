@@ -1,5 +1,6 @@
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, ProjectSource } from './contract';
+import { docTypes, docTypesEpoch, isMarkdown, readDocType } from './doc-types';
 import { parseFrontMatter } from './front-matter';
 import { repositoryScope } from './ownership';
 import { judgeReadWhen } from './read-when';
@@ -106,21 +107,44 @@ function readPage(path: string, text: string): PageReading {
 }
 
 /**
- * The map sources of `files`, pinned at the rules epoch `epoch`: every visible authored page
- * (Markdown under `wiki/` outside {@link generatedIndexDirectory}), and the projects every one of
- * `projectSources` reads at that epoch, in their order. A defect is no failure; each is returned,
- * sorted by path.
+ * The visible authored pages of `files` at the rules epoch `epoch`, each with its text. Before
+ * {@link docTypesEpoch}, every `.md` file under `wiki/` outside {@link generatedIndexDirectory};
+ * from it, every Markdown file declaring the type `wiki-page` where that type lives, so a page
+ * declared elsewhere, or not declared, is the `docs.type` rule's alone.
+ */
+function listPages(
+  files: CheckoutFiles,
+  epoch: number,
+): { readonly path: string; readonly text: string }[] {
+  const visible = files.listVisible(repositoryScope);
+  if (epoch < docTypesEpoch) {
+    return visible
+      .filter((path) => path.startsWith('wiki/') && path.endsWith('.md'))
+      .filter((path) => !path.startsWith(`${generatedIndexDirectory}/`))
+      .map((path) => ({ path, text: files.readText(path) }));
+  }
+  return visible.filter(isMarkdown).flatMap((path) => {
+    const text = files.readText(path);
+    const declared = readDocType(text);
+    const isPage =
+      declared.kind === 'declared' &&
+      declared.type === 'wiki-page' &&
+      docTypes['wiki-page'].isPlaced(path, 'system-state');
+    return isPage ? [{ path, text }] : [];
+  });
+}
+
+/**
+ * The map sources of `files`, pinned at the rules epoch `epoch`: every authored page (see
+ * {@link listPages}), and the projects every one of `projectSources` reads at that epoch, in
+ * their order. A defect is no failure; each is returned, sorted by path.
  */
 export function readMapSources(
   files: CheckoutFiles,
   projectSources: readonly ProjectSource[],
   epoch: number,
 ): MapSources {
-  const readings = files
-    .listVisible(repositoryScope)
-    .filter((path) => path.startsWith('wiki/') && path.endsWith('.md'))
-    .filter((path) => !path.startsWith(`${generatedIndexDirectory}/`))
-    .map((path) => readPage(path, files.readText(path)));
+  const readings = listPages(files, epoch).map(({ path, text }) => readPage(path, text));
   const projects = projectSources.map((source) => source.readProjects(files, epoch));
   return {
     pages: readings.flatMap((reading) => ('page' in reading ? [reading.page] : [])),

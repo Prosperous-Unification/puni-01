@@ -1,6 +1,6 @@
 {
   "this-repo-type": "system-state",
-  "rules": 3,
+  "rules": 4,
   "all-repos": [
     {
       "type": "system-state",

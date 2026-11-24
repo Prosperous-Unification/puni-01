@@ -1,7 +1,7 @@
 import { countWords, repositoryScope } from '@puni/shared-checkout';
 import { pageWordBudget } from '../budgets';
-import { isDocumentation, isSymbolName, listCode } from '../docs';
-import type { Breach, Rule } from '../finding';
+import { isDocumentation, isSymbolName, listCode, readDeclaredType } from '../docs';
+import type { Breach, Rule, RuleReading } from '../finding';
 
 /** The extensions of the files whose words a symbol named in documentation may be. */
 const sourceExtensions = /\.(?:[cm]?[jt]s|json|ya?ml|toml|sh)$/u;
@@ -47,23 +47,44 @@ export const judgeDocSymbols: Rule = {
   },
 };
 
+/** The breaches of the pages `isPage` chooses among the visible files the scope owns. */
+function judgePageWords(
+  { files, scope }: RuleReading,
+  isPage: (path: string) => boolean,
+): Breach[] {
+  return files
+    .listVisible(scope)
+    .filter(isPage)
+    .flatMap((path) => {
+      const words = countWords(files.readText(path));
+      return words <= pageWordBudget
+        ? []
+        : [{ path, message: `has ${String(words)} words; at most ${String(pageWordBudget)}` }];
+    });
+}
+
+const pageWordsRemedy = `split the page into pages that each answer one read-when, or move what one library owns into its JSDoc, until each holds at most ${String(pageWordBudget)} words`;
+
 /**
  * Every authored wiki page the scope owns holds at most {@link pageWordBudget} words, front
  * matter included: a page is read whole into an agent's context, so one that outgrows it splits
- * into pages that each answer one "Read this when …".
+ * into pages that each answer one "Read this when …". Epochs 1 to 3, a page chosen by its path;
+ * {@link limitTypedPageWords} chooses it by its declared type.
  */
 export const limitPageWords: Rule = {
   id: 'docs.words',
   since: 1,
-  remedy: `split the page into pages that each answer one read-when, or move what one library owns into its JSDoc, until each holds at most ${String(pageWordBudget)} words`,
-  judge: ({ files, scope }) =>
-    files
-      .listVisible(scope)
-      .filter((path) => isDocumentation(path) && path.startsWith('wiki/'))
-      .flatMap((path) => {
-        const words = countWords(files.readText(path));
-        return words <= pageWordBudget
-          ? []
-          : [{ path, message: `has ${String(words)} words; at most ${String(pageWordBudget)}` }];
-      }),
+  until: 4,
+  remedy: pageWordsRemedy,
+  judge: (reading) =>
+    judgePageWords(reading, (path) => isDocumentation(path) && path.startsWith('wiki/')),
+};
+
+/** {@link limitPageWords} over every Markdown file declaring the type `wiki-page`. */
+export const limitTypedPageWords: Rule = {
+  id: 'docs.words',
+  since: 4,
+  remedy: pageWordsRemedy,
+  judge: (reading) =>
+    judgePageWords(reading, (path) => readDeclaredType(reading.files, path) === 'wiki-page'),
 };

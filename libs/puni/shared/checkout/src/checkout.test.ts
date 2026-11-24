@@ -147,22 +147,30 @@ describe('checkoutFiles over a memory file system', () => {
     ]);
   });
 
-  test.each(['README.md', 'docs/AGENTS.md', 'wiki/index/index.md', 'nav/plans/2031-04-05-a.md'])(
-    'a system-state checkout writes nothing else: %s is refused',
-    (path) => {
-      const { host, container } = openHost(tree);
-      const files = container.resolve('checkoutFiles').open('/r', 'system-state');
-      expect(
-        caught(() => {
-          files.write(path, 'overwritten');
-        }),
-      ).toMatchObject({
-        message: `${path}: is not puni.json or AGENTS.md, the only place a system-state checkout writes`,
-      });
-      expect(host.nodes.get('/r/README.md')).toBe('r');
-      expect(host.nodes.has(`/r/${path}`)).toBe(path === 'README.md');
-    },
-  );
+  test('a system-state checkout writes README.md, for the type raising its pin declares', () => {
+    const { host, container } = openHost(tree);
+    container.resolve('checkoutFiles').open('/r', 'system-state').write('README.md', 'declared');
+    expect(host.nodes.get('/r/README.md')).toBe('declared');
+  });
+
+  test.each([
+    'docs/AGENTS.md',
+    'docs/README.md',
+    'wiki/index/index.md',
+    'nav/plans/2031-04-05-a.md',
+  ])('a system-state checkout writes nothing else: %s is refused', (path) => {
+    const { host, container } = openHost(tree);
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    expect(
+      caught(() => {
+        files.write(path, 'overwritten');
+      }),
+    ).toMatchObject({
+      message: `${path}: is not puni.json, AGENTS.md or README.md, the only place a system-state checkout writes`,
+    });
+    expect(host.nodes.get('/r/README.md')).toBe('r');
+    expect(host.nodes.has(`/r/${path}`)).toBe(false);
+  });
 
   test.each([
     ['nav/plans/2031-04-05-a.md', true],
@@ -174,7 +182,8 @@ describe('checkoutFiles over a memory file system', () => {
     ['nav/other/a.md', false],
     ['dash/ops/nodes.json', false],
     ['wiki/index/index.md', false],
-    ['AGENTS.md', false],
+    ['AGENTS.md', true],
+    ['nav/AGENTS.md', false],
   ] as const)('a records checkout writes %s: %p', (path, allowed) => {
     const { host, container } = openHost({ '/r/AGENTS.md': 'a' });
     const files = container.resolve('checkoutFiles').open('/r', 'system-records');
@@ -187,9 +196,9 @@ describe('checkoutFiles over a memory file system', () => {
       return;
     }
     expect(caught(write)).toMatchObject({
-      message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive), the only place a system-records checkout writes`,
+      message: `${path}: is not AGENTS.md or directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive), the only place a system-records checkout writes`,
     });
-    expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
+    expect(host.nodes.get(`/r/${path}`)).toBeUndefined();
   });
 
   test('the HEAD commit is read from git; none is the repository.git defect', () => {

@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Failures
 read-when: deciding how code reports something going wrong, or which exit code a command returns
 ---

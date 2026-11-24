@@ -87,8 +87,9 @@ export interface CheckoutFiles {
   listIndexEntries(scope: CheckScope): readonly GitIndexEntry[];
   /**
    * Writes `text` at `path`, creating its directories, replacing a file there. A system-state
-   * checkout writes only `puni.json` and `AGENTS.md`; a records checkout only directly inside a
-   * kind directory. Any other path is refused with `CheckoutPathRefused`.
+   * checkout writes only `puni.json`, `AGENTS.md` and `README.md`; a records checkout only its
+   * `AGENTS.md` and directly inside a kind directory. Any other path is refused with
+   * `CheckoutPathRefused`.
    */
   write(path: string, text: string): void;
   /**

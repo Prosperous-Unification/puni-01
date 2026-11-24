@@ -18,6 +18,7 @@
     "checkerSource": [
       "{projectRoot}/package.json",
       "{projectRoot}/src/**/*.ts",
+      "{projectRoot}/src/**/*.tmpl",
       "!{projectRoot}/**/*.test.ts",
       "!{projectRoot}/**/*.test-host.ts"
     ]

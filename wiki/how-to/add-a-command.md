@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Adding a command
 read-when: adding a leaf command to a group that already has a library
 ---

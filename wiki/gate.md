@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: The gate
 read-when: the gate fails, a finding names a rule you do not know, or you change what the gate runs
 ---

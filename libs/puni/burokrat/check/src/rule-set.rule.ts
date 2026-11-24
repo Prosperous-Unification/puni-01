@@ -22,7 +22,8 @@ import {
   stateAgentsHeadings,
 } from './rules/entry.rule';
 import { judgeEntryKinds } from './rules/entries.rule';
-import { confineRecordsName, forbidDates } from './rules/history.rule';
+import { judgeRecordsDocTypes, judgeStateDocTypes } from './rules/doc-types.rule';
+import { confineRecordsName, forbidDates, forbidTypedDates } from './rules/history.rule';
 import {
   forbidGeneratedIndex,
   limitIndexWords,
@@ -32,7 +33,7 @@ import {
   requireScope,
   requireSection,
 } from './rules/index.rule';
-import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
+import { judgeDocSymbols, limitPageWords, limitTypedPageWords } from './rules/wiki.rule';
 import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
@@ -46,8 +47,16 @@ import {
   judgeDocPaths,
   judgeMarkdownCommands,
   judgeMarkdownPaths,
+  judgeTypedDocCommands,
+  judgeTypedDocPaths,
 } from './rules/docs.rule';
-import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import {
+  judgeDocLinks,
+  judgeDocReferences,
+  judgeDocSpans,
+  judgeTypedDocReferences,
+  judgeTypedDocSpans,
+} from './rules/references.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import {
   forbidPlaintextSecrets,
@@ -88,6 +97,7 @@ export const codeRules: readonly LeveledRule[] = [
   ].map(at('repository')),
   ...[
     forbidDates,
+    forbidTypedDates,
     confineRecordsName,
     resolveLinks,
     forbidPlaintextSecrets,
@@ -96,14 +106,20 @@ export const codeRules: readonly LeveledRule[] = [
     requireProjectTargets,
     judgeMarkdownPaths,
     judgeDocPaths,
+    judgeTypedDocPaths,
     judgeMarkdownCommands,
     judgeDocCommands,
+    judgeTypedDocCommands,
     limitPageWords,
+    limitTypedPageWords,
     judgeDocSymbols,
     judgeDocReferences,
+    judgeTypedDocReferences,
     judgeDocSpans,
+    judgeTypedDocSpans,
     judgeDocLinks,
     judgeEntryKinds,
+    judgeStateDocTypes,
   ].map(at('project')),
 ];
 
@@ -120,6 +136,7 @@ export const recordsRules: readonly LeveledRule[] = [
   judgeRecordFrontMatter,
   judgeReviewRecords,
   judgeSupersession,
+  judgeRecordsDocTypes,
   forbidPlaintextSecrets,
   forbidRecordsAddresses,
 ].map(at('repository'));
@@ -140,8 +157,10 @@ export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
   judgeMarkdownPaths,
   judgeDocPaths,
+  judgeTypedDocPaths,
   judgeDocSymbols,
   judgeDocReferences,
+  judgeTypedDocReferences,
   judgeEntryKinds,
 ];
 
@@ -171,7 +190,10 @@ export const checkRules: CheckRules = {
  * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
  * listed.
  */
-export const retiredRules: Readonly<Record<string, number>> = { 'docs.symbols': 3 };
+export const retiredRules: Readonly<Record<string, number>> = {
+  'docs.symbols': 3,
+  'index.section': 4,
+};
 
 /** The latest rules epoch of {@link checkRules}. */
 export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: File kinds
 read-when: deciding which kind a new file is, or what a file of a kind may import
 ---

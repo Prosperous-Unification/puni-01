@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readDocType } from '@puni/shared-checkout';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
 import { makeStateRepository } from './repository.test-host';
@@ -30,6 +31,7 @@ test('installs the bundled review skills for both project discovery directories'
     const claudePath = `.claude/skills/${skill}/SKILL.md`;
     const text = readFileSync(join(root, portablePath), 'utf8');
     expect(text).toStartWith(`---\nname: ${skill}\n`);
+    expect(readDocType(text)).toEqual({ kind: 'declared', type: 'product' });
     expect(readFileSync(join(root, claudePath), 'utf8')).toBe(text);
     expect(installed.stdout).toContain(portablePath);
     expect(installed.stdout).toContain(claudePath);

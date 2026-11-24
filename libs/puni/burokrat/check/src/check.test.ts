@@ -41,7 +41,8 @@ import {
   stateAgentsHeadings,
 } from './rules/entry.rule';
 import { judgeEntryKinds } from './rules/entries.rule';
-import { confineRecordsName, forbidDates } from './rules/history.rule';
+import { judgeStateDocTypes } from './rules/doc-types.rule';
+import { confineRecordsName, forbidDates, forbidTypedDates } from './rules/history.rule';
 import {
   forbidGeneratedIndex,
   limitIndexWords,
@@ -52,20 +53,28 @@ import {
   requireSection,
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
-import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
+import { judgeDocSymbols, limitPageWords, limitTypedPageWords } from './rules/wiki.rule';
 import {
   judgeDocCommands,
   judgeDocPaths,
   judgeMarkdownCommands,
   judgeMarkdownPaths,
+  judgeTypedDocCommands,
+  judgeTypedDocPaths,
 } from './rules/docs.rule';
-import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import {
+  judgeDocLinks,
+  judgeDocReferences,
+  judgeDocSpans,
+  judgeTypedDocReferences,
+  judgeTypedDocSpans,
+} from './rules/references.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
 import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
-import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
+import { fixtureAgentsRules, makeRepository, writeEpochFiles } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -134,7 +143,7 @@ function writePages(directory: string, count: number): void {
     writeRepositoryFile(
       root,
       `${directory}/page${at}.md`,
-      `---\ntitle: Page ${at}\nread-when: reading ${'page '.repeat(18)}${at}\n---\n`,
+      `---\npuni-doc-type: wiki-page\ntitle: Page ${at}\nread-when: reading ${'page '.repeat(18)}${at}\n---\n`,
     );
   }
 }
@@ -161,10 +170,15 @@ const fixtureCodeRules = fixtureRuleSets['system-state'];
 
 describe('every rule holds on the fixture repository', () => {
   test.each(fixtureCodeRules.map(({ rule }) => [rule.id, rule] as const))('%s', (_name, rule) => {
-    if (!appliesAt(rule, 2)) root = makeRepository(scratchDirectories, 1);
+    if (rule.until !== undefined) root = makeRepository(scratchDirectories, rule.until - 1);
     expect(judge(rule)).toEqual([]);
   });
 });
+
+/** A wiki page declaring its type, its front matter holding `fields` after the type, then `body`. */
+function typedPage(body: string, fields = ''): string {
+  return `---\npuni-doc-type: wiki-page\n${fields}---\n\n${body}`;
+}
 
 /** A breach and the one finding it makes; `remedy` is given only where it is not the rule's own. */
 type Expected = Judged & { readonly remedy?: string };
@@ -245,7 +259,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'agents.headings',
       path: 'AGENTS.md',
       message:
-        'line 11 is the heading "## Exceptions — Rule 4 never applies to documentation", which puni does not declare for AGENTS.md',
+        'line 15 is the heading "## Exceptions — Rule 4 never applies to documentation", which puni does not declare for AGENTS.md',
     },
   ],
   [
@@ -257,7 +271,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'agents.headings',
       path: 'AGENTS.md',
-      message: 'line 11 is a second title, "# Addendum"',
+      message: 'line 15 is a second title, "# Addendum"',
     },
   ],
   [
@@ -269,7 +283,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'agents.headings',
       path: 'AGENTS.md',
-      message: 'line 11 repeats the heading "## Rules"',
+      message: 'line 15 repeats the heading "## Rules"',
     },
   ],
   [
@@ -281,7 +295,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'agents.headings',
       path: 'AGENTS.md',
-      message: 'line 11 is the heading "## Exceptions", which puni does not declare for AGENTS.md',
+      message: 'line 15 is the heading "## Exceptions", which puni does not declare for AGENTS.md',
     },
   ],
   [
@@ -360,19 +374,19 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a date in README.md',
-    forbidDates,
+    forbidTypedDates,
     () => {
       appendFileSync(join(root, 'README.md'), 'Since 2031-04-05.\n');
     },
-    { rule: 'history.date', path: 'README.md', message: 'line 4 holds the date 2031-04-05' },
+    { rule: 'history.date', path: 'README.md', message: 'line 8 holds the date 2031-04-05' },
   ],
   [
     'a date in a wiki page',
-    forbidDates,
+    forbidTypedDates,
     () => {
-      writeRepositoryFile(root, 'wiki/ops/log.md', 'On 2031-04-05.\n');
+      writeRepositoryFile(root, 'wiki/ops/log.md', typedPage('On 2031-04-05.\n'));
     },
-    { rule: 'history.date', path: 'wiki/ops/log.md', message: 'line 1 holds the date 2031-04-05' },
+    { rule: 'history.date', path: 'wiki/ops/log.md', message: 'line 5 holds the date 2031-04-05' },
   ],
   [
     'a tracked file naming the records repository',
@@ -572,10 +586,11 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     'a page in a directory that is no section',
     requireSection,
     () => {
+      writeEpochFiles(root, 3);
       writeRepositoryFile(
         root,
         'wiki/ops/deploy.md',
-        '---\ntitle: Deploy\nread-when: deploying\n---\n',
+        '---\npuni-doc-type: wiki-page\ntitle: Deploy\nread-when: deploying\n---\n',
       );
     },
     {
@@ -588,10 +603,11 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     'a page nested below a section',
     requireSection,
     () => {
+      writeEpochFiles(root, 3);
       writeRepositoryFile(
         root,
         'wiki/how-to/ops/deploy.md',
-        '---\ntitle: Deploy\nread-when: deploying\n---\n',
+        '---\npuni-doc-type: wiki-page\ntitle: Deploy\nread-when: deploying\n---\n',
       );
     },
     {
@@ -603,9 +619,9 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a page over budget',
-    limitPageWords,
+    limitTypedPageWords,
     () => {
-      writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget + 1));
+      writeRepositoryFile(root, 'wiki/how-to/deploy.md', typedPage(words(pageWordBudget - 3)));
     },
     {
       rule: 'docs.words',
@@ -621,7 +637,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       writeRepositoryFile(
         root,
         'wiki/how-to/deploy.md',
-        '---\ntitle: Deploy\nread-when: deploying\n---\n\nCall `renderIndex`, then `renderPages(pages)`; in prose, renderGone is no symbol.\n',
+        '---\npuni-doc-type: wiki-page\ntitle: Deploy\nread-when: deploying\n---\n\nCall `renderIndex`, then `renderPages(pages)`; in prose, renderGone is no symbol.\n',
       );
     },
     {
@@ -662,7 +678,11 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     'a page without read-when',
     requireReadWhen,
     () => {
-      writeRepositoryFile(root, 'wiki/deploy.md', '---\ntitle: Deploy\n---\n');
+      writeRepositoryFile(
+        root,
+        'wiki/deploy.md',
+        '---\npuni-doc-type: wiki-page\ntitle: Deploy\n---\n',
+      );
     },
     { rule: 'index.read-when', path: 'wiki/deploy.md', message: 'has no read-when' },
   ],
@@ -759,7 +779,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a backticked path that does not exist',
-    judgeDocPaths,
+    judgeTypedDocPaths,
     () => {
       appendFileSync(join(root, 'README.md'), 'Deploy with `bin/deploy.sh` from `apps/`.\n');
     },
@@ -775,7 +795,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a doc comment naming a path that does not exist',
-    judgeDocPaths,
+    judgeTypedDocPaths,
     () => {
       writeRepositoryFile(
         root,
@@ -791,7 +811,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a link naming a symbol its source file does not declare',
-    judgeDocReferences,
+    judgeTypedDocReferences,
     () => {
       writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
       appendFileSync(
@@ -807,7 +827,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a link with a fragment into a file no source reader reads',
-    judgeDocReferences,
+    judgeTypedDocReferences,
     () => {
       writeRepositoryFile(root, 'config/a.json', '{ "key": 1 }\n');
       appendFileSync(join(root, 'README.md'), 'Set [key](config/a.json#key).\n');
@@ -823,7 +843,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a symbol in backticks outside a link',
-    judgeDocSpans,
+    judgeTypedDocSpans,
     () => {
       writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
       appendFileSync(
@@ -855,7 +875,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a backticked path git ignores, though it exists on this disk',
-    judgeDocPaths,
+    judgeTypedDocPaths,
     () => {
       writeRepositoryFile(root, '.gitignore', 'dist/\n');
       writeRepositoryFile(root, 'dist/cli.js', 'built\n');
@@ -879,7 +899,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a bun run naming no script',
-    judgeDocCommands,
+    judgeTypedDocCommands,
     () => {
       appendFileSync(join(root, 'README.md'), 'Then `bun run nope`.\n');
     },
@@ -905,7 +925,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a doc comment naming a command the tree does not hold',
-    judgeDocCommands,
+    judgeTypedDocCommands,
     () => {
       writeRepositoryFile(
         root,
@@ -921,12 +941,12 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a command the tree does not hold',
-    judgeDocCommands,
+    judgeTypedDocCommands,
     () => {
       writeRepositoryFile(
         root,
         'wiki/ops/run.md',
-        '---\ntitle: Run\nread-when: running\n---\n\n```sh\ndemo burokrat audit --all\n```\n',
+        '---\npuni-doc-type: wiki-page\ntitle: Run\nread-when: running\n---\n\n```sh\ndemo burokrat audit --all\n```\n',
       );
     },
     {
@@ -1056,7 +1076,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'an nx run naming no project',
-    judgeDocCommands,
+    judgeTypedDocCommands,
     () => {
       appendFileSync(join(root, 'README.md'), 'Then `bunx nx run onee:test`.\n');
     },
@@ -1087,7 +1107,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
   ],
   [
     'a backticked path to a heading that does not exist',
-    judgeDocPaths,
+    judgeTypedDocPaths,
     () => {
       writeRepositoryFile(root, 'apps/one/NOTES.md', '# Notes\n');
       appendFileSync(join(root, 'README.md'), 'Read `apps/one/NOTES.md#nowhere`.\n');
@@ -1107,6 +1127,169 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rmSync(join(root, '.github'), { recursive: true });
     },
     { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'is missing' },
+  ],
+  [
+    'a date in README.md, up to epoch 3',
+    forbidDates,
+    () => {
+      writeRepositoryFile(root, 'docs/guide.md', 'Since 2031-04-05.\n');
+    },
+    { rule: 'history.date', path: 'docs/guide.md', message: 'line 1 holds the date 2031-04-05' },
+  ],
+  [
+    'a backticked path that does not exist, at epoch 3',
+    judgeDocPaths,
+    () => {
+      writeRepositoryFile(root, 'wiki/ops/one.md', 'Run `bin/deploy.sh`.\n');
+    },
+    {
+      rule: 'docs.paths',
+      path: 'wiki/ops/one.md',
+      message: 'names the missing path bin/deploy.sh',
+    },
+  ],
+  [
+    'a bun run naming no script, at epoch 3',
+    judgeDocCommands,
+    () => {
+      writeRepositoryFile(root, 'wiki/ops/one.md', 'Then `bun run nope`.\n');
+    },
+    {
+      rule: 'docs.commands',
+      path: 'wiki/ops/one.md',
+      message: 'runs the script nope, which package.json does not define',
+      remedy: 'name a script the root package.json defines, or add the script there',
+    },
+  ],
+  [
+    'a page over budget, up to epoch 3',
+    limitPageWords,
+    () => {
+      writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget + 1));
+    },
+    {
+      rule: 'docs.words',
+      path: 'wiki/how-to/deploy.md',
+      message: `has ${String(pageWordBudget + 1)} words; at most ${String(pageWordBudget)}`,
+    },
+  ],
+  [
+    'a link naming a symbol its source file does not declare, from any .md file at epoch 3',
+    judgeDocReferences,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+      writeRepositoryFile(root, 'docs/guide.md', 'See [`gone`](../libs/x/src/a.ts#gone).\n');
+    },
+    {
+      rule: 'docs.references',
+      path: 'docs/guide.md',
+      message: 'links to ../libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
+    },
+  ],
+  [
+    'a symbol in backticks outside a link, at epoch 3',
+    judgeDocSpans,
+    () => {
+      writeRepositoryFile(root, 'wiki/ops/one.md', 'Call `renderIndex()`.\n');
+    },
+    {
+      rule: 'docs.spans',
+      path: 'wiki/ops/one.md',
+      message: 'names the symbol renderIndex without linking it',
+    },
+  ],
+  [
+    'a Markdown file declaring no type',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(root, 'docs/guide.md', '# Guide\n');
+    },
+    {
+      rule: 'docs.type',
+      path: 'docs/guide.md',
+      message: 'declares no puni-doc-type in its front matter',
+      remedy:
+        'open it with front matter declaring it: a --- line, "puni-doc-type: <type>", a --- line (or that line first in the front matter it has), the type here being product',
+    },
+  ],
+  [
+    'a Markdown file declaring a type there is none of',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/how-to/x.mdx',
+        typedPage('x\n').replace('wiki-page', 'howto'),
+      );
+    },
+    {
+      rule: 'docs.type',
+      path: 'wiki/how-to/x.mdx',
+      message:
+        'declares puni-doc-type "howto", which is no type; the types are agents, readme, wiki-page, product, record',
+      remedy: 'declare wiki-page, the type that lives here',
+    },
+  ],
+  [
+    'a Markdown file declaring a type where it does not live',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(root, 'wiki/notes.markdown', '---\npuni-doc-type: product\n---\n');
+    },
+    {
+      rule: 'docs.type',
+      path: 'wiki/notes.markdown',
+      message:
+        "declares puni-doc-type product, which lives outside wiki/ and the records' kind directories, under a name other than AGENTS.md, CLAUDE.md, README.md",
+      remedy: 'declare wiki-page, the type that lives here, or move it to where product lives',
+    },
+  ],
+  [
+    'a Markdown file where no type lives',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(root, 'libs/x/README.md', '---\npuni-doc-type: readme\n---\n');
+    },
+    {
+      rule: 'docs.type',
+      path: 'libs/x/README.md',
+      message:
+        'declares puni-doc-type readme, which lives only as README.md at the repository root',
+      remedy: 'move or rename it to where readme lives: only as README.md at the repository root',
+    },
+  ],
+  [
+    'a Markdown file declaring no type where no type lives',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(root, 'libs/x/AGENTS.md', '# x\n');
+    },
+    {
+      rule: 'docs.type',
+      path: 'libs/x/AGENTS.md',
+      message: 'declares no puni-doc-type in its front matter',
+      remedy:
+        "move or rename it to where its type lives: agents only as AGENTS.md at the repository root; readme only as README.md at the repository root; wiki-page only directly in wiki/ or in one of its sections (wiki/concepts/, wiki/how-to/); product outside wiki/ and the records' kind directories, under a name other than AGENTS.md, CLAUDE.md, README.md; record only directly in a kind directory of the records repository (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive)",
+    },
+  ],
+  [
+    'a wiki page in a directory that is no section, its type declared',
+    judgeStateDocTypes,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/ops/deploy.md',
+        typedPage('x\n', 'title: Deploy\nread-when: deploying\n'),
+      );
+    },
+    {
+      rule: 'docs.type',
+      path: 'wiki/ops/deploy.md',
+      message:
+        'declares puni-doc-type wiki-page, which lives only directly in wiki/ or in one of its sections (wiki/concepts/, wiki/how-to/)',
+      remedy:
+        'move or rename it to where wiki-page lives: only directly in wiki/ or in one of its sections (wiki/concepts/, wiki/how-to/)',
+    },
   ],
 ];
 
@@ -1128,6 +1311,45 @@ describe('each rule finds its breach', () => {
       expect([rule.id, /^[a-z]+\.[a-z-]+$/u.test(rule.id)]).toEqual([rule.id, true]);
       expect([rule.id, rule.remedy.length > 0]).toEqual([rule.id, true]);
     }
+  });
+});
+
+describe('documents by declared type, from rules epoch 4', () => {
+  /** Breaks every documentation rule in `path`: a date, a missing path, a script, a symbol, a reference. */
+  function writeBreaking(path: string, type: string): void {
+    writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+    const link = `${'../'.repeat(path.split('/').length - 1)}libs/x/src/a.ts#gone`;
+    writeRepositoryFile(
+      root,
+      path,
+      `---\npuni-doc-type: ${type}\n---\n\nReleased 2031-04-05: run \`bin/deploy.sh\`, \`bun run nope\`, \`renderIndex()\`, [\`gone\`](${link}).\n`,
+    );
+  }
+
+  const typedRules = [
+    forbidTypedDates,
+    judgeTypedDocPaths,
+    judgeTypedDocCommands,
+    judgeTypedDocSpans,
+    judgeTypedDocReferences,
+  ];
+
+  test('a product document is judged by none of the documentation rules', () => {
+    writeBreaking('docs/guide.md', 'product');
+    expect(typedRules.flatMap((rule) => judge(rule))).toEqual([]);
+    expect([...judge(judgeStateDocTypes), ...judge(resolveLinks)]).toEqual([]);
+  });
+
+  test('a wiki page is judged by every one, whatever its Markdown extension', () => {
+    writeBreaking('wiki/how-to/guide.mdx', 'wiki-page');
+    expect(typedRules.map((rule) => judge(rule).length)).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  test('before epoch 4 the path chose: a product document dated is a finding, an .mdx page is none', () => {
+    writeBreaking('docs/guide.md', 'product');
+    writeBreaking('wiki/how-to/guide.mdx', 'wiki-page');
+    expect(judge(forbidDates).map(({ path }) => path)).toEqual(['docs/guide.md']);
+    expect(judge(judgeDocSpans)).toEqual([]);
   });
 });
 
@@ -1194,7 +1416,7 @@ describe('rule boundaries', () => {
   test('docs.words holds a page of exactly the budget and judges only wiki pages', () => {
     writeRepositoryFile(root, 'wiki/how-to/deploy.md', words(pageWordBudget));
     writeRepositoryFile(root, 'README.md', words(pageWordBudget + 1));
-    expect(judge(limitPageWords)).toEqual([]);
+    expect(judge(limitTypedPageWords)).toEqual([]);
   });
 
   test('docs.symbols accepts a symbol only a JSON, YAML or shell file holds', () => {
@@ -1204,7 +1426,7 @@ describe('rule boundaries', () => {
     writeRepositoryFile(
       root,
       'wiki/how-to/deploy.md',
-      '---\ntitle: Deploy\nread-when: deploying\n---\n\nSet `retryLimit`, `cacheKey` and `PUNI_HOME`.\n',
+      '---\npuni-doc-type: wiki-page\ntitle: Deploy\nread-when: deploying\n---\n\nSet `retryLimit`, `cacheKey` and `PUNI_HOME`.\n',
     );
     expect(judge(judgeDocSymbols)).toEqual([]);
   });
@@ -1304,7 +1526,7 @@ describe('rule boundaries', () => {
   });
 
   test('a backticked path into another project is judged only by the cross-project reach', () => {
-    writeRepositoryFile(root, 'wiki/ops/one.md', 'See `apps/one/src/gone.ts`.\n');
+    writeRepositoryFile(root, 'wiki/ops/one.md', typedPage('See `apps/one/src/gone.ts`.\n'));
     const projects = host.container
       .resolve('checkoutProjectScope')
       .list(host.container.resolve('checkoutFiles').open(root, 'system-state'));
@@ -1314,10 +1536,10 @@ describe('rule boundaries', () => {
       message: 'names the missing path apps/one/src/gone.ts',
     };
     const reach = (kind: 'within-project' | 'cross-project') =>
-      dropRemedies(host.judge(judgeDocPaths, root, root, undefined, { kind, projects }));
+      dropRemedies(host.judge(judgeTypedDocPaths, root, root, undefined, { kind, projects }));
     expect(reach('within-project')).toEqual([]);
     expect(reach('cross-project')).toEqual([finding]);
-    expect(judge(judgeDocPaths)).toEqual([finding]);
+    expect(judge(judgeTypedDocPaths)).toEqual([finding]);
   });
 
   test('globs, placeholders, flags, URLs and paths above the root are not paths', () => {
@@ -1325,7 +1547,7 @@ describe('rule boundaries', () => {
       join(root, 'README.md'),
       '`src/*.ts` `nav/<slug>.md` `--out=dist/x.js` `https://x.dev/a.md` `../demo-records/a.md` `@puni/shared-x` `a/b`\n',
     );
-    expect(judge(judgeDocPaths)).toEqual([]);
+    expect(judge(judgeTypedDocPaths)).toEqual([]);
   });
 
   test('flags and placeholders end the words, and prose names no command', () => {
@@ -1333,7 +1555,7 @@ describe('rule boundaries', () => {
       join(root, 'README.md'),
       'Run `demo burokrat --help` or `demo dash NAME`; demo burokrat judges, in prose.\n',
     );
-    expect(judge(judgeDocCommands)).toEqual([]);
+    expect(judge(judgeTypedDocCommands)).toEqual([]);
   });
 
   test('a leaf takes arguments, but a group takes a command', async () => {
@@ -1348,7 +1570,7 @@ describe('rule boundaries', () => {
         join(root, 'README.md'),
         '`demo burokrat check here` `demo burokrat wiki map now` `demo burokrat wiki nope`\n',
       );
-      expect(dropRemedies(leaves.judge(judgeDocCommands, root))).toEqual([
+      expect(dropRemedies(leaves.judge(judgeTypedDocCommands, root))).toEqual([
         {
           rule: 'docs.commands',
           path: 'README.md',
@@ -1408,7 +1630,10 @@ describe('the check command', () => {
 
   test('findings print sorted, then a summary, and exit 1', () => {
     rmSync(join(root, 'README.md'));
-    writeFileSync(join(root, 'AGENTS.md'), `# demo\n\n${fixtureAgentsRules}`);
+    writeFileSync(
+      join(root, 'AGENTS.md'),
+      `---\npuni-doc-type: agents\n---\n\n# demo\n\n${fixtureAgentsRules}`,
+    );
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [
@@ -1483,7 +1708,11 @@ describe('a link target the file system cannot describe is missing, not a crash'
   });
 
   test('a project-scoped link below a file is a finding of its project', () => {
-    writeRepositoryFile(root, 'apps/one/notes.md', '[a](src/index.ts/child)\n');
+    writeRepositoryFile(
+      root,
+      'apps/one/notes.md',
+      '---\npuni-doc-type: product\n---\n\n[a](src/index.ts/child)\n',
+    );
     const run = runCheck({ project: 'one' });
     expect(run.code).toBe(1);
     expect(run.stdout).toStartWith(`${finding('apps/one/notes.md', 'src/index.ts/child')}\n`);
