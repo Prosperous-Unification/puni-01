@@ -1,9 +1,9 @@
-import type { FileSystem, Git, GitListing, PathKind } from '@puni/shared-ports';
+import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
 import type { IndexDrift, IndexSources } from './index-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
-export type { FileSystem, Git, GitListing, PathKind };
+export type { FileSystem, Git, GitListing, PathKind } from '@puni/shared-ports';
 
 /** What the checkout module needs from its host. */
 export interface CheckoutRequirements {

@@ -17,7 +17,9 @@ import {
   requireReadFirst,
   requireReadWhen,
   requireScope,
+  requireSection,
 } from './rules/index.rule';
+import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
 import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
@@ -60,6 +62,7 @@ export const codeRules: readonly LeveledRule[] = [
     requireReadWhen,
     requireReadFirst,
     requireScope,
+    requireSection,
   ].map(at('repository')),
   ...[
     forbidDates,
@@ -71,6 +74,8 @@ export const codeRules: readonly LeveledRule[] = [
     requireProjectTargets,
     judgeDocPaths,
     judgeDocCommands,
+    limitPageWords,
+    judgeDocSymbols,
   ].map(at('project')),
   at('whole')(matchGeneratedIndex),
 ];
@@ -97,9 +102,10 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
- * repository, judging only the references that leave the linking file's project.
+ * repository, judging only the references that leave the linking file's project, and the
+ * symbols documentation names, which a project check leaves to this run.
  */
-export const crossProjectRules: readonly Rule[] = [resolveLinks, judgeDocPaths];
+export const crossProjectRules: readonly Rule[] = [resolveLinks, judgeDocPaths, judgeDocSymbols];
 
 /**
  * The rules judging what a commit makes public, by the type of the repository judged: its

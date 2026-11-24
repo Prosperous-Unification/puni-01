@@ -10,7 +10,7 @@ import {
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
 
-export type { Finding };
+export type { Finding } from '@puni/shared-failures';
 
 /**
  * Which references from a file to another path (Markdown links, backticked paths) a run judges:

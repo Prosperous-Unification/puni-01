@@ -112,7 +112,8 @@ export const burokratParser = map(
  * (an effect on the system or a node), Burokrat judges (a verdict on whether work was done
  * right). A command whose result is two of these is two commands. Aliases select their group at
  * runtime and in completion but never appear in usage or help, which name only the canonical
- * group. A new leaf also needs an entry in {@link handlerKeys} and a case in `runPuni` in
+ * group. A new leaf also needs a `Leaf` member whose kind is its words after the program, an
+ * entry in {@link handlerKeys}, a case in its role's `select…Leaf`, and a case in `runPuni` in
  * `main.ts`.
  */
 export const puniParser = or(

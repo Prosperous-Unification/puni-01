@@ -139,6 +139,54 @@ const refused: readonly (readonly [string, string, string, string])[] = [
     'no-console',
   ],
   [
+    'an exported function without JSDoc',
+    `${check}/x.ts`,
+    'export function f(): number {\n  return 1;\n}',
+    'jsdoc/require-jsdoc',
+  ],
+  [
+    'an exported constant without JSDoc',
+    `${check}/x.ts`,
+    'export const a = 1;',
+    'jsdoc/require-jsdoc',
+  ],
+  [
+    'an exported interface without JSDoc',
+    `${check}/x.ts`,
+    'export interface A {\n  readonly b: number;\n}',
+    'jsdoc/require-jsdoc',
+  ],
+  [
+    'an exported type without JSDoc',
+    `${check}/x.ts`,
+    'export type A = number;',
+    'jsdoc/require-jsdoc',
+  ],
+  [
+    'an app export without JSDoc',
+    'apps/puni/cli/src/main.ts',
+    'export const a = 1;',
+    'jsdoc/require-jsdoc',
+  ],
+  [
+    'a local export list in a library file',
+    `${check}/x.ts`,
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
+    'a local export list in a rule',
+    `${check}/x.rule.ts`,
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
+    'a local export list in the app',
+    'apps/puni/cli/src/main.ts',
+    'const a = 1;\nexport { a };',
+    'no-restricted-syntax',
+  ],
+  [
     'a test using toThrow',
     `${check}/x.test.ts`,
     'expect(() => 1).toThrow();',
@@ -154,14 +202,29 @@ const refused: readonly (readonly [string, string, string, string])[] = [
 
 const allowed: readonly (readonly [string, string, string])[] = [
   ['a test over 400 lines', `${check}/x.test.ts`, longFile.join('\n')],
-  ['domain constructing a given date', `${check}/x.ts`, 'export const a = new Date(0);'],
-  ['a command constructing a given date', `${check}/x.command.ts`, 'export const a = new Date(0);'],
+  ['domain constructing a given date', `${check}/x.ts`, '/** A. */\nexport const a = new Date(0);'],
+  [
+    'a command constructing a given date',
+    `${check}/x.command.ts`,
+    '/** A. */\nexport const a = new Date(0);',
+  ],
   ['a test writing to the console', `${check}/x.test.ts`, "console.log('x');"],
   ['the app writing to the console', 'apps/puni/cli/src/main.ts', "console.log('x');"],
   [
     'a repository reading the clock',
     'libs/puni/shared/adapters/src/x.repository.ts',
-    'export const a = Date.now();',
+    '/** A. */\nexport const a = Date.now();',
+  ],
+  ['a re-export from another module', `${check}/x.ts`, "export { a } from './y';"],
+  [
+    'an exported declaration of a test without JSDoc',
+    `${check}/x.test-host.ts`,
+    'export function f(): number {\n  return 1;\n}',
+  ],
+  [
+    'an unexported declaration without JSDoc',
+    `${check}/x.ts`,
+    'function f(): number {\n  return 1;\n}\n/** G. */\nexport function g(): number {\n  return f();\n}',
   ],
   [
     'a described disable directive that disables a problem',
@@ -208,7 +271,7 @@ async function lintTyped(path: string, source: string): Promise<string[]> {
 }
 
 describe('the type-checked lint rules', () => {
-  const assertion = "export const a = JSON.parse('{}') as { a: number };";
+  const assertion = "/** A. */\nexport const a = JSON.parse('{}') as { a: number };";
 
   test('an unchecked type assertion in production code is refused', async () => {
     expect(await lintTyped(`${check}/probe-x.ts`, assertion)).toEqual([
