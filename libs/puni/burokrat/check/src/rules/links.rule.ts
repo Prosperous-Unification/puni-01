@@ -52,6 +52,7 @@ function judgeLinks(
  */
 export const resolveLinks: Rule = {
   id: 'links.resolve',
+  since: 1,
   remedy,
   judge({ files, scope, references }) {
     return files
@@ -66,6 +67,7 @@ export const resolveLinks: Rule = {
 /** Every relative Markdown link in `AGENTS.md` resolves, for a records repository. */
 export const resolveAgentsLinks: Rule = {
   id: 'links.resolve',
+  since: 1,
   remedy,
   judge: ({ files }) =>
     files.exists('AGENTS.md') ? judgeLinks(files, 'AGENTS.md', () => true) : [],

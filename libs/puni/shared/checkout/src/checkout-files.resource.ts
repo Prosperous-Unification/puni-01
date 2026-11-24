@@ -45,37 +45,66 @@ function normalise(path: string): string {
 interface WriteArea {
   readonly description: string;
   holdsFile(normal: string): boolean;
+  /** Where the checkout removes files, which may be less than where it writes them. */
+  readonly removedDescription: string;
+  removesFile(normal: string): boolean;
   holdsDirectory(normal: string): boolean;
 }
+
+/** How a path is changed: a file written or removed, or a directory emptied. */
+type Change = 'write' | 'remove' | 'directory';
 
 const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
- * The write area of a checkout of each type: a system-state checkout writes only the generated
- * index, anywhere below `wiki/index/`, and may remove a file standing where `wiki/index` belongs;
- * a records checkout writes only record files, directly inside a kind directory, and empties no
- * directory.
+ * The files a system-state checkout writes outside the generated index: the registry and the
+ * entry file whose rules section follows its `rules` pin.
  */
+const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md'];
+
+/**
+ * The write area of a checkout of each type: a system-state checkout writes only the generated
+ * index, anywhere below `wiki/index/`, and the {@link pinnedFiles}, and removes only index
+ * files and a file standing where `wiki/index` belongs; a records checkout writes and removes
+ * only record files, directly inside a kind directory, and empties no directory.
+ */
+const inIndex = (normal: string): boolean =>
+  normal === indexDirectory || normal.startsWith(`${indexDirectory}/`);
+
+const inKindDirectory = (normal: string): boolean =>
+  kindDirectories.includes(posix.dirname(normal));
+
 const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
   'system-state': {
-    description: `inside ${indexDirectory}/`,
-    holdsFile: (normal) => normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
-    holdsDirectory: (normal) =>
-      normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
+    description: `inside ${indexDirectory}/ or ${pinnedFiles.join(' or ')}`,
+    holdsFile: (normal) => pinnedFiles.includes(normal) || inIndex(normal),
+    removedDescription: `inside ${indexDirectory}/`,
+    removesFile: inIndex,
+    holdsDirectory: inIndex,
   },
   'system-records': {
     description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
+    holdsFile: inKindDirectory,
+    removedDescription: `directly inside a kind directory (${kindDirectories.join(', ')})`,
+    removesFile: inKindDirectory,
     holdsDirectory: () => false,
   },
 };
 
-/** `path` normalised, refused unless the write area of a `type` checkout holds it. */
-function normaliseWritten(path: string, type: RepositoryType, directory: boolean): string {
+/** `path` normalised, refused unless the write area of a `type` checkout allows `change` there. */
+function normaliseWritten(path: string, type: RepositoryType, change: Change): string {
   const normal = normalise(path);
   const area = writeAreas[type];
-  if (!(directory ? area.holdsDirectory(normal) : area.holdsFile(normal))) {
-    refuse(path, `is not ${area.description}, the only place a ${type} checkout writes`);
+  const allowed =
+    change === 'write'
+      ? area.holdsFile(normal)
+      : change === 'remove'
+        ? area.removesFile(normal)
+        : area.holdsDirectory(normal);
+  if (!allowed) {
+    const [where, verb] =
+      change === 'remove' ? [area.removedDescription, 'removes'] : [area.description, 'writes'];
+    refuse(path, `is not ${where}, the only place a ${type} checkout ${verb}`);
   }
   return normal;
 }
@@ -187,12 +216,12 @@ function openCheckout(
       return head.text;
     },
     write(path, text) {
-      const normal = normaliseWritten(path, type, false);
+      const normal = normaliseWritten(path, type, 'write');
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
     createFile(path, text) {
-      const normal = normaliseWritten(path, type, false);
+      const normal = normaliseWritten(path, type, 'write');
       ensureCreateParents(fileSystem, root, normal);
       try {
         fileSystem.writeNew(join(root, normal), text);
@@ -203,10 +232,10 @@ function openCheckout(
       }
     },
     remove(path) {
-      fileSystem.remove(join(root, normaliseWritten(path, type, false)));
+      fileSystem.remove(join(root, normaliseWritten(path, type, 'remove')));
     },
     removeEmptyDirectories(directory) {
-      removeEmptyBelow(normaliseWritten(directory, type, true));
+      removeEmptyBelow(normaliseWritten(directory, type, 'directory'));
     },
   };
 }

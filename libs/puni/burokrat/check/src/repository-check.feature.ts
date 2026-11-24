@@ -4,17 +4,27 @@ import {
   compareBytes,
   findCheckoutDefect,
   isRepositoryLevel,
+  type LatestRules,
+  replaceRulesSection,
+  type RepositoryRegistry,
   type RepositoryType,
   repositoryScope,
+  requirePinReached,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
-import type { CheckRequest, CheckRequirements, RepositoryCheck } from './contract';
+import { digestRulesSection, rulesDigestAt } from './agents-rules';
+import type { CheckRequest, CheckRequirements, NewerRules, RepositoryCheck } from './contract';
 import {
+  appliesAt,
   applyRule,
+  type CheckRules,
   formatFinding,
+  latestEpoch,
   type LeveledRule,
+  listEveryRule,
   type ReferenceReach,
   type Rule,
+  type RuleReading,
 } from './finding';
 import {
   CommitRangeRefused,
@@ -22,7 +32,9 @@ import {
   ProjectScopeRefused,
   ScopeOptionsConflict,
 } from './failures';
-import { crossProjectRules, type ruleSets, secretRules } from './rule-set.rule';
+
+/** What the check features need: the module's requirements and the rules it judges by. */
+type CheckServices = CheckRequirements & { readonly checkRules: CheckRules };
 
 /** What one run judges, chosen by the request's options. */
 type CheckMode =
@@ -125,6 +137,51 @@ function countRules(rules: readonly Rule[]): string {
   return `${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
 }
 
+/** `findings` sorted by their printed form. */
+function sortFindings(findings: readonly Finding[]): Finding[] {
+  return findings
+    .map((finding) => ({ finding, line: formatFinding(finding) }))
+    .sort((left, right) => compareBytes(left.line, right.line))
+    .map(({ finding }) => finding);
+}
+
+/** The ids of `rules` that start applying after the pin `pin`, sorted, once each. */
+function listNewer(rules: readonly Rule[], pin: number): string[] {
+  const ids = rules.filter((rule) => rule.since > pin).map(({ id }) => id);
+  return [...new Set(ids)].sort(compareBytes);
+}
+
+/**
+ * The reading of the whole repository `files` holds, registered by `registry`: every file, every
+ * reference, the composed CLI's commands and the index and records resources.
+ */
+function readWhole(
+  { commandCatalog, checkoutWikiIndex, recordsCatalog }: CheckServices,
+  files: CheckoutFiles,
+  registry: RepositoryRegistry,
+): RuleReading {
+  return {
+    files,
+    registry,
+    commands: commandCatalog.list(),
+    scope: repositoryScope,
+    references: { kind: 'all' },
+    wikiIndex: checkoutWikiIndex,
+    records: recordsCatalog,
+  };
+}
+
+/** The findings of `run`, or the one finding of the checkout defect it throws. */
+function judgeOrDefect(run: () => Finding[]): Finding[] {
+  try {
+    return run();
+  } catch (caught) {
+    const defect = findCheckoutDefect(caught);
+    if (defect === undefined) throw caught;
+    return [defect];
+  }
+}
+
 /** The rules a project scope runs: repository- and project-level at the root, else project-level. */
 function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): readonly Rule[] {
   const levels = isRepositoryLevel(scope) ? ['repository', 'project'] : ['project'];
@@ -134,33 +191,30 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
 /**
  * The {@link RepositoryCheck}. The repository holding the nearest `puni.json` is found as the
  * type that file declares; `repo` names the type to judge instead, resolved through the registry
- * to the checkout beside it. The judged type selects its rule set from `checkRuleSets`, which the
- * module supplies as {@link ruleSets}. Without an option the whole repository is judged by every
+ * to the checkout beside it. The judged type selects its rule set from `checkRules`, which the
+ * module supplies from the rule set. Without an option the whole repository is judged by every
  * rule. With `project`, only what that project of the `system-state` repository owns, by the
- * rules of its level, references reaching only paths the same project owns. With `crossProjectLinks`, every file, by
- * {@link crossProjectRules}, references reaching only paths another project owns. So every
- * project check, the cross-project check and the `whole`-level rules together find what the
- * whole check finds. With `staged`, the staged files as the index holds them, by the
- * {@link secretRules} of the type. With `commits`, what each commit of the range adds and its
- * message, judged apart, by the same rules, each finding's path `<commit>:<path>` and its remedy
- * saying how to take the commit out: by rewriting the branch, or, with `merged`, by a pull
- * request. Findings are sorted by their printed form.
+ * rules of its level, references reaching only paths the same project owns. With
+ * `crossProjectLinks`, every file, by its cross-project rules, references reaching only paths
+ * another project owns. So every project check, the cross-project check and the `whole`-level
+ * rules together find what the whole check finds. With `staged`, the staged files as the index
+ * holds them, by the secret rules of the type. With `commits`, what each commit of the range adds
+ * and its message, judged apart, by the same rules, each finding's path `<commit>:<path>` and its
+ * remedy saying how to take the commit out: by rewriting the branch, or, with `merged`, by a pull
+ * request. Every run applies only the rules that apply at its `puni.json` pin, by
+ * {@link appliesAt}, and names those that start after it. Findings are sorted by their printed
+ * form.
  */
-export function createRepositoryCheck({
-  checkoutRegistry,
-  checkoutFiles,
-  checkoutProjectScope,
-  checkoutWikiIndex,
-  recordsCatalog,
-  commandCatalog,
-  checkRuleSets,
-}: CheckRequirements & { readonly checkRuleSets: typeof ruleSets }): RepositoryCheck {
+export function createRepositoryCheck(services: CheckServices): RepositoryCheck {
+  const { checkoutRegistry, checkoutFiles, checkoutProjectScope, programSource, checkRules } =
+    services;
+  const latest = latestEpoch(listEveryRule(checkRules));
   const plan = (
     mode: Exclude<CheckMode, { kind: 'commits' }>,
     type: RepositoryType,
     files: CheckoutFiles,
   ): RunPlan => {
-    const rules = checkRuleSets[type];
+    const rules = checkRules.sets[type];
     switch (mode.kind) {
       case 'whole':
         return {
@@ -182,14 +236,14 @@ export function createRepositoryCheck({
         return {
           scope: repositoryScope,
           references: { kind: 'cross-project', projects: checkoutProjectScope.list(files) },
-          rules: crossProjectRules,
+          rules: checkRules.crossProject,
           label: 'cross-project links, ',
         };
       case 'staged':
         return {
           scope: repositoryScope,
           references: { kind: 'all' },
-          rules: secretRules[type],
+          rules: checkRules.secrets[type],
           label: 'staged files, ',
         };
     }
@@ -197,54 +251,84 @@ export function createRepositoryCheck({
   return {
     check(request, cwd) {
       let summary = 'no repository';
-      let findings: Finding[];
-      try {
+      let newer: NewerRules | undefined;
+      const findings = judgeOrDefect(() => {
         const found = checkoutRegistry.locate(cwd);
         const type = request.repo ?? found.type;
         const mode = selectMode(request, type);
         summary = type;
         const { root, registry } = checkoutRegistry.resolve(found, type);
-        const reading = {
-          registry,
-          commands: commandCatalog.list(),
-          references: { kind: 'all' } as const,
-          scope: repositoryScope,
-          wikiIndex: checkoutWikiIndex,
-          records: recordsCatalog,
+        requirePinReached(registry, latest, programSource.version);
+        const pin = registry.rules;
+        const pinned = (all: readonly Rule[]): readonly Rule[] => {
+          const ids = listNewer(all, pin);
+          if (ids.length > 0) newer = { pin, ids };
+          return all.filter((rule) => appliesAt(rule, pin));
         };
         if (mode.kind === 'commits') {
-          const rules = secretRules[type];
+          const rules = pinned(checkRules.secrets[type]);
           const commits = checkoutFiles.openCommits(root, mode.base, mode.head);
           const count = `${String(commits.length)} ${commits.length === 1 ? 'commit' : 'commits'}`;
           summary = `${type}, commits ${mode.base}..${mode.head}, ${count}, ${countRules(rules)}`;
-          findings = commits.flatMap(({ shortHash, files, message }) =>
+          return commits.flatMap(({ shortHash, files, message }) =>
             [files, message]
-              .flatMap((view) =>
-                rules.flatMap((rule) => applyRule(rule, { ...reading, files: view })),
-              )
+              .flatMap((view) => {
+                const reading = readWhole(services, view, registry);
+                return rules.flatMap((rule) => applyRule(rule, reading));
+              })
               .map((finding) => locateInCommit(finding, shortHash, mode.base, mode.merged)),
           );
-        } else {
-          const files =
-            mode.kind === 'staged'
-              ? checkoutFiles.openStaged(root)
-              : checkoutFiles.open(root, type);
-          const { scope, references, rules, label } = plan(mode, type, files);
-          summary = `${type}, ${label}${countRules(rules)}`;
-          findings = rules.flatMap((rule) =>
-            applyRule(rule, { ...reading, files, scope, references }),
-          );
         }
-      } catch (caught) {
-        const defect = findCheckoutDefect(caught);
-        if (defect === undefined) throw caught;
-        findings = [defect];
-      }
-      const sorted = findings
-        .map((finding) => ({ finding, line: formatFinding(finding) }))
-        .sort((left, right) => compareBytes(left.line, right.line))
-        .map(({ finding }) => finding);
-      return { summary, findings: sorted };
+        const files =
+          mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
+        const { scope, references, rules: all, label } = plan(mode, type, files);
+        const rules = pinned(all);
+        summary = `${type}, ${label}${countRules(rules)}`;
+        const reading: RuleReading = { ...readWhole(services, files, registry), scope, references };
+        return rules.flatMap((rule) => applyRule(rule, reading));
+      });
+      return { summary, findings: sortFindings(findings), newer };
+    },
+  };
+}
+
+/**
+ * The {@link LatestRules} of `checkRules`, which the module supplies as the `checkRules` of the rule set: its
+ * epoch is the latest of every rule there. It judges each whole repository of the project by
+ * the rules of its type that apply at that epoch, with the registry pinned there and, for the
+ * system-state repository, a view of the checkout whose `AGENTS.md` rules section, when it has
+ * one, is the given text. Whether a section holds an epoch's rules is judged by the digest
+ * in force at that epoch.
+ */
+export function createLatestRules(services: CheckServices): LatestRules {
+  const { checkoutRegistry, checkoutFiles, checkRules } = services;
+  const epoch = latestEpoch(listEveryRule(checkRules));
+  const judgeType = (cwd: string, type: RepositoryType, rules: string): Finding[] =>
+    judgeOrDefect(() => {
+      const found = checkoutRegistry.locate(cwd);
+      const { root, registry } = checkoutRegistry.resolve(found, type);
+      const files = checkoutFiles.open(root, type);
+      const readText = (path: string): string => {
+        const text = files.readText(path);
+        if (type !== 'system-state' || path !== 'AGENTS.md') return text;
+        return replaceRulesSection(text, rules) ?? text;
+      };
+      const reading = readWhole(services, { ...files, readText }, { ...registry, rules: epoch });
+      return checkRules.sets[type]
+        .map(({ rule }) => rule)
+        .filter((rule) => appliesAt(rule, epoch))
+        .flatMap((rule) => applyRule(rule, reading));
+    });
+  return {
+    epoch,
+    judge(cwd, rules) {
+      return {
+        'system-state': sortFindings(judgeType(cwd, 'system-state', rules)),
+        'system-records': sortFindings(judgeType(cwd, 'system-records', rules)),
+      };
+    },
+    holdsRulesOf(section, at) {
+      return digestRulesSection(section) === rulesDigestAt(checkRules.agentsRulesDigests, at);
     },
   };
 }

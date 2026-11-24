@@ -28,6 +28,7 @@ const removal = (path: string): string => `remove it: git rm --cached ${path}`;
  */
 export const judgeEntryKinds: Rule = {
   id: 'entries.kind',
+  since: 1,
   remedy:
     'point the symlink at a tracked file inside the repository by a relative path (ln -sfn <relative-target> <path>), or remove it',
   judge({ files, scope, references }) {

@@ -92,6 +92,7 @@ describe('burokratParser', () => {
     ],
     ['repo init --name shop', { kind: 'repo init', name: 'shop', owner: undefined }],
     ['repo init --owner acme --name shop', { kind: 'repo init', name: 'shop', owner: 'acme' }],
+    ['repo upgrade', { kind: 'repo upgrade' }],
     [
       'adr add --title T --topics a,b --summary S',
       { kind: 'adr add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
@@ -132,6 +133,8 @@ describe('burokratParser', () => {
     'repo init --owner acme',
     'repo init --name',
     'repo init --name x --bogus',
+    'repo upgrade --bogus',
+    'repo upgrade stray',
     'adr add',
     'adr add --title T --topics a',
     'adr stray',

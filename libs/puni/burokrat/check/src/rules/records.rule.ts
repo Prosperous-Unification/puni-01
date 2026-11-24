@@ -35,6 +35,7 @@ function judgeRecordFiles(
  */
 export const judgeRecordsLayout: Rule = {
   id: 'records.layout',
+  since: 1,
   remedy: 'move or remove it; the records AGENTS.md says where each kind of record goes',
   judge: ({ files }) => judgeLayout(files.listVisibleEntries()),
 };
@@ -72,6 +73,7 @@ function judgeLayout(entries: readonly CheckoutEntry[]): Breach[] {
 /** Every record file is named `YYYY-MM-DD-<slug>.md` with a real calendar date. */
 export const judgeRecordNames: Rule = {
   id: 'records.name',
+  since: 1,
   remedy: 'rename it YYYY-MM-DD-<slug>.md with git mv, and keep its date key equal to that day',
   judge: (reading) =>
     judgeRecordFiles(reading, (recordFiles) =>
@@ -96,6 +98,7 @@ export const judgeRecordNames: Rule = {
  */
 export const judgeRecordFrontMatter: Rule = {
   id: 'records.front-matter',
+  since: 1,
   remedy: 'correct the front matter as the message says',
   judge: judgeFrontMatter,
 };
@@ -143,6 +146,7 @@ function judgeFrontMatter(reading: RuleReading): Breach[] {
 /** Findings and assessment reviews hold a structured review body with consistent runs and scores. */
 export const judgeReviewRecords: Rule = {
   id: 'records.review',
+  since: 1,
   remedy: 'file the review with the generated Markdown body and all required review fields',
   judge: (reading) =>
     judgeRecordFiles(reading, (recordFiles) =>
@@ -229,6 +233,7 @@ function findSupersessionCycles(
  */
 export const judgeSupersession: Rule = {
   id: 'records.supersession',
+  since: 1,
   remedy:
     'make the newer record say supersedes and the older say superseded-by, each naming the other',
   judge: (reading) =>

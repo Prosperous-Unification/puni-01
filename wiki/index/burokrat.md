@@ -11,7 +11,7 @@
 - changing how fresh reviews discover, compare, score or file findings: [puni-burokrat-review](../../libs/puni/burokrat/review/src/review.feature.ts)
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
 - changing the adr add command: its options and the sections a new decision record starts with: [puni-burokrat-adr](../../libs/puni/burokrat/adr/src/adr-add.command.ts)
-- changing what repo init creates for a new governed repository pair: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/repository-pair.feature.ts)
+- changing what repo init creates for a new governed repository pair, or how repo upgrade raises a rules pin: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/contract.ts)
 
 ## Commands
 
@@ -22,8 +22,9 @@
 - `puni burokrat assess templates`: List versioned assessment criteria maps.
 - `puni burokrat change`: Archive finished changes.
 - `puni burokrat check`: Judge the repository against its rules.
-- `puni burokrat repo`: Set up repositories for puni to govern.
+- `puni burokrat repo`: Set up the repositories puni governs, and raise their rules pin.
 - `puni burokrat repo init`: Create a governed repository here and its records repository beside it.
+- `puni burokrat repo upgrade`: Raise this repository's rules pin to the latest epoch, if it passes them.
 - `puni burokrat review`: Review evidence against criteria and file the scored findings.
 - `puni burokrat review file`: File and print the completed review by impact.
 - `puni burokrat review next`: Read the current review task.

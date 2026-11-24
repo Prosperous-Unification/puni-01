@@ -17,7 +17,7 @@ export interface RegistryPair {
 export function makeRegistryPair(scratchDirectories: ScratchDirectoryOwner): RegistryPair {
   const parent = scratchDirectories.createDirectory('puni-registry-');
   const pair = { state: join(parent, 'demo'), records: join(parent, 'demo-records') };
-  writeRepositoryFile(pair.state, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+  writeRepositoryFile(pair.state, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
   mkdirSync(pair.records);
   return pair;
 }

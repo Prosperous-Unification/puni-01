@@ -11,5 +11,6 @@ DiBag.createBuilder()
     checkoutFiles: () => requirements.checkoutFiles,
     commandCatalog: () => requirements.commandCatalog,
     programSource: () => requirements.programSource,
+    latestRules: () => requirements.latestRules,
   })
   .verifyGraphAtCompileTime() satisfies void;

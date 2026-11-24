@@ -31,6 +31,7 @@ export function opensWithHeader(text: string): boolean {
  */
 export const forbidFileHeaders: Rule = {
   id: 'code.header',
+  since: 1,
   remedy: 'delete the header comment; say what a symbol does in JSDoc on it',
   judge({ files, scope }) {
     return files

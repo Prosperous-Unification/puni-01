@@ -5,6 +5,7 @@ import {
   readInvocation as readProgramInvocation,
   UsageRefused,
 } from '@puni/shared-command';
+import { rulesUpgradeCommand } from '@puni/shared-checkout';
 import { type Group, puniProgram } from './root-parser';
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
@@ -125,7 +126,7 @@ describe('readInvocation', () => {
     ['d ops', ['ssh', 'k3s']],
     ['n plan', ['add']],
     ['n research', ['add']],
-    ['b repo', ['init']],
+    ['b repo', ['init', 'upgrade']],
     ['b adr', ['add']],
     ['b assess', ['outcomes', 'templates']],
     ['b review', ['start', 'next', 'submit', 'file']],
@@ -155,6 +156,7 @@ describe('readInvocation', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toMatch(/^Usage: puni burokrat \[\(check /mu);
     expect(help).toContain('--commits BASE..HEAD');
+    expect(help).toContain('| upgrade)]');
     expect(readListedNames(help)).toEqual([
       'check',
       'wiki',
@@ -219,6 +221,12 @@ describe('readInvocation', () => {
   });
 });
 
+describe('the rules upgrade command', () => {
+  test('the command check and the agents.rules remedy name is in the command tree', () => {
+    expect(listCommands(puniProgram).map(({ path }) => path)).toContain(rulesUpgradeCommand);
+  });
+});
+
 describe('listCommands', () => {
   test('walks the parser tree: every group and leaf by canonical path, with its brief', () => {
     expect(listCommands(puniProgram)).toEqual([
@@ -279,10 +287,17 @@ describe('listCommands', () => {
       { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
       { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
       { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
-      { path: 'puni burokrat repo', brief: 'Set up repositories for puni to govern.' },
+      {
+        path: 'puni burokrat repo',
+        brief: 'Set up the repositories puni governs, and raise their rules pin.',
+      },
       {
         path: 'puni burokrat repo init',
         brief: 'Create a governed repository here and its records repository beside it.',
+      },
+      {
+        path: 'puni burokrat repo upgrade',
+        brief: "Raise this repository's rules pin to the latest epoch, if it passes them.",
       },
       { path: 'puni burokrat adr', brief: 'File architecture decision records.' },
       {

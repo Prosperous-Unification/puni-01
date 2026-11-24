@@ -64,7 +64,7 @@ export async function regenerateIndex(root: string): Promise<void> {
  */
 async function buildStateRepository(root: string): Promise<void> {
   mkdirSync(root);
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {

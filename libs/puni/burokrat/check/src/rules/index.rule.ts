@@ -29,6 +29,7 @@ function joinIds(ids: readonly string[], conjunction: string): string {
  */
 export const matchGeneratedIndex: Rule = {
   id: 'index.current',
+  since: 1,
   remedy: `run \`${writeIndex}\``,
   judge({ files, commands, wikiIndex }) {
     const sources = wikiIndex.readSources(files);
@@ -57,6 +58,7 @@ export const matchGeneratedIndex: Rule = {
  */
 export const limitIndexWords: Rule = {
   id: 'index.words',
+  since: 1,
   remedy: `shorten the readWhen of projects, the read-when of pages and the command briefs until each file of ${indexDirectory}/ holds at most ${String(indexWordBudget)} words, then run \`${writeIndex}\``,
   judge: ({ files }) =>
     files
@@ -86,6 +88,7 @@ function judgeSources(topic: SourceDefect['topic']): Rule['judge'] {
  */
 export const requireReadWhen: Rule = {
   id: 'index.read-when',
+  since: 1,
   remedy: sourceDefectRemedies['read-when'],
   judge: judgeSources('read-when'),
 };
@@ -96,6 +99,7 @@ export const requireReadWhen: Rule = {
  */
 export const requireReadFirst: Rule = {
   id: 'index.read-first',
+  since: 1,
   remedy: sourceDefectRemedies['read-first'],
   judge: judgeSources('read-first'),
 };
@@ -103,6 +107,7 @@ export const requireReadFirst: Rule = {
 /** Every project has exactly one `scope:<name>` tag, naming the index partition that lists it. */
 export const requireScope: Rule = {
   id: 'index.scope',
+  since: 1,
   remedy: sourceDefectRemedies.scope,
   judge: judgeSources('scope'),
 };
@@ -113,6 +118,7 @@ export const requireScope: Rule = {
  */
 export const requireSection: Rule = {
   id: 'index.section',
+  since: 1,
   remedy: sourceDefectRemedies.section,
   judge: judgeSources('section'),
 };

@@ -37,6 +37,7 @@ export function listSymbolNames(text: string): string[] {
  */
 export const judgeDocSymbols: Rule = {
   id: 'docs.symbols',
+  since: 1,
   remedy: 'name the symbol as the code now spells it, or remove it',
   judge({ files, references }) {
     if (references.kind === 'within-project') return [];
@@ -63,6 +64,7 @@ export const judgeDocSymbols: Rule = {
  */
 export const limitPageWords: Rule = {
   id: 'docs.words',
+  since: 1,
   remedy: `split the page into pages that each answer one read-when, or move what one library owns into its JSDoc, until each holds at most ${String(pageWordBudget)} words`,
   judge: ({ files, scope }) =>
     files

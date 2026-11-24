@@ -13,5 +13,6 @@ DiBag.createBuilder()
     checkoutWikiIndex: () => requirements.checkoutWikiIndex,
     recordsCatalog: () => requirements.recordsCatalog,
     commandCatalog: () => requirements.commandCatalog,
+    programSource: () => requirements.programSource,
   })
   .verifyGraphAtCompileTime() satisfies void;

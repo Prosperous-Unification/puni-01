@@ -94,6 +94,7 @@ export function holdsCredential(line: string): boolean {
  */
 export const forbidPlaintextSecrets: Rule = {
   id: 'secrets.plaintext',
+  since: 1,
   remedy:
     'remove the credential from the file, rotate it, and read it from the environment or a secret store',
   judge({ files, scope }) {
@@ -147,6 +148,7 @@ export function holdsAddress(line: string): boolean {
 function forbidAddresses(remedy: string): Rule {
   return {
     id: 'secrets.addresses',
+    since: 1,
     remedy,
     judge({ files, scope }) {
       return listTextLines(files, scope).flatMap(({ path, lines }) =>

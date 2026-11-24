@@ -26,8 +26,8 @@ import {
   type Judged,
   openCheckHost,
 } from './check.test-host';
-import type { Rule } from './finding';
-import { codeRules, crossProjectRules, ruleSets, secretRules } from './rule-set.rule';
+import { listEveryRule, type Rule } from './finding';
+import { checkRules, codeRules } from './rule-set.rule';
 import {
   agentsExists,
   agentsNamesIndex,
@@ -720,7 +720,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
         {
           rule: 'agents.rules',
           path: 'AGENTS.md',
-          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not the pinned ${digestRulesSection(fixtureAgentsRules)}`,
+          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 1`,
         },
       ] as const,
   ),
@@ -868,11 +868,7 @@ describe('each rule finds its breach', () => {
   });
 
   test('every rule of every rule set names its id and a remedy', () => {
-    const everyRule = [
-      ...Object.values(ruleSets).flatMap((rules) => rules.map(({ rule }) => rule)),
-      ...crossProjectRules,
-      ...Object.values(secretRules).flat(),
-    ];
+    const everyRule = listEveryRule(checkRules);
     for (const rule of everyRule) {
       expect([rule.id, /^[a-z]+\.[a-z-]+$/u.test(rule.id)]).toEqual([rule.id, true]);
       expect([rule.id, rule.remedy.length > 0]).toEqual([rule.id, true]);
@@ -1133,7 +1129,7 @@ describe('the check command', () => {
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
-      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
+      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
     );
   });
 });

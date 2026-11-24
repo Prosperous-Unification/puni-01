@@ -106,6 +106,8 @@ export function runPuni(
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat repo init':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat repo upgrade':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat adr add':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat assess templates':

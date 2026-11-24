@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path';
 import { readRulesSection } from '@puni/shared-checkout';
 import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
+import cliPackage from '../package.json' with { type: 'json' };
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -64,6 +65,32 @@ describe('burokrat repo init through the entrypoint, in an empty temporary direc
       stdout: 'ok: system-records, 13 rules, no findings.\n',
       stderr: '',
     });
+  });
+
+  test('a new pair is pinned at the latest rules: upgrade has nothing to do; a later pin is refused', () => {
+    expect(
+      runPuni(['burokrat', 'repo', 'init', '--name', 'shop', '--owner', 'acme'], state).code,
+    ).toBe(0);
+    runGit(state, ['init', '-q']);
+    const pinned = readFileSync(join(state, 'puni.json'), 'utf8');
+    const { rules } = JSON.parse(pinned) as { rules: number };
+    expect(runPuni(['burokrat', 'repo', 'upgrade'], state)).toEqual({
+      code: 0,
+      stdout: `ok: rules epoch ${String(rules)} is already the latest this puni knows\n`,
+      stderr: '',
+    });
+    writeFileSync(
+      join(state, 'puni.json'),
+      pinned.replace(`"rules":${String(rules)}`, '"rules":99'),
+    );
+    const refusal = `error: puni.json pins rules epoch 99, but puni ${cliPackage.version} knows rules only up to epoch ${String(rules)}; upgrade puni\n`;
+    for (const args of [['check'], ['repo', 'upgrade']]) {
+      expect(runPuni(['burokrat', ...args], state)).toEqual({
+        code: 2,
+        stdout: '',
+        stderr: refusal,
+      });
+    }
   });
 
   test('the owner defaults to the owner of the checkout puni runs from', () => {

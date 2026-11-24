@@ -97,7 +97,9 @@ export const burokratParser = map(
         brief: message`Judge the repository against its rules.`,
       }),
       command('wiki', wikiParser, { brief: message`Generate the wiki index.` }),
-      command('repo', repoParser, { brief: message`Set up repositories for puni to govern.` }),
+      command('repo', repoParser, {
+        brief: message`Set up the repositories puni governs, and raise their rules pin.`,
+      }),
       command('adr', adrParser, { brief: message`File architecture decision records.` }),
       command('change', changeParser, { brief: message`Archive finished changes.` }),
       command('skills', skillsParser, { brief: message`Manage PUNI's repository skills.` }),
@@ -207,6 +209,10 @@ export type Leaf =
       readonly request: Extract<BurokratRequest, { kind: 'repo init' }>;
     }
   | {
+      readonly kind: 'burokrat repo upgrade';
+      readonly request: Extract<BurokratRequest, { kind: 'repo upgrade' }>;
+    }
+  | {
       readonly kind: 'burokrat adr add';
       readonly request: Extract<BurokratRequest, { kind: 'adr add' }>;
     }
@@ -253,6 +259,7 @@ export const handlerKeys = {
   'burokrat check': 'burokratCheckCommand',
   'burokrat wiki index': 'burokratWikiIndexCommand',
   'burokrat repo init': 'burokratRepoInitCommand',
+  'burokrat repo upgrade': 'burokratRepoUpgradeCommand',
   'burokrat adr add': 'burokratAdrAddCommand',
   'burokrat assess templates': 'burokratAssessTemplatesCommand',
   'burokrat skills install': 'burokratSkillsInstallCommand',
@@ -305,6 +312,8 @@ function selectBurokratLeaf(request: BurokratRequest): Leaf {
       return { kind: 'burokrat wiki index', request };
     case 'repo init':
       return { kind: 'burokrat repo init', request };
+    case 'repo upgrade':
+      return { kind: 'burokrat repo upgrade', request };
     case 'adr add':
       return { kind: 'burokrat adr add', request };
     case 'assess templates':

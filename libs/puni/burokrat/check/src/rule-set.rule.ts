@@ -1,5 +1,13 @@
 import type { RepositoryType } from '@puni/shared-checkout';
-import type { LeveledRule, Rule, RuleLevel } from './finding';
+import { agentsRulesDigests } from './agents-rules';
+import {
+  type CheckRules,
+  latestEpoch,
+  type LeveledRule,
+  listEveryRule,
+  type Rule,
+  type RuleLevel,
+} from './finding';
 import { forbidFileHeaders } from './rules/code.rule';
 import {
   agentsExists,
@@ -55,7 +63,7 @@ export const codeRules: readonly LeveledRule[] = [
     agentsExists,
     agentsWords,
     agentsNamesIndex,
-    agentsKeepRules,
+    ...agentsKeepRules,
     stateAgentsHeadings,
     claudeLinksAgents,
     readmeExists,
@@ -134,3 +142,20 @@ export const secretRules: Readonly<Record<RepositoryType, readonly Rule[]>> = {
   'system-state': [forbidPlaintextSecrets, forbidStateAddresses],
   'system-records': [forbidPlaintextSecrets, forbidRecordsAddresses],
 };
+
+/** Every rule `puni burokrat check` judges by, as the module supplies it. */
+export const checkRules: CheckRules = {
+  sets: ruleSets,
+  crossProject: crossProjectRules,
+  secrets: secretRules,
+  agentsRulesDigests,
+};
+
+/**
+ * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
+ * only ids a repository's verdict may lose when it raises its pin.
+ */
+export const retiredRules: Readonly<Record<string, number>> = {};
+
+/** The latest rules epoch of {@link checkRules}. */
+export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

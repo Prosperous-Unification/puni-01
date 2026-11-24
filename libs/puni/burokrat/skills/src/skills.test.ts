@@ -14,7 +14,7 @@ const claudeAssessment = '.claude/skills/puni-assessment/SKILL.md';
 
 function open(tree: MemoryTree = {}) {
   const host = memoryHost({
-    [`${root}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+    [`${root}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
     ...tree,
   });
   const container = track(
@@ -124,7 +124,7 @@ describe('skills install', () => {
 
   test('requires a governed system-state repository', () => {
     const records = open({
-      [`${root}/puni.json`]: formatRegistry('system-records', fixtureRemotes),
+      [`${root}/puni.json`]: formatRegistry('system-records', fixtureRemotes, 1),
     });
     expect(records.run().stderr).toContain('system-state');
     expect(records.get(findings)).toBeUndefined();

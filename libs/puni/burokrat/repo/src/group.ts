@@ -1,6 +1,7 @@
-import { command, map, message, optional } from '@optique/core';
+import { command, map, message, optional, or } from '@optique/core';
 import type { HelpRequest } from '@puni/shared-command';
 import { initParser } from './repo-init.command';
+import { upgradeParser } from './repo-upgrade.command';
 
 const helpRequest: HelpRequest = { kind: 'help', path: ['repo'] };
 
@@ -10,9 +11,14 @@ const helpRequest: HelpRequest = { kind: 'help', path: ['repo'] };
  */
 export const repoParser = map(
   optional(
-    command('init', initParser, {
-      brief: message`Create a governed repository here and its records repository beside it.`,
-    }),
+    or(
+      command('init', initParser, {
+        brief: message`Create a governed repository here and its records repository beside it.`,
+      }),
+      command('upgrade', upgradeParser, {
+        brief: message`Raise this repository's rules pin to the latest epoch, if it passes them.`,
+      }),
+    ),
   ),
   (leaf) => leaf ?? helpRequest,
 );
