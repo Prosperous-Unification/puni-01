@@ -4,11 +4,16 @@ export type {
   CheckoutFiles,
   CheckoutFilesResource,
   CommitCheckout,
+  DocComment,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
   ProjectSource,
   RepositoryRegistryResource,
+  SourceDeclaration,
+  SourceRange,
+  SourceReader,
+  SourceRegistry,
 } from './contract';
 export {
   CheckoutPathRefused,
@@ -20,6 +25,7 @@ export {
   ProjectUnknown,
   RevisionUnknown,
   RulesPinAhead,
+  SourceReadersOverlap,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
@@ -51,6 +57,7 @@ export { nameProject, type ProjectFile, readProjectFiles } from './project-files
 export { readRulesSection, replaceRulesSection } from './rules-section';
 export { type LatestRules, requirePinReached, rulesUpgradeCommand } from './latest-rules';
 export { seedFiles } from './seed-files';
+export { openSourceRegistry } from './source-registry';
 export {
   formatRegistry,
   githubUrlPattern,

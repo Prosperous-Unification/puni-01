@@ -51,8 +51,8 @@ export const agentsWords = limitWords('agents.words', 'AGENTS.md', agentsWordBud
 const indexFile = 'wiki/index/index.md';
 
 /**
- * `AGENTS.md` names the generated entry point, `wiki/index/index.md`: the judgement up to epoch
- * 2, which {@link agentsNamesMap} replaces.
+ * `AGENTS.md` names the generated entry point, `index.md` of `wiki/index`: the judgement up to
+ * epoch 2, which {@link agentsNamesMap} replaces.
  */
 export const agentsNamesIndex: Rule = {
   id: 'agents.index',

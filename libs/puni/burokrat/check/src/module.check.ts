@@ -11,6 +11,7 @@ DiBag.createBuilder()
     checkoutFiles: () => requirements.checkoutFiles,
     checkoutProjectScope: () => requirements.checkoutProjectScope,
     projectSources: () => requirements.projectSources,
+    sourceReaders: () => requirements.sourceReaders,
     recordsCatalog: () => requirements.recordsCatalog,
     commandCatalog: () => requirements.commandCatalog,
     programSource: () => requirements.programSource,

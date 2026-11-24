@@ -25,14 +25,14 @@ request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) 
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word
   budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`,
-  but for the map's `indexWordBudget`, which its renderer in the checkout library obeys.
+  but for the map's [`indexWordBudget`](../libs/puni/shared/checkout/src/render-map.ts#indexWordBudget), which its renderer obeys.
 - **`puni burokrat check --commits <base>..<head>`** runs in `gate:affected` over a pull
   request's commits, in CI's `pushed-commits` job over every push to any branch or tag, and over
   a merge group. It prints `<rule> <commit>:<path>: <message>; fix: <remedy>`: that commit adds a
   credential or an address, in a file, a file name (`(paths)`) or its message
   (`(commit message)`), though a later commit may have removed it. A pushed commit is public, so
   rotate a credential first, then do what the remedy says: rewrite an unmerged branch, or, with
-  `--merged` (main and tags), open a pull request removing it. Locally it needs `NX_BASE`:
+  `--merged` (main and tags), open a pull request removing it. Locally it needs NX_BASE:
   `NX_BASE=origin/main bun run gate:affected`.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of

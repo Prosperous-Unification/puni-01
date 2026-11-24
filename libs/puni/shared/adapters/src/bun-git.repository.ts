@@ -133,8 +133,8 @@ function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unr
  * by full and short hash with `git rev-list --reverse --format='%H %h'`; git is asked only by full
  * hash after that, so no ref named like a short hash can stand in for a commit. A commit's message
  * is what `git cat-file commit` holds after its header; its added lines are
- * `git diff-tree -p -U0 --root --text --diff-merges=first-parent --no-renames`, with fixed `a/` and
- * `b/` prefixes, no external diff or text conversion, no global attributes file and the empty tree
+ * `git diff-tree -p -U0 --root --text --diff-merges=first-parent --no-renames`, with fixed `a` and
+ * `b` prefixes, no external diff or text conversion, no global attributes file and the empty tree
  * as the attribute source, so no `.gitattributes`, in any commit, can mark a path binary or
  * otherwise change what is printed. Every revision follows `--end-of-options`, so none is read as
  * an option.

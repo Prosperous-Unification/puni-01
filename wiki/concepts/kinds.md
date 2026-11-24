@@ -7,7 +7,8 @@ read-when: deciding which kind a new file is, or what a file of a kind may impor
 
 Every source file but a test has one kind: its suffix, or a wiring name at a library's source
 root. The kind says what the file is for; [eslint.config.js](../../eslint.config.js) holds what
-each kind may import (`forbiddenKinds`, `forbiddenByWiring`) and refuses the rest under `lint`.
+each kind may import ([`forbiddenKinds`](../../eslint.config.js#forbiddenKinds),
+[`forbiddenByWiring`](../../eslint.config.js#forbiddenByWiring)) and refuses the rest under `lint`.
 
 - **command** (`.command.ts`): one leaf's Optique parser, and a handler from the parsed request to
   a feature call, output and an exit code; or the output and exit codes its group's leaves share;

@@ -1,5 +1,11 @@
-import { type CheckScope, checkoutModule, repositoryScope } from '@puni/shared-checkout';
+import {
+  type CheckScope,
+  checkoutModule,
+  openSourceRegistry,
+  repositoryScope,
+} from '@puni/shared-checkout';
 import { type NxExports, nxModule } from '@puni/shared-nx';
+import { type TypescriptExports, typescriptModule } from '@puni/shared-typescript';
 import type { CommandBrief, CommandExitCode } from '@puni/shared-command';
 import { recordsModule } from '@puni/shared-records';
 import { type MemoryHost, nodeHostModule } from '@puni/shared-testing';
@@ -65,7 +71,8 @@ export const fixtureVersion = '9.8.7';
 
 /**
  * The check module's services, judging by `rules` ({@link fixtureCheckRules} unless given),
- * with the checkout, records and Nx modules they need, the Nx project source as the only one,
+ * with the checkout, records, Nx and TypeScript modules they need, the Nx project source and the
+ * TypeScript source readers as the only ones,
  * `commands` as the command catalog and a program of {@link fixtureVersion}, over this machine,
  * or over the memory host services `memory` put in its place. Its owner closes it.
  */
@@ -75,11 +82,18 @@ export function openCheckHost(
   rules: CheckRules = fixtureRules,
 ) {
   const machine = DiBag.createBuilder()
-    .withInstalledModules([nodeHostModule, checkoutModule, recordsModule, nxModule])
+    .withInstalledModules([
+      nodeHostModule,
+      checkoutModule,
+      recordsModule,
+      nxModule,
+      typescriptModule,
+    ])
     .withServices({
       commandCatalog: () => ({ list: () => commands }),
       programSource: () => ({ directory: '/nowhere', version: fixtureVersion }),
       projectSources: ({ nxProjectSource }: NxExports) => [nxProjectSource],
+      sourceReaders: ({ typescriptSourceReaders }: TypescriptExports) => typescriptSourceReaders,
     })
     .withServices({ checkRules: () => rules })
     .withServices({ repositoryCheck: createRepositoryCheck, latestRules: createLatestRules })
@@ -114,6 +128,7 @@ export function openCheckHost(
         scope,
         references,
         projectSources: container.resolve('projectSources'),
+        sources: openSourceRegistry(container.resolve('sourceReaders')),
         records: container.resolve('recordsCatalog'),
       });
     },

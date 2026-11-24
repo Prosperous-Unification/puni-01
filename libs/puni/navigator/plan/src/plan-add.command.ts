@@ -13,7 +13,7 @@ const planAdd: RecordAddLeaf<'plan add'> = {
 export const planAddParser = recordAddParser(planAdd);
 
 /**
- * The `plan add` command: files the plan in `nav/plans/` of the records repository as
+ * The `plan add` command: files the plan in `nav/plans` of the records repository as
  * `createRecordAddCommand` of `@puni/shared-records` says, every outcome and exit code included.
  */
 export const createPlanAddCommand = createRecordAddCommand(planAdd);

@@ -15,7 +15,7 @@ and ends in `verifyGraphAtCompileTime() satisfies void`;
   export the same key.
 - A requirement no module provides belongs in a shared library; host services come from
   `libs/puni/shared/adapters`.
-- `module.ts` registers each service in a `withServices` after those it uses, and lists the keys
+- `module.ts` registers each service in a withServices call after those it uses, and lists the keys
   it exports.
 
 [composition.ts](../../apps/puni/cli/src/composition.ts) is the one graph: host services, shared

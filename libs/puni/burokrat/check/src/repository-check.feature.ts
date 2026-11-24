@@ -5,6 +5,7 @@ import {
   findCheckoutDefect,
   isRepositoryLevel,
   type LatestRules,
+  openSourceRegistry,
   replaceRulesSection,
   type RepositoryRegistry,
   type RepositoryType,
@@ -153,10 +154,11 @@ function listNewer(rules: readonly Rule[], pin: number): string[] {
 
 /**
  * The reading of the whole repository `files` holds, registered by `registry`: every file, every
- * reference, the composed CLI's commands, the project sources of the map and the records.
+ * reference, the composed CLI's commands, the project sources of the map, a registry of the
+ * source readers of its own, so what it reads of a text is read once, and the records.
  */
 function readWhole(
-  { commandCatalog, projectSources, recordsCatalog }: CheckServices,
+  { commandCatalog, projectSources, sourceReaders, recordsCatalog }: CheckServices,
   files: CheckoutFiles,
   registry: RepositoryRegistry,
 ): RuleReading {
@@ -167,6 +169,7 @@ function readWhole(
     scope: repositoryScope,
     references: { kind: 'all' },
     projectSources,
+    sources: openSourceRegistry(sourceReaders),
     records: recordsCatalog,
   };
 }

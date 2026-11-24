@@ -10,44 +10,96 @@ import { type Breach, reachesReference, type Rule, type RuleReading } from '../f
 import { isDocumentation, listCode, listInlineCode, readPathReference } from '../docs';
 import { findMissingAnchor } from './links.rule';
 
-/** The visible documentation files the scope owns. */
-function listDocumentation({ files, scope }: RuleReading): readonly string[] {
-  return files.listVisible(scope).filter(isDocumentation);
+/**
+ * A text the docs rules read, in the file at `path`: a documentation file whole, with `at`
+ * empty, or one doc comment of a source file, `at` naming its line for a breach's message.
+ */
+export interface DocText {
+  readonly path: string;
+  readonly text: string;
+  readonly at: string;
 }
+
+/** The visible documentation files the scope owns, each whole (see `isDocumentation`). */
+function listDocumentation({ files, scope }: RuleReading): DocText[] {
+  return files
+    .listVisible(scope)
+    .filter(isDocumentation)
+    .map((path) => ({ path, text: files.readText(path), at: '' }));
+}
+
+/**
+ * Every doc comment of the visible files the scope owns that a source reader of the run reads,
+ * as the reader gives it, `at` naming its line.
+ */
+export function listDocComments({ files, scope, sources }: RuleReading): DocText[] {
+  return files.listVisible(scope).flatMap((path) => {
+    const reader = sources.readerOf(path);
+    if (reader === undefined) return [];
+    return reader.docComments(files.readText(path)).map(({ line, text }) => ({
+      path,
+      text,
+      at: `doc comment at line ${String(line)} `,
+    }));
+  });
+}
+
+/** The documentation the scope owns, then the doc comments of its source files. */
+function listEveryDocText(reading: RuleReading): DocText[] {
+  return [...listDocumentation(reading), ...listDocComments(reading)];
+}
+
+/** The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}). */
+function judgePaths(reading: RuleReading, docs: readonly DocText[]): Breach[] {
+  const { files, references } = reading;
+  return docs.flatMap(({ path, text, at }) =>
+    listInlineCode(text).flatMap((span): Breach[] => {
+      const reference = readPathReference(span);
+      if (reference === undefined || !reachesReference(references, path, reference.path)) {
+        return [];
+      }
+      if (!files.isShown(reference.path)) {
+        return [{ path, message: `${at}names the missing path ${span}` }];
+      }
+      const missing = findMissingAnchor(files, reference.path, reference.fragment);
+      return missing === undefined
+        ? []
+        : [
+            {
+              path,
+              message: `${at}names ${span}, but ${missing}`,
+              remedy: `name a heading of ${reference.path}, or drop the fragment`,
+            },
+          ];
+    }),
+  );
+}
+
+const pathsRemedy = 'correct the path to one that exists, or remove it';
 
 /**
  * Every backticked token in the documentation the scope owns that looks like a repository path
  * (see `readPathReference`) names something that exists, and its `#fragment`, if the path is
- * Markdown, one of its headings, among the references the run's reach judges.
+ * Markdown, one of its headings, among the references the run's reach judges. Epochs 1 and 2;
+ * {@link judgeDocPaths} judges doc comments too.
+ */
+export const judgeMarkdownPaths: Rule = {
+  id: 'docs.paths',
+  since: 1,
+  until: 3,
+  remedy: pathsRemedy,
+  judge: (reading) => judgePaths(reading, listDocumentation(reading)),
+};
+
+/**
+ * {@link judgeMarkdownPaths} over the documentation the scope owns and every doc comment of its
+ * source files that a source reader reads, a path in a comment named from the repository root.
  */
 export const judgeDocPaths: Rule = {
   id: 'docs.paths',
-  since: 1,
-  remedy: 'correct the path to one that exists, or remove it',
-  judge(reading) {
-    const { files, references } = reading;
-    return listDocumentation(reading).flatMap((path) =>
-      listInlineCode(files.readText(path)).flatMap((span): Breach[] => {
-        const reference = readPathReference(span);
-        if (reference === undefined || !reachesReference(references, path, reference.path)) {
-          return [];
-        }
-        if (!files.isShown(reference.path)) {
-          return [{ path, message: `names the missing path ${span}` }];
-        }
-        const missing = findMissingAnchor(files, reference.path, reference.fragment);
-        return missing === undefined
-          ? []
-          : [
-              {
-                path,
-                message: `names ${span}, but ${missing}`,
-                remedy: `name a heading of ${reference.path}, or drop the fragment`,
-              },
-            ];
-      }),
-    );
-  },
+  since: 3,
+  remedy: pathsRemedy,
+  judge: (reading) => judgePaths(reading, listEveryDocText(reading)),
 };
 
 /** The scripts of the root `package.json`, or the breach of one that cannot be read. */
@@ -151,54 +203,73 @@ function listNxProjects(code: string): string[] {
   return named;
 }
 
+/** The breaches of the commands of `docs` (see {@link judgeMarkdownCommands}). */
+function judgeCommands(reading: RuleReading, docs: readonly DocText[]): Breach[] {
+  const read = readScripts(reading);
+  if ('breach' in read) return [read.breach];
+  const { scripts } = read;
+  const program = reading.commands[0]?.path.split(' ')[0];
+  const projects = new Set(
+    readProjectFiles(reading.files, repositoryScope).flatMap((file) => nameProject(file) ?? []),
+  );
+  return docs.flatMap(({ path, text, at }) =>
+    listCode(text).flatMap((code): Breach[] => {
+      const breaches: Breach[] = [...code.matchAll(/\bbun run ([\w:.-]+)/gu)]
+        .map((match) => match[1] ?? '')
+        .filter((script) => !scripts.has(script))
+        .map((script) => ({
+          path,
+          message: `${at}runs the script ${script}, which package.json does not define`,
+          remedy: 'name a script the root package.json defines, or add the script there',
+        }));
+      for (const name of listNxProjects(code).filter((named) => !projects.has(named))) {
+        breaches.push({
+          path,
+          message: `${at}names no Nx project ${name}`,
+          remedy: 'name a project `bunx nx show projects` lists, or remove it',
+        });
+      }
+      if (program === undefined) return breaches;
+      for (const match of code.matchAll(new RegExp(`\\b${program}((?:\\s+[a-z][\\w-]*)+)`, 'gu'))) {
+        const words = (match[1] ?? '').trim().split(/\s+/u);
+        const unknown = findUnknownCommand(reading.commands, program, words);
+        if (unknown !== undefined) {
+          breaches.push({
+            path,
+            message: `${at}names no command ${unknown.known} ${unknown.word}`,
+          });
+        }
+      }
+      return breaches;
+    }),
+  );
+}
+
+const commandsRemedy = 'name a command that `puni --help` lists, or remove it';
+
 /**
  * Every `bun run <script>` in the code of the documentation the scope owns names a script of the
  * root `package.json`; every `<program> <words…>` names a command of the CLI's tree: the
  * longest prefix of plain lower-case words that the tree holds, flags and placeholders ending
  * the words; and every Nx project named by `nx run`, `nx <target>` or `-p` (see
- * `listNxProjects`) is a project of the repository.
+ * `listNxProjects`) is a project of the repository. Epochs 1 and 2; {@link judgeDocCommands}
+ * judges doc comments too.
+ */
+export const judgeMarkdownCommands: Rule = {
+  id: 'docs.commands',
+  since: 1,
+  until: 3,
+  remedy: commandsRemedy,
+  judge: (reading) => judgeCommands(reading, listDocumentation(reading)),
+};
+
+/**
+ * {@link judgeMarkdownCommands} over the documentation the scope owns and every doc comment of
+ * its source files that a source reader reads.
  */
 export const judgeDocCommands: Rule = {
   id: 'docs.commands',
-  since: 1,
-  remedy: 'name a command that `puni --help` lists, or remove it',
-  judge(reading) {
-    const read = readScripts(reading);
-    if ('breach' in read) return [read.breach];
-    const { scripts } = read;
-    const program = reading.commands[0]?.path.split(' ')[0];
-    const projects = new Set(
-      readProjectFiles(reading.files, repositoryScope).flatMap((file) => nameProject(file) ?? []),
-    );
-    return listDocumentation(reading).flatMap((path) =>
-      listCode(reading.files.readText(path)).flatMap((code): Breach[] => {
-        const breaches: Breach[] = [...code.matchAll(/\bbun run ([\w:.-]+)/gu)]
-          .map((match) => match[1] ?? '')
-          .filter((script) => !scripts.has(script))
-          .map((script) => ({
-            path,
-            message: `runs the script ${script}, which package.json does not define`,
-            remedy: 'name a script the root package.json defines, or add the script there',
-          }));
-        for (const name of listNxProjects(code).filter((named) => !projects.has(named))) {
-          breaches.push({
-            path,
-            message: `names no Nx project ${name}`,
-            remedy: 'name a project `bunx nx show projects` lists, or remove it',
-          });
-        }
-        if (program === undefined) return breaches;
-        for (const match of code.matchAll(
-          new RegExp(`\\b${program}((?:\\s+[a-z][\\w-]*)+)`, 'gu'),
-        )) {
-          const words = (match[1] ?? '').trim().split(/\s+/u);
-          const unknown = findUnknownCommand(reading.commands, program, words);
-          if (unknown !== undefined) {
-            breaches.push({ path, message: `names no command ${unknown.known} ${unknown.word}` });
-          }
-        }
-        return breaches;
-      }),
-    );
-  },
+  since: 3,
+  remedy: commandsRemedy,
+  judge: (reading) => judgeCommands(reading, listEveryDocText(reading)),
 };

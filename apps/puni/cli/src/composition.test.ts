@@ -34,6 +34,8 @@ const exportedKeys = [
   'projectSources',
   'recordFiling',
   'recordsCatalog',
+  'sourceReaders',
+  'typescriptSourceReaders',
 ] as const;
 
 const track = closeAfterEach();

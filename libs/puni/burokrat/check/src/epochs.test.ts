@@ -53,10 +53,45 @@ function shows(id: string, path: string, since: number): Rule {
 /** The rules section the fixture's `AGENTS.md` must hold from epoch 2. */
 const secondRules = '## Rules\n\n1. **The second rules.** Stricter than the first.\n';
 
-const base = fixtureCheckRules({
+/** `rule` as epoch 1 holds it, applying from there on. */
+function freeze(rule: Rule): Rule {
+  const frozen: { -readonly [Key in keyof Rule]: Rule[Key] } = { ...rule };
+  delete frozen.until;
+  return frozen;
+}
+
+/** The rules of `rules` that apply at epoch 1, each frozen there (see {@link freeze}). */
+function freezeAll(rules: readonly Rule[]): Rule[] {
+  return rules.filter((rule) => appliesAt(rule, 1)).map(freeze);
+}
+
+const fixture = fixtureCheckRules({
   1: digestRulesSection(fixtureAgentsRules),
   2: digestRulesSection(secondRules),
 });
+
+/**
+ * The fixture rules frozen at epoch 1, but for their `agents.rules` rules, which hold the
+ * fixture's own rules texts: so the epochs the tests walk are only those this file adds, however
+ * many the production rules reach.
+ */
+const base: CheckRules = {
+  ...fixture,
+  sets: {
+    'system-state': fixture.sets['system-state'].flatMap(({ level, rule }) => {
+      if (rule.id === 'agents.rules') return [{ level, rule }];
+      return freezeAll([rule]).map((frozen) => ({ level, rule: frozen }));
+    }),
+    'system-records': fixture.sets['system-records'].flatMap(({ level, rule }) =>
+      freezeAll([rule]).map((frozen) => ({ level, rule: frozen })),
+    ),
+  },
+  crossProject: freezeAll(fixture.crossProject),
+  secrets: {
+    'system-state': freezeAll(fixture.secrets['system-state']),
+    'system-records': freezeAll(fixture.secrets['system-records']),
+  },
+};
 const project = (rule: Rule): LeveledRule => ({ level: 'project', rule });
 
 /**
@@ -131,8 +166,8 @@ const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     'whole',
     {},
-    `ok: system-state, 25 rules, no findings.\n${newer('agents.index, agents.rules, demo.also, demo.later, index.purpose, index.words are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 28 rules, 2 findings.\n`,
+    `ok: system-state, 25 rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 26 rules, 2 findings.\n`,
   ],
   [
     '--project one',

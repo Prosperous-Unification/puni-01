@@ -317,8 +317,10 @@ describe('the plugin boundary', () => {
     expect(await readAllowedTags('apps/puni/cli/src/x.ts', 'scope:app')).toEqual(['*']);
   });
 
-  test('the Nx project source is the plugin', async () => {
-    const project: unknown = await Bun.file(join(root, 'libs/puni/shared/nx/project.json')).json();
+  test.each(['nx', 'typescript'])('the %s library is a plugin', async (name) => {
+    const project: unknown = await Bun.file(
+      join(root, `libs/puni/shared/${name}/project.json`),
+    ).json();
     expect((project as { tags: string[] }).tags).toEqual(['scope:shared', 'type:plugin']);
   });
 });

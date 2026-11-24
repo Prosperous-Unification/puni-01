@@ -24,6 +24,7 @@ const container = DiBag.createBuilder()
     commandCatalog: () => ({ list: () => [] }),
     programSource: () => ({ directory: root, version: 'test' }),
     projectSources: () => [],
+    sourceReaders: () => [],
   })
   .buildContainer();
 

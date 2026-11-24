@@ -11,6 +11,7 @@
         "caught-object-report-json": "15.0.0",
         "configurable-tree-traversal": "0.13.0",
         "di-bag": "0.5.2",
+        "typescript": "npm:@typescript/typescript6@6.0.2",
       },
       "devDependencies": {
         "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
@@ -23,7 +24,6 @@
         "eslint-plugin-jsdoc": "65.5.2",
         "lefthook": "2.2.2",
         "nx": "24.0.6",
-        "typescript": "npm:@typescript/typescript6@6.0.2",
         "typescript-eslint": "8.73.0",
       },
     },

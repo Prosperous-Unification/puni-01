@@ -28,9 +28,9 @@ The first leaf of a group with none also adds what step 3 of
    the `or` if it held one leaf; the first leaf replaces the `constant` parser with
    `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan`
    does. The brief, one sentence in Optique's `message` template, is the leaf's line in help. If the new leaf makes the group's brief untrue, rewrite it; if it makes the
-   library's `readWhen` or `readFirst` untrue, rewrite them as
+   library's `metadata.readWhen` or `metadata.readFirst` untrue, rewrite them as
    [documentation](../concepts/documentation.md#how-an-agent-finds-it) says.
-5. `module.ts`: register each service and add the command key to `exportedServiceKeys`, as
+5. `module.ts`: register each service and add the command key to its exported service keys, as
    [dependency injection](../concepts/dependency-injection.md) says. `module.check.ts`: supply
    any new requirement.
 
@@ -38,9 +38,9 @@ The first leaf of a group with none also adds what step 3 of
 
 In `apps/puni/cli/src`:
 
-6. `root-parser.ts`: what the JSDoc of `puniParser` asks of a new leaf, its kind being its
+6. `root-parser.ts`: what the JSDoc of [`puniParser`](../../apps/puni/cli/src/root-parser.ts#puniParser) asks of a new leaf, its kind being its
    words after the program, as `'dash ops ssh'` and `'burokrat check'` are.
-7. `main.ts`: the kind's case in the `switch` of `runPuni`.
+7. `main.ts`: the kind's case in the `switch` of [`runPuni`](../../apps/puni/cli/src/main.ts#runPuni).
 
 ## Tests
 
@@ -48,8 +48,9 @@ Each seam as [writing a test](write-a-test.md) says:
 
 8. The library test, beside the group's existing one, covering every outcome of the leaf.
 9. `apps/puni/cli/src/group-parsers.test.ts`: the leaf's lines parse; bad ones are refused.
-10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`, `listCommands`),
-    `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
+10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`,
+    [`listCommands`](../../libs/puni/shared/command/src/command-catalog.ts#listCommands)),
+    `composition.test.ts` ([`exportedKeys`](../../apps/puni/cli/src/composition.test.ts#exportedKeys), sorted) and `main.test.ts` (the `failing` container,
     which provides every command key).
 11. A spawned run of the leaf, for its real streams and exit code.
 

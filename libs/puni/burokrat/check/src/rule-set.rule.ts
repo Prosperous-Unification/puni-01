@@ -36,7 +36,13 @@ import {
   judgeRecordsLayout,
   judgeSupersession,
 } from './rules/records.rule';
-import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
+import {
+  judgeDocCommands,
+  judgeDocPaths,
+  judgeMarkdownCommands,
+  judgeMarkdownPaths,
+} from './rules/docs.rule';
+import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import {
   forbidPlaintextSecrets,
@@ -81,10 +87,15 @@ export const codeRules: readonly LeveledRule[] = [
     forbidStateAddresses,
     forbidFileHeaders,
     requireProjectTargets,
+    judgeMarkdownPaths,
     judgeDocPaths,
+    judgeMarkdownCommands,
     judgeDocCommands,
     limitPageWords,
     judgeDocSymbols,
+    judgeDocReferences,
+    judgeDocSpans,
+    judgeDocLinks,
   ].map(at('project')),
 ];
 
@@ -110,10 +121,16 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
- * repository, judging only the references that leave the linking file's project, and the
- * symbols documentation names, which a project check leaves to this run.
+ * repository, judging only the references that leave the linking file's project, and, before
+ * epoch 3, the symbols documentation names, which a project check leaves to this run.
  */
-export const crossProjectRules: readonly Rule[] = [resolveLinks, judgeDocPaths, judgeDocSymbols];
+export const crossProjectRules: readonly Rule[] = [
+  resolveLinks,
+  judgeMarkdownPaths,
+  judgeDocPaths,
+  judgeDocSymbols,
+  judgeDocReferences,
+];
 
 /**
  * The rules judging what a commit makes public, by the type of the repository judged: its
@@ -137,7 +154,7 @@ export const checkRules: CheckRules = {
  * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
  * only ids a repository's verdict may lose when it raises its pin.
  */
-export const retiredRules: Readonly<Record<string, number>> = {};
+export const retiredRules: Readonly<Record<string, number>> = { 'docs.symbols': 3 };
 
 /** The latest rules epoch of {@link checkRules}. */
 export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

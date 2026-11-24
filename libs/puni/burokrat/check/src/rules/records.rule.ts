@@ -28,8 +28,8 @@ function judgeRecordFiles(
 
 /**
  * The records layout, over the paths git shows: only the names in {@link recordsTopLevel} at the
- * top level, only kind directories in `nav/` and `bur/`, and only regular files directly in a
- * kind directory. `dash/` is not inspected. Ignored files and empty directories are invisible.
+ * top level, only kind directories in `nav` and `bur`, and only regular files directly in a
+ * kind directory. `dash` is not inspected. Ignored files and empty directories are invisible.
  */
 export const judgeRecordsLayout: Rule = {
   id: 'records.layout',

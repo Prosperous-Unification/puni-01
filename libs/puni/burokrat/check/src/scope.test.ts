@@ -14,7 +14,7 @@ import {
 import { agentsWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { appliesAt } from './finding';
-import { codeRules, crossProjectRules } from './rule-set.rule';
+import { codeRules, crossProjectRules, latestRulesEpoch } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 import {
   fixturePurposes,
@@ -43,10 +43,13 @@ function listProjects() {
   return host.container.resolve('checkoutProjectScope').list(openFiles());
 }
 
-/** The fixture repository pinned at epoch 2, with a second project, `two`. */
+/** The rules epoch the fixture repository is pinned at: the latest, unless a test walks another. */
+let pin = latestRulesEpoch;
+
+/** The fixture repository pinned at {@link pin}, with a second project, `two`. */
 function makeTwoProjectRepository(): string {
   const repository = makeRepository(scratchDirectories);
-  writeRepositoryFile(repository, 'puni.json', formatFixtureRegistry(2));
+  writeRepositoryFile(repository, 'puni.json', formatFixtureRegistry(pin));
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
@@ -55,6 +58,7 @@ function makeTwoProjectRepository(): string {
 }
 
 beforeEach(() => {
+  pin = latestRulesEpoch;
   root = makeTwoProjectRepository();
 });
 
@@ -67,7 +71,7 @@ interface Run {
 
 function runIn(project?: string, repo?: RepositoryType, crossProjectLinks?: boolean): Run {
   const { code, stdout, stderr } = host.runCheck({ project, repo, crossProjectLinks }, root);
-  const lines = stdout.split('\n').filter((line) => line !== '');
+  const lines = stdout.split('\n').filter((line) => line !== '' && !line.startsWith('newer: '));
   return { code, findings: lines.slice(0, -1), summary: lines.at(-1) ?? '', errors: stderr };
 }
 
@@ -92,7 +96,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'apps/one/NOTES.md',
-        'Since 2031-04-05. [here](gone.md) [there](../../libs/two/gone.md) [root](../../gone.md)\n',
+        'Since 2031-04-05. [here](gone.md) [there](../../libs/two/gone.md) [root](../../gone.md) [`a`](src/head.ts#b)\n',
       );
       writeProject(root, 'apps/one', 'one', {
         readWhen: 'changing the one app',
@@ -102,7 +106,11 @@ const seeds: readonly (readonly [string, () => void])[] = [
         readWhen: 'Changing two',
         readFirst: 'src/index.ts',
       });
-      writeRepositoryFile(root, 'libs/two/src/index.ts', `export const home = '${recordsName}';\n`);
+      writeRepositoryFile(
+        root,
+        'libs/two/src/index.ts',
+        `/** Home, after {@link gone}: \`apps/one/gone.ts\`, \`bun run nope\`. */\nexport const home = '${recordsName}';\n`,
+      );
       writeRepositoryFile(
         root,
         'libs/two/docs/notes.md',
@@ -122,7 +130,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'wiki/ops/tools.md',
-        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`.\n',
+        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`, [`home`](../../libs/two/src/index.ts#gone) and [options](../../apps/one/tsconfig.json#strict).\n',
       );
       writeRepositoryFile(
         root,
@@ -147,7 +155,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'puni.json',
-        formatRegistry('system-state', fixtureRemotes, 2, purposes),
+        formatRegistry('system-state', fixtureRemotes, pin, purposes),
       );
     },
   ],
@@ -159,66 +167,76 @@ const seeds: readonly (readonly [string, () => void])[] = [
   ],
 ];
 
-describe('every project check and the cross-project check are the whole check', () => {
-  test.each(seeds)('%s', (_name, seed) => {
-    seed();
-    const whole = runIn();
-    const union = [
-      ...projectNames.flatMap((name) => runIn(name).findings),
-      ...runIn(undefined, undefined, true).findings,
-    ].sort();
-    expect(whole.code).toBe(1);
-    expect(union).toEqual([...whole.findings].sort());
-  });
-
-  test('each part finds something the others do not', () => {
-    for (const [, seed] of seeds) seed();
-    const cross = runIn(undefined, undefined, true).findings;
-    const projects = projectNames.flatMap((name) => runIn(name).findings);
-    expect(cross.length).toBeGreaterThan(0);
-    expect(cross.filter((line) => projects.includes(line))).toEqual([]);
-  });
-
-  test('the seeds break every code rule', () => {
-    const broken = new Set<string>();
-    for (const [, seed] of seeds) {
+describe.each([2, latestRulesEpoch])(
+  'at pin %d, every project check and the cross-project check are the whole check',
+  (at) => {
+    beforeEach(() => {
+      pin = at;
       root = makeTwoProjectRepository();
+    });
+
+    test.each(seeds)('%s', (_name, seed) => {
       seed();
-      for (const line of runIn().findings) broken.add(line.split(' ')[0] ?? '');
-    }
-    expect([...broken].sort()).toEqual(
-      [
-        'agents.exists',
-        'agents.index',
-        'claude.symlink',
-        'agents.words',
-        'history.date',
-        'history.records',
-        'index.purpose',
-        'index.read-first',
-        'index.read-when',
-        'index.scope',
-        'index.section',
-        'index.words',
-        'links.resolve',
-        'readme.exists',
-        'readme.words',
-        'secrets.plaintext',
-        'project.targets',
-        'docs.paths',
-        'docs.commands',
-        'docs.symbols',
-        'docs.words',
-        'agents.records',
-        'ci.gate',
-        'agents.rules',
-        'secrets.addresses',
-        'code.header',
-      ].sort(),
-    );
-    expect(broken).toEqual(new Set(codeRules.map(({ rule }) => rule.id)));
-  });
-});
+      const whole = runIn();
+      const union = [
+        ...projectNames.flatMap((name) => runIn(name).findings),
+        ...runIn(undefined, undefined, true).findings,
+      ].sort();
+      expect(whole.code).toBe(1);
+      expect(union).toEqual([...whole.findings].sort());
+    });
+
+    test('each part finds something the others do not', () => {
+      for (const [, seed] of seeds) seed();
+      const cross = runIn(undefined, undefined, true).findings;
+      const projects = projectNames.flatMap((name) => runIn(name).findings);
+      expect(cross.length).toBeGreaterThan(0);
+      expect(cross.filter((line) => projects.includes(line))).toEqual([]);
+    });
+
+    test('the seeds break every code rule', () => {
+      const broken = new Set<string>();
+      for (const [, seed] of seeds) {
+        root = makeTwoProjectRepository();
+        seed();
+        for (const line of runIn().findings) broken.add(line.split(' ')[0] ?? '');
+      }
+      expect([...broken].sort()).toEqual(
+        [
+          'agents.exists',
+          'agents.index',
+          'claude.symlink',
+          'agents.words',
+          'history.date',
+          'history.records',
+          'index.purpose',
+          'index.read-first',
+          'index.read-when',
+          'index.scope',
+          'index.section',
+          'index.words',
+          'links.resolve',
+          'readme.exists',
+          'readme.words',
+          'secrets.plaintext',
+          'project.targets',
+          'docs.paths',
+          'docs.commands',
+          ...(at < 3 ? ['docs.symbols'] : ['docs.references', 'docs.spans', 'docs.comment-links']),
+          'docs.words',
+          'agents.records',
+          'ci.gate',
+          'agents.rules',
+          'secrets.addresses',
+          'code.header',
+        ].sort(),
+      );
+      expect(broken).toEqual(
+        new Set(codeRules.filter(({ rule }) => appliesAt(rule, at)).map(({ rule }) => rule.id)),
+      );
+    });
+  },
+);
 
 describe('project ownership', () => {
   test('a file belongs to the deepest enclosing project', () => {
@@ -263,7 +281,7 @@ describe('project ownership', () => {
 
 describe('check --project', () => {
   test('names the project and runs only project-level rules outside the root', () => {
-    const pinned = codeRules.filter(({ rule }) => appliesAt(rule, 2));
+    const pinned = codeRules.filter(({ rule }) => appliesAt(rule, pin));
     const projectRules = pinned.filter(({ level }) => level === 'project').length;
     const rootRules = pinned.length;
     expect(runIn('two')).toEqual({
@@ -300,7 +318,7 @@ describe('check --project', () => {
     expect(runIn(undefined, undefined, true)).toEqual({
       code: 0,
       findings: [],
-      summary: `ok: system-state, cross-project links, ${String(crossProjectRules.length)} rules, no findings.`,
+      summary: `ok: system-state, cross-project links, ${String(crossProjectRules.filter((rule) => appliesAt(rule, pin)).length)} rules, no findings.`,
       errors: '',
     });
   });

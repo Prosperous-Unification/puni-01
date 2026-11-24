@@ -60,7 +60,7 @@ export interface CheckoutFiles {
   /** Whether something exists at `path`, a symlink followed to its target. Never throws. */
   exists(path: string): boolean;
   /**
-   * Whether `path` is a file git shows, or a directory holding one. Unlike {@link exists}, a path
+   * Whether `path` is a file git shows, or a directory holding one. Unlike {@link CheckoutFiles.exists}, a path
    * git ignores (a build output, an editor directory) is not shown, so a judgement over it is the
    * same in every checkout of the same commit.
    */
@@ -185,6 +185,60 @@ export interface ProjectSource {
    * that places it, in words a reader of the source's files knows.
    */
   readonly placementHint: string;
+}
+
+/** A half-open range `[start, end)` of character offsets into a source text. */
+export interface SourceRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * A symbol a source file declares, by the name a typed reference gives it: a top-level name, or
+ * a member of an exported type or object as `<Name>.<member>`.
+ */
+export interface SourceDeclaration {
+  readonly name: string;
+  /** Where the declaration stands in the text, its doc comment excluded. */
+  readonly range: SourceRange;
+}
+
+/** One doc comment of a source file: its text without the comment markers, and its first line. */
+export interface DocComment {
+  /** The 1-based line the comment opens on. */
+  readonly line: number;
+  readonly text: string;
+}
+
+/**
+ * A plugin that reads the source files of one language: what a file declares, its doc comments
+ * and the names visible in it, from the file's text alone. The host composes the readers a
+ * repository is read with as the `sourceReaders` list, and a {@link SourceRegistry} picks one by
+ * a file's extension.
+ */
+export interface SourceReader {
+  /** The file extensions this reader reads, each with its dot, as `.md` is written. */
+  readonly extensions: readonly string[];
+  /**
+   * The symbols `text` declares: its top-level declarations, every name it exports, re-exports
+   * included, and the members of what it exports as `<Name>.<member>`.
+   */
+  declarations(text: string): readonly SourceDeclaration[];
+  /** The doc comments of `text`, in order. */
+  docComments(text: string): readonly DocComment[];
+  /** The names visible throughout `text`: its top-level declarations and what it imports. */
+  scope(text: string): ReadonlySet<string>;
+}
+
+/**
+ * The source readers of one run by extension, each reading of a text made once however often a
+ * rule asks for it.
+ */
+export interface SourceRegistry {
+  /** The extensions some reader reads, sorted. */
+  readonly extensions: readonly string[];
+  /** The reader of the file at `path`, by its extension; `undefined` when none reads it. */
+  readerOf(path: string): SourceReader | undefined;
 }
 
 /** What the checkout module exports. */

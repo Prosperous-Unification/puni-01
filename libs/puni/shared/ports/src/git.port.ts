@@ -7,7 +7,7 @@ export type GitText = { readonly text: string } | { readonly failure: string };
 /** One worktree of a repository: its absolute path as git prints it, and its branch if any. */
 export interface GitWorktree {
   readonly path: string;
-  /** The branch checked out there, without `refs/heads/`; none when `HEAD` is detached. */
+  /** The branch checked out there, without its `refs/heads` prefix; none when `HEAD` is detached. */
   readonly branch?: string | undefined;
 }
 
@@ -15,7 +15,7 @@ export interface GitWorktree {
 export type GitWorktrees =
   { readonly worktrees: readonly GitWorktree[] } | { readonly failure: string };
 
-/** Branch names without `refs/heads/`, or why git gave none. */
+/** Branch names without their `refs/heads` prefix, or why git gave none. */
 export type GitBranches = { readonly branches: readonly string[] } | { readonly failure: string };
 
 /** One merge commit: its full hash, when it was committed, and its subject line. */
