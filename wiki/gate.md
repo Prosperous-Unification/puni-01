@@ -8,7 +8,7 @@ read-when: the gate fails, a finding names a rule you do not know, or you change
 Nx owns the task graph: affected projects, caching and ESLint under `lint`; `bun fmt` formats. Burokrat judges what no tool knows:
 `puni burokrat check` applies the rules of
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
-per project, which across projects and which only on the whole repository. It applies only the
+per project, which only for the root project and which across projects. It applies only the
 rules that apply at the `rules` pin of [puni.json](../puni.json), by their `since` and `until`,
 and names the newer ones; `puni burokrat repo upgrade` raises the pin once the repository passes
 them. The `gate` and

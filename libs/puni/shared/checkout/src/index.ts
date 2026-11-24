@@ -62,16 +62,23 @@ export {
   repositoryTypes,
 } from './registry';
 export {
+  comparePartitions,
   formatMapCommand,
   indexWordBudget,
   judgePurposes,
   listPartitions,
+  listSections,
   type MapContent,
+  type MapLevel,
+  type MapLineKind,
   placeProject,
+  type PurposeProblem,
   readInvocation,
+  type RenderedLevel,
   renderMapLevels,
   renderPartitionMap,
   renderRootMap,
+  renderSectionMap,
 } from './render-map';
 export { placePage, type WikiSection, wikiSections } from './wiki-sections';
 export { countWords } from './word-count';

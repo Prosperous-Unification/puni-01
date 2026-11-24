@@ -15,19 +15,31 @@ import {
   repositoryScope,
   type SourceDefect,
 } from '@puni/shared-checkout';
-import { readFirstRemedy, scopeRemedy } from './remedies';
+import {
+  invalidJsonRemedy,
+  missingDirectoryRemedy,
+  nameRemedy,
+  nxPlacementHint,
+  readFirstRemedy,
+  scopeRemedy,
+} from './remedies';
 
 type Reading = { readonly project: MapProject } | { readonly defect: SourceDefect };
 
-/** The remedy of each defect topic a project can have. */
+/** The usual remedy of each defect topic a project can have. */
 const remedies = {
   'read-when': readWhenRemedy,
   'read-first': readFirstRemedy,
   scope: scopeRemedy,
 } as const;
 
-function defectOf(topic: keyof typeof remedies, path: string, message: string): Reading {
-  return { defect: { topic, path, message, remedy: remedies[topic] } };
+function defectOf(
+  topic: keyof typeof remedies,
+  path: string,
+  message: string,
+  remedy: string = remedies[topic],
+): Reading {
+  return { defect: { topic, path, message, remedy } };
 }
 
 /**
@@ -97,9 +109,9 @@ function readIndex(
  */
 function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
   const { path, directory } = file;
-  if ('problem' in file) return [defectOf('read-when', path, file.problem)];
+  if ('problem' in file) return [defectOf('read-when', path, file.problem, invalidJsonRemedy)];
   const name = nameProject(file);
-  if (name === undefined) return [defectOf('read-when', path, 'has no name')];
+  if (name === undefined) return [defectOf('read-when', path, 'has no name', nameRemedy)];
   const metadata = isRecord(file.json['metadata']) ? file.json['metadata'] : {};
   const defects: Reading[] = [];
   const readWhen = metadata['readWhen'];
@@ -150,13 +162,18 @@ function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
  */
 export function createNxProjectSource(): ProjectSource {
   return {
+    placementHint: nxPlacementHint,
     readProjects(files): ProjectReading {
       const readings: Reading[] = [];
       const projectFiles = readProjectFiles(files, repositoryScope);
       const isWorkspace = files.exists('nx.json');
       for (const top of ['apps', 'libs']) {
         if (!files.exists(top)) {
-          if (isWorkspace) readings.push(defectOf('read-when', top, 'directory is missing'));
+          if (isWorkspace) {
+            readings.push(
+              defectOf('read-when', top, 'directory is missing', missingDirectoryRemedy(top)),
+            );
+          }
           continue;
         }
         for (const file of projectFiles) {

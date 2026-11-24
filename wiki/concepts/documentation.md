@@ -27,16 +27,16 @@ gives every export; only what spans libraries is a wiki page.
 Each layer is short, and names the next:
 
 1. `AGENTS.md`, read every session: the rules, the gate, and the map's command.
-2. The root of the map, printed by `bun run puni burokrat wiki map` and put in every Claude Code
-   session by the `SessionStart` hook of `.claude/settings.json`: a "Read when" line per page,
-   by section, and one line per top-level partition with its purpose and its command.
-3. A partition, printed by `bun run puni burokrat wiki map <partition>`: a "Read when" line per
-   library placed there, linking its `readFirst`, and its partitions below.
+2. The root of the map, `bun run puni burokrat wiki map`, which the `SessionStart` hook of
+   `.claude/settings.json` prints into every Claude Code session (or what stopped it, and to run
+   `bun install`): a "Read when" line per page, by section, and a line per top-level partition.
+3. A section or partition, `bun run puni burokrat wiki map <name>`: a "Read when" line per page,
+   or per library placed there, linking its `readFirst`, and the partitions below.
 4. The page, or the library's `readFirst` file and the JSDoc on its exports.
 
-The map is printed, never committed. A library's partition is its `metadata.index`, else its
-`scope:<name>` tag; the `map` of `puni.json` gives each partition's purpose. A partition prints
-its whole subtree when that fits `indexWordBudget`, else a line per partition below.
+The map is printed, never committed: [render-map.ts](../../libs/puni/shared/checkout/src/render-map.ts)
+says how each level is laid out. A library's partition is its `metadata.index`, else its
+`scope:<name>` tag; the `map` of `puni.json` gives each partition's purpose.
 
 A "Read when" line names the task that should open the file, not what the file holds: it is the
 only text an agent weighs before choosing.

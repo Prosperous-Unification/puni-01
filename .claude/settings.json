@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bun run --silent puni burokrat wiki map"
+            "command": "{ cd \"$CLAUDE_PROJECT_DIR\" && bun run --silent puni burokrat wiki map; } 2>&1 || echo 'The wiki map could not be printed (see above); run bun install, then bun run puni burokrat wiki map.'"
           }
         ]
       }

@@ -13,7 +13,14 @@ import {
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { nxModule } from './module';
-import { readFirstRemedy, scopeRemedy } from './remedies';
+import {
+  invalidJsonRemedy,
+  missingDirectoryRemedy,
+  nameRemedy,
+  nxPlacementHint,
+  readFirstRemedy,
+  scopeRemedy,
+} from './remedies';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -134,21 +141,46 @@ describe('the Nx project source', () => {
   });
 
   test.each([
-    ['{ not json', /^is not valid JSON: /u],
-    ['[]', /^is not a JSON object$/u],
-    ['{}', /^has no name$/u],
-  ])('a project.json holding %s is one read-when defect', (text, message) => {
-    const { defects } = readMemory({ ...workspace, '/r/libs/two/project.json': text });
-    expect(defects).toHaveLength(1);
-    expect(defects[0]).toMatchObject({ topic: 'read-when', path: 'libs/two/project.json' });
-    expect(defects[0]?.message).toMatch(message);
+    ['{ not json', /^is not valid JSON: /u, invalidJsonRemedy],
+    ['[]', /^is not a JSON object$/u, invalidJsonRemedy],
+    ['{}', /^has no name$/u, nameRemedy],
+  ])(
+    'a project.json holding %s is one read-when defect with its own remedy',
+    (text, message, remedy) => {
+      const { defects } = readMemory({ ...workspace, '/r/libs/two/project.json': text });
+      expect(defects).toHaveLength(1);
+      expect(defects[0]).toMatchObject({
+        topic: 'read-when',
+        path: 'libs/two/project.json',
+        remedy,
+      });
+      expect(defects[0]?.message).toMatch(message);
+    },
+  );
+
+  test('its placement hint, for remedies, names metadata.index', () => {
+    const container = track(
+      DiBag.createBuilder().withInstalledModules([nxModule]).buildContainer(),
+    );
+    expect(container.resolve('nxProjectSource').placementHint).toBe(nxPlacementHint);
+    expect(nxPlacementHint).toContain('metadata.index');
   });
 
   test('a workspace needs apps/ and libs/; a repository without nx.json needs neither', () => {
     expect(readMemory({ '/r/README.md': 'r' })).toEqual({ projects: [], defects: [] });
     expect(readMemory({ '/r/nx.json': '{}' }).defects).toEqual([
-      { topic: 'read-when', path: 'apps', message: 'directory is missing', remedy: readWhenRemedy },
-      { topic: 'read-when', path: 'libs', message: 'directory is missing', remedy: readWhenRemedy },
+      {
+        topic: 'read-when',
+        path: 'apps',
+        message: 'directory is missing',
+        remedy: missingDirectoryRemedy('apps'),
+      },
+      {
+        topic: 'read-when',
+        path: 'libs',
+        message: 'directory is missing',
+        remedy: missingDirectoryRemedy('libs'),
+      },
     ]);
   });
 

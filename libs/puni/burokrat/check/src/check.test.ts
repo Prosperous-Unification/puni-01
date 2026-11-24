@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { formatRegistry, indexWordBudget } from '@puni/shared-checkout';
-import { readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
+import { nxPlacementHint, readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
   fixtureRemotes,
   removeScratchDirectoriesAfterEach,
@@ -122,6 +122,35 @@ function writeCrowdedPartition(index: readonly string[]): void {
       index,
     });
   }
+}
+
+/** `count` pages directly in `directory`, each with a "Read when" of twenty words. */
+function writePages(directory: string, count: number): void {
+  for (const at of Array.from({ length: count }, (_, index) => String(index))) {
+    writeRepositoryFile(
+      root,
+      `${directory}/page${at}.md`,
+      `---\ntitle: Page ${at}\nread-when: reading ${'page '.repeat(18)}${at}\n---\n`,
+    );
+  }
+}
+
+/**
+ * `count` partitions `<prefix><n>`, each holding one project and given a purpose of twenty words,
+ * beside the fixture's `app`.
+ */
+function writeChildren(prefix: string, count: number): void {
+  const purposes: [string, string][] = [['app', 'changing the app']];
+  for (const at of Array.from({ length: count }, (_, index) => String(index))) {
+    const partition = `${prefix}${at}`;
+    writeProject(root, `libs/kid${at}`, `kid${at}`, {
+      readWhen: `changing kid ${at}`,
+      readFirst: 'src/index.ts',
+      index: partition.split('/'),
+    });
+    purposes.push([partition, `changing ${'kid '.repeat(18)}${at}`]);
+  }
+  writePurposes(purposes);
 }
 
 const fixtureCodeRules = fixtureRuleSets['system-state'];
@@ -312,28 +341,85 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.words',
       path: 'puni.json',
       message: `the map of partition app (\`puni burokrat wiki map app\`) prints ${String(crowdedWords)} words; at most ${String(indexWordBudget)}`,
-      remedy:
-        'place some of its projects in a partition below app (metadata.index in an Nx project.json) and give that partition a purpose in the map of puni.json, or shorten their read-when',
+      remedy: `place some of its projects in a partition below app (${nxPlacementHint}) and give that partition a purpose in the map of puni.json, or shorten their read-when`,
     },
   ],
   [
-    'a root map that does not fit the budget',
+    'a partition whose child partitions do not fit the budget',
     limitIndexWords,
     () => {
-      for (const index of Array.from({ length: 20 }, (_, at) => String(at))) {
-        writeRepositoryFile(
-          root,
-          `wiki/page${index}.md`,
-          `---\ntitle: Page ${index}\nread-when: reading ${'page '.repeat(18)}${index}\n---\n`,
-        );
-      }
+      writeChildren('app/c', 20);
+    },
+    {
+      rule: 'index.words',
+      path: 'puni.json',
+      message: `the map of partition app (\`puni burokrat wiki map app\`) prints 541 words; at most ${String(indexWordBudget)}`,
+      remedy:
+        'shorten the purposes of the partitions below app in the map of puni.json, or group them under an intermediate partition',
+    },
+  ],
+  [
+    'a root whose top-level partitions do not fit the budget, run through a puni script',
+    limitIndexWords,
+    () => {
+      writeRepositoryFile(root, 'package.json', JSON.stringify({ scripts: { puni: 'bun x.ts' } }));
+      writeChildren('top', 20);
+    },
+    {
+      rule: 'index.words',
+      path: 'wiki',
+      message: `the root map (\`bun run puni burokrat wiki map\`) prints 576 words; at most ${String(indexWordBudget)}`,
+      remedy:
+        'shorten the purposes of the top-level partitions in the map of puni.json, or group them under fewer top-level partitions',
+    },
+  ],
+  [
+    'a root whose pages do not fit the budget, its sections collapsed',
+    limitIndexWords,
+    () => {
+      writePages('wiki', 20);
     },
     {
       rule: 'index.words',
       path: 'wiki',
       message: `the root map (\`puni burokrat wiki map\`) prints 477 words; at most ${String(indexWordBudget)}`,
       remedy:
-        'shorten the read-when of the wiki pages and the purposes of the top-level partitions in the map of puni.json, or merge pages',
+        'shorten the read-when of the pages directly in wiki/, merge them, or move them into a section',
+    },
+  ],
+  [
+    'a section whose pages do not fit the budget',
+    limitIndexWords,
+    () => {
+      writePages('wiki/how-to', 20);
+    },
+    {
+      rule: 'index.words',
+      path: 'wiki',
+      message: `the map of section how-to (\`puni burokrat wiki map how-to\`) prints 476 words; at most ${String(indexWordBudget)}`,
+      remedy: 'shorten the read-when of the pages in wiki/how-to/, or merge pages',
+    },
+  ],
+  [
+    'a partition named as a wiki section',
+    requirePurposes,
+    () => {
+      writeProject(root, 'libs/con', 'con', {
+        readWhen: 'changing con',
+        readFirst: 'src/index.ts',
+        index: ['concepts'],
+      });
+      writePurposes([
+        ['app', 'changing the app'],
+        ['concepts', 'reading concepts'],
+      ]);
+    },
+    {
+      rule: 'index.purpose',
+      path: 'puni.json',
+      message:
+        'partition concepts has the name of the wiki section wiki/concepts/, which `wiki map concepts` prints',
+      remedy: 'place the projects of concepts in a partition of another name',
     },
   ],
   [
@@ -834,6 +920,39 @@ describe('rule boundaries', () => {
     expect([...judge(limitIndexWords), ...judge(requirePurposes)]).toEqual([]);
   });
 
+  /**
+   * Fills `app` to `total` words: its head and the fixture's project hold 19, seventeen projects
+   * of twenty-word read-whens 22 each, and one last project the rest.
+   */
+  function fillApp(total: number): void {
+    for (const at of Array.from({ length: 17 }, (_, index) => String(index))) {
+      writeProject(root, `libs/pad${at}`, `pad${at}`, {
+        readWhen: `changing ${'pad '.repeat(18)}${at}`,
+        readFirst: 'src/index.ts',
+      });
+    }
+    writeProject(root, 'libs/last', 'last', {
+      readWhen: Array.from({ length: total - 19 - 17 * 22 - 2 }, () => 'w').join(' '),
+      readFirst: 'src/index.ts',
+    });
+  }
+
+  test('a level of exactly the budget passes, one word more is a finding', () => {
+    fillApp(indexWordBudget);
+    expect(judge(limitIndexWords)).toEqual([]);
+    writeProject(root, 'libs/last', 'last', {
+      readWhen: 'w w w w w w',
+      readFirst: 'src/index.ts',
+    });
+    expect(judge(limitIndexWords)).toEqual([
+      {
+        rule: 'index.words',
+        path: 'puni.json',
+        message: `the map of partition app (\`puni burokrat wiki map app\`) prints ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+      },
+    ]);
+  });
+
   test('a partition without a purpose leaves index.words to index.purpose', () => {
     writeCrowdedPartition(['dash']);
     expect(judge(limitIndexWords)).toEqual([]);
@@ -1016,7 +1135,7 @@ describe('the check command', () => {
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
-      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
+      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, rules (the rules epoch), all-repos listing every type once, and optionally map (each partition path to its purpose) and keys starting x-\nfail: no repository, 1 finding.\n`,
     );
   });
 });

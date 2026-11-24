@@ -73,7 +73,7 @@ describe('the repository check turns defect kinds into findings', () => {
           path: 'puni.json',
           message: '/r/puni.json is not a JSON object',
           remedy:
-            'correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once',
+            'correct puni.json as the message says: this-repo-type, rules (the rules epoch), all-repos listing every type once, and optionally map (each partition path to its purpose) and keys starting x-',
         },
       ],
     });

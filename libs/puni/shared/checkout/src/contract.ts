@@ -180,6 +180,11 @@ export interface ProjectScopeResource {
  */
 export interface ProjectSource {
   readProjects(files: CheckoutFiles): ProjectReading;
+  /**
+   * How a project of this source is given a deeper partition, as a remedy names it: the setting
+   * that places it, in words a reader of the source's files knows.
+   */
+  readonly placementHint: string;
 }
 
 /** What the checkout module exports. */

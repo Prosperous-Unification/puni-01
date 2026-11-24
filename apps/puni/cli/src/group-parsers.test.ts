@@ -14,6 +14,13 @@ describe('burokratParser', () => {
     });
   });
 
+  test('wiki map takes an empty argument, for the command to refuse by name', () => {
+    expect(parse(burokratParser, ['wiki', 'map', ''])).toEqual({
+      success: true,
+      value: { kind: 'wiki map', partition: '' },
+    });
+  });
+
   test.each(['repo', 'adr', 'change', 'assess'])('a bare %s asks for its help', (group) => {
     expect(parse(burokratParser, [group])).toEqual({
       success: true,

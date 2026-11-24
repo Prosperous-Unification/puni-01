@@ -31,6 +31,7 @@ const one: MapProject = {
 /** A project source giving `one` and one defect at `path`, whatever the checkout holds. */
 function fixedSource(path: string): ProjectSource {
   return {
+    placementHint: 'set its place',
     readProjects: () => ({
       projects: [one],
       defects: [{ topic: 'scope', path, message: 'has no place', remedy: 'place it' }],
@@ -128,6 +129,7 @@ describe('readMapSources', () => {
     const files = container.resolve('checkoutFiles').open(root, 'system-state');
     const seen: CheckoutFiles[] = [];
     const source: ProjectSource = {
+      placementHint: 'set its place',
       readProjects: (read) => {
         seen.push(read);
         return { projects: [], defects: [] };

@@ -1,9 +1,10 @@
 import {
-  countWords,
   formatMapCommand,
   indexWordBudget,
   judgePurposes,
-  judgeReadWhen,
+  listPartitions,
+  type MapLevel,
+  type MapLineKind,
   type MapSources,
   readInvocation,
   readMapSources,
@@ -18,12 +19,39 @@ function readSources({ files, projectSources }: RuleReading): MapSources {
   return readMapSources(files, projectSources);
 }
 
+/** The argument that prints `level`, `undefined` for the root. */
+function argumentOf(level: MapLevel): string | undefined {
+  if (level.kind === 'root') return undefined;
+  return level.kind === 'section' ? level.section.directory : level.path;
+}
+
+/** What to do about `level` when its lines of `kind` hold the most of its words. */
+function remedyFor(level: MapLevel, kind: MapLineKind | undefined, hints: string): string {
+  const partition = level.kind === 'partition' ? level.path : '';
+  switch (kind) {
+    case 'projects':
+      return `place some of its projects in a partition below ${partition} (${hints}) and give that partition a purpose in the map of puni.json, or shorten their read-when`;
+    case 'children':
+      return `shorten the purposes of the partitions below ${partition} in the map of puni.json, or group them under an intermediate partition`;
+    case 'partitions':
+      return 'shorten the purposes of the top-level partitions in the map of puni.json, or group them under fewer top-level partitions';
+    case 'sections':
+      return 'shorten the purposes of the wiki sections (wikiSections), or merge sections';
+    case 'pages':
+    case undefined:
+      return level.kind === 'section'
+        ? `shorten the read-when of the pages in wiki/${level.section.directory}/, or merge pages`
+        : 'shorten the read-when of the pages directly in wiki/, merge them, or move them into a section';
+  }
+}
+
 /**
- * Every level `puni burokrat wiki map` prints, the root and each partition, stays within
- * {@link indexWordBudget}, each judged alone. A partition prints its whole subtree only when that
- * fits, so a level over budget is the root, or a partition whose own projects and child
- * partitions do not fit. While the sources have defects or a partition lacks its purpose the map
- * cannot be printed; those are the other `index` rules' findings.
+ * Every level `puni burokrat wiki map` prints, the root, each wiki section and each partition,
+ * stays within {@link indexWordBudget}, each judged alone. The root collapses its sections and a
+ * partition its subtree when the whole does not fit, so a level over budget is one whose own
+ * lines do not fit; the remedy follows the kind of line holding the most of its words. While
+ * the sources have defects or a shown partition has no purpose the map cannot be printed; those
+ * are the other `index` rules' findings.
  */
 export const limitIndexWords: Rule = {
   id: 'index.words',
@@ -33,38 +61,39 @@ export const limitIndexWords: Rule = {
     const sources = readSources(reading);
     const purposes = reading.registry.map;
     if (sources.defects.length > 0) return [];
-    if (judgePurposes(sources.projects, purposes).missing.length > 0) return [];
+    if (listPartitions(sources.projects).some((shown) => !purposes.has(shown))) return [];
     const invocation = readInvocation(reading.files);
-    const levels = renderMapLevels({ ...sources, purposes, invocation });
-    return levels.flatMap(({ partition, text }): Breach[] => {
-      const words = countWords(text);
-      if (words <= indexWordBudget) return [];
-      const counted = `prints ${String(words)} words; at most ${String(indexWordBudget)}`;
-      const command = formatMapCommand(invocation, partition);
-      return partition === undefined
-        ? [
-            {
-              path: 'wiki',
-              message: `the root map (\`${command}\`) ${counted}`,
-              remedy:
-                'shorten the read-when of the wiki pages and the purposes of the top-level partitions in the map of puni.json, or merge pages',
-            },
-          ]
-        : [
-            {
-              path: 'puni.json',
-              message: `the map of partition ${partition} (\`${command}\`) ${counted}`,
-              remedy: `place some of its projects in a partition below ${partition} (metadata.index in an Nx project.json) and give that partition a purpose in the map of puni.json, or shorten their read-when`,
-            },
-          ];
-    });
+    const hints = [...new Set(reading.projectSources.map((source) => source.placementHint))].join(
+      '; ',
+    );
+    return renderMapLevels({ ...sources, purposes, invocation }).flatMap(
+      ({ level, words, largest }): Breach[] => {
+        if (words <= indexWordBudget) return [];
+        const command = formatMapCommand(invocation, argumentOf(level));
+        const what =
+          level.kind === 'root'
+            ? 'the root map'
+            : level.kind === 'section'
+              ? `the map of section ${level.section.directory}`
+              : `the map of partition ${level.path}`;
+        return [
+          {
+            path: level.kind === 'partition' ? 'puni.json' : 'wiki',
+            message: `${what} (\`${command}\`) prints ${String(words)} words; at most ${String(indexWordBudget)}`,
+            remedy: remedyFor(level, largest, hints),
+          },
+        ];
+      },
+    );
   },
 };
 
 /**
- * The `map` of `puni.json` gives a purpose to exactly the partitions the map shows, each a phrase
- * completing "Read this when …". While the sources have defects a project may be missing from
- * them, so a purpose no project uses is judged only once there are none.
+ * The `map` of `puni.json` gives the partitions the map shows purposes the map can print, as
+ * `judgePurposes` judges them: each shown partition has one, each completes "Read this when …",
+ * none is named as a wiki section, and none is for a partition no project is placed in. While
+ * the sources have defects a project may be missing from them, so that last is judged only once
+ * there are none.
  */
 export const requirePurposes: Rule = {
   id: 'index.purpose',
@@ -73,34 +102,9 @@ export const requirePurposes: Rule = {
     'give each partition the map shows a purpose in the map of puni.json, a phrase completing "Read this when …", and remove each purpose of a partition no project is placed in',
   judge(reading) {
     const sources = readSources(reading);
-    const purposes = reading.registry.map;
-    const path = 'puni.json';
-    const { missing, unused } = judgePurposes(sources.projects, purposes);
-    const breaches: Breach[] = missing.map((partition) => ({
-      path,
-      message: `map has no purpose for partition ${partition}, which the map shows`,
-      remedy: `add "${partition}": "<the task an agent comes to ${partition} for>" to the map of puni.json`,
-    }));
-    if (sources.defects.length === 0) {
-      for (const partition of unused) {
-        breaches.push({
-          path,
-          message: `map gives a purpose for partition ${partition}, where no project is placed`,
-          remedy: `remove "${partition}" from the map of puni.json, or place a project there`,
-        });
-      }
-    }
-    for (const [partition, purpose] of purposes) {
-      const problem = judgeReadWhen(purpose);
-      if (problem !== undefined) {
-        breaches.push({
-          path,
-          message: `map.${partition} ${problem}`,
-          remedy: `make the purpose of ${partition} a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words`,
-        });
-      }
-    }
-    return breaches;
+    return judgePurposes(sources.projects, reading.registry.map, sources.defects.length === 0).map(
+      ({ message, remedy }) => ({ path: 'puni.json', message, remedy }),
+    );
   },
 };
 
@@ -114,7 +118,7 @@ function judgeSources(topic: SourceDefect['topic']): Rule['judge'] {
 
 /**
  * Every project has a valid "Read when" phrase and every page a valid `title` and `read-when`.
- * The root project judges every source: its check reads every `project.json`.
+ * The root project judges every source: its check reads every project's files.
  */
 export const requireReadWhen: Rule = {
   id: 'index.read-when',

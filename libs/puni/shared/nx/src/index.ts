@@ -1,3 +1,10 @@
 export type { NxExports } from './contract';
 export { nxModule } from './module';
-export { readFirstRemedy, scopeRemedy } from './remedies';
+export {
+  invalidJsonRemedy,
+  missingDirectoryRemedy,
+  nameRemedy,
+  nxPlacementHint,
+  readFirstRemedy,
+  scopeRemedy,
+} from './remedies';

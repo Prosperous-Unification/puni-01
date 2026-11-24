@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry, repositoryScope } from '@puni/shared-checkout';
-import { fixtureRemotes, removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
+import { repositoryScope } from '@puni/shared-checkout';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { digestRulesSection, rulesDigestAt } from './agents-rules';
 import {
   type CheckHost,
@@ -97,8 +97,8 @@ afterAll(async () => {
   await host.close();
 });
 
-beforeEach(async () => {
-  ({ state, records } = await makeRepositoryPair(scratchDirectories));
+beforeEach(() => {
+  ({ state, records } = makeRepositoryPair(scratchDirectories));
   writeFileSync(join(state, 'later.md'), 'breaks the later rules\n');
   git(state, 'add', 'later.md');
   git(records, 'add', 'AGENTS.md');

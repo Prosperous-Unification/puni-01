@@ -116,8 +116,32 @@ describe('the wiki map command', () => {
     expect(runMap('nope')).toEqual({
       code: 2,
       stdout: '',
-      stderr: 'error: the map has no partition nope; its partitions: app, dash\n',
+      stderr:
+        'error: the map has no section or partition "nope"; its sections: none; its partitions: app, dash\n',
     });
+    expect(runMap('')).toEqual({
+      code: 2,
+      stdout: '',
+      stderr:
+        'error: the map has no section or partition ""; its sections: none; its partitions: app, dash\n',
+    });
+  });
+
+  test('a section directory prints that section; sections and partitions share the argument', () => {
+    writeRepositoryFile(
+      root,
+      'wiki/how-to/deploy.md',
+      '---\ntitle: Deploy\nread-when: deploying\n---\n',
+    );
+    expect(runMap('how-to')).toEqual({
+      code: 0,
+      stdout:
+        '# Wiki map: how-to\n\nA task that spans the repository, as ordered steps.\n\n## Read when\n\n- deploying: [Deploy](wiki/how-to/deploy.md)\n',
+      stderr: '',
+    });
+    expect(runMap('concepts').stderr).toBe(
+      'error: the map has no section or partition "concepts"; its sections: how-to; its partitions: app\n',
+    );
   });
 
   test('a map with no partitions names none', () => {
@@ -127,17 +151,29 @@ describe('the wiki map command', () => {
     expect(runMap('app')).toEqual({
       code: 2,
       stdout: '',
-      stderr: 'error: the map has no partition app; its partitions: none\n',
+      stderr:
+        'error: the map has no section or partition "app"; its sections: none; its partitions: none\n',
     });
   });
 
-  test('a partition the map shows without a purpose is one error line and exit 1', () => {
+  test('purposes index.purpose refuses are one error line naming each, exit 1', () => {
     writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
     expect(runMap()).toEqual({
       code: 1,
       stdout: '',
       stderr:
-        'error: the map of puni.json gives no purpose for the partitions app; fix: give each a phrase completing "Read this when …"\n',
+        'error: puni.json: map has no purpose for partition app, which the map shows; fix: add "app": "<the task an agent comes to app for>" to the map of puni.json\n',
+    });
+    writeRepositoryFile(
+      root,
+      'puni.json',
+      formatFixtureRegistry({ app: 'The app.', gone: 'changing nothing' }),
+    );
+    expect(runMap('app')).toEqual({
+      code: 1,
+      stdout: '',
+      stderr:
+        'error: puni.json: map.app must start with a lower-case letter, must not end with a full stop; fix: make the purpose of app a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words; puni.json: map gives a purpose for partition gone, where no project is placed; fix: remove "gone" from the map of puni.json, or place a project there\n',
     });
   });
 

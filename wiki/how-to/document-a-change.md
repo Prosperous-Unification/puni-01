@@ -27,5 +27,5 @@ says where each kind of fact lives. Before committing:
    planned: those are records in the records repository, filed as its `AGENTS.md` says. The
    repository keeps only the reason that still binds, beside the fact it explains.
 6. **Run `bun run fix`, then `bun run gate`.** The fix formats; the gate judges links, paths,
-   commands, symbols, sections, the map and budgets. A new library or partition needs a purpose
+   commands, symbols, sections, the map and budgets. A new partition needs a purpose
    in the `map` of `puni.json`; `bun run puni burokrat wiki map` shows what an agent will see.

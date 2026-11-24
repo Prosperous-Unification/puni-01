@@ -352,7 +352,8 @@ describe('entrypoint', () => {
       expect(runPuni(['b', 'wiki', 'map', 'dash'], state)).toEqual({
         code: 2,
         stdout: '',
-        stderr: 'error: the map has no partition dash; its partitions: app\n',
+        stderr:
+          'error: the map has no section or partition "dash"; its sections: none; its partitions: app\n',
       });
     });
   });

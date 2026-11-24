@@ -4,7 +4,6 @@ import {
   explainDefect,
   formatRegistry,
   githubUrlPattern,
-  readRulesSection,
 } from '@puni/shared-checkout';
 import type { RepoInitRequest, RepositoryPairSetup, RepoRequirements } from './contract';
 import { RemoteNameRefused, SourceRulesMissing, SourceRulesStale } from './failures';

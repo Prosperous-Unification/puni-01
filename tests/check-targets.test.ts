@@ -149,7 +149,7 @@ describe('puni-bur-check targets', () => {
     const checkerSource = readStrings(field(nx, 'namedInputs', 'checkerSource'));
     const cli = readJson('apps/puni/cli/package.json');
     expect(field(cli, 'bin', 'puni')).toBe('src/entrypoint.ts');
-    for (const path of ['package.json', 'src/main.ts', 'src/rules/history.rule.ts', 'src/a.cjs']) {
+    for (const path of ['package.json', 'src/main.ts', 'src/rules/history.rule.ts']) {
       expect([path, matchesInput(checkerSource.map(project), path)]).toEqual([path, true]);
     }
     for (const path of ['src/check.test.ts', 'src/check.test-host.ts', 'NOTES.md']) {
@@ -165,15 +165,28 @@ describe('puni-bur-check targets', () => {
     }
   });
 
-  test('the root project check reads its own files, every project.json and nx.json, not the whole workspace', () => {
-    expect(
-      readStrings(field(readJson('project.json'), 'targets', 'puni-bur-check', 'inputs')),
-    ).toEqual([
+  /**
+   * The root project's check judges the map, which reads every project's `project.json` and the
+   * existence of the file each names to read first, so a change to any file of a project can
+   * change its verdict: renaming a `readFirst` file breaks `index.read-first`.
+   */
+  test('the root project check reads its own files, every project under apps/ and libs/, and nx.json', () => {
+    const inputs = readStrings(
+      field(readJson('project.json'), 'targets', 'puni-bur-check', 'inputs'),
+    );
+    expect(inputs).toEqual([
       'default',
       'puniBurCheck',
-      '{workspaceRoot}/**/project.json',
+      '{workspaceRoot}/apps/**/*',
+      '{workspaceRoot}/libs/**/*',
       '{workspaceRoot}/nx.json',
     ]);
+    for (const path of [
+      'libs/puni/dash/ops/src/node-shell.feature.ts',
+      'apps/puni/cli/project.json',
+    ]) {
+      expect([path, matchesInput(inputs, path)]).toEqual([path, true]);
+    }
     expect(field(readJson('project.json'), 'name')).toBe('workspace');
   });
 });

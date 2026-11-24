@@ -117,7 +117,7 @@ export const checkoutDefects = [
   remedyDefect(
     RegistryInvalid,
     () =>
-      'correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once',
+      'correct puni.json as the message says: this-repo-type, rules (the rules epoch), all-repos listing every type once, and optionally map (each partition path to its purpose) and keys starting x-',
   ),
   remedyDefect(CheckoutMissing, ({ url, root }) => `clone it: git clone ${url} ${root}`),
   remedyDefect(
