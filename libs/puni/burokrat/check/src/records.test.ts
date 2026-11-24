@@ -40,7 +40,7 @@ import {
 import { forbidPlaintextSecrets, forbidRecordsAddresses } from './rules/secrets.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 let host: CheckHost;
@@ -54,7 +54,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRecordsRepository(scratch);
+  root = await makeRecordsRepository(scratchDirectories);
 });
 
 /** The system-state repository beside the records repository under test. */

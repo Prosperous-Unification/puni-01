@@ -17,7 +17,7 @@ import type { ResourcesExports } from './contract';
 import { resourcesParser } from './group';
 import { dashResourcesModule } from './module';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const track = closeAfterEach();
 const identity = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
@@ -92,7 +92,7 @@ describe('dash resources over a temporary system-state repository', () => {
   const probe = () => join(state, '.worktrees/probe');
 
   beforeEach(() => {
-    parent = scratch.createDirectory('puni-resources-');
+    parent = scratchDirectories.createDirectory('puni-resources-');
     state = join(parent, 'demo');
     writeRepositoryFile(state, 'puni.json', formatRegistry('system-state', fixtureRemotes));
     writeRepositoryFile(state, '.gitignore', '.worktrees/\n');
@@ -282,7 +282,7 @@ describe('dash resources over a temporary system-state repository', () => {
   });
 
   test('a directory with no puni.json above it fails in one line, exit 1', () => {
-    const outside = scratch.createDirectory('puni-resources-none-');
+    const outside = scratchDirectories.createDirectory('puni-resources-none-');
     const listed = list(outside);
     expect([listed.code, listed.stdout]).toEqual([1, '']);
     expect(listed.stderr).toMatch(/^error: [^\n]*puni\.json[^\n]*; fix: [^\n]+\n$/u);

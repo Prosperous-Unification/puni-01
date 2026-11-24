@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
@@ -6,7 +6,7 @@ import type { Git, GitMerge } from '@puni/shared-ports';
 import { memoryHost } from './memory-host';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
-const scratch = removeScratchDirectoriesAfterAll();
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 /**
  * A git and a repository whose `main` merged `feature` (which itself merged `inner`) and then
@@ -37,7 +37,7 @@ function runGitAt(root: string, args: readonly string[], date: string = times.in
 }
 
 function openBunGit(): Subject {
-  const root = scratch.createDirectory('puni-git-merges-');
+  const root = scratchDirectories.createDirectory('puni-git-merges-');
   const commit = (file: string) => {
     writeFileSync(join(root, file), file);
     runGitAt(root, ['add', '-A']);
@@ -92,7 +92,12 @@ describe.each([
   ['the bun adapter', openBunGit],
   ['the memory fake', openMemoryGit],
 ] as const)('the Git merges contract: %s', (_name, open) => {
-  const { git, root, outer } = open();
+  let git: Git;
+  let root: string;
+  let outer: string;
+  beforeAll(() => {
+    ({ git, root, outer } = open());
+  });
 
   const listed = (revisions: string, ancestry: 'all' | 'first-parent') => {
     const merges = git.listMerges(root, revisions, ancestry);

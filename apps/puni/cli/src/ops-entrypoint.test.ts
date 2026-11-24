@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -26,7 +26,7 @@ describe('dash ops through the entrypoint, demo beside demo-records, a fake ssh 
   let log = '';
 
   beforeEach(() => {
-    state = makeStateRepository(scratch);
+    state = makeStateRepository(scratchDirectories);
     const parent = dirname(state);
     const records = join(parent, 'demo-records');
     mkdirSync(join(records, 'dash/ops'), { recursive: true });

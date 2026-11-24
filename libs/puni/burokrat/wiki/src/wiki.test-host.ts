@@ -20,12 +20,12 @@ export const fixtureCommands: readonly CommandBrief[] = [
 ];
 
 /**
- * A fresh git repository `demo` in a directory `scratch` creates, the index sources a wiki index needs:
+ * A fresh git repository `demo` in a directory `scratchDirectories` creates, the index sources a wiki index needs:
  * `puni.json`, the root project, one project `one` under `apps/`, an empty `libs/`, and the
- * index generated from them. `scratch` removes it.
+ * index generated from them. `scratchDirectories` removes it.
  */
-export function makeRepository(scratch: ScratchDirectoryOwner): string {
-  const root = join(scratch.createDirectory('puni-wiki-'), 'demo');
+export function makeRepository(scratchDirectories: ScratchDirectoryOwner): string {
+  const root = join(scratchDirectories.createDirectory('puni-wiki-'), 'demo');
   writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeProject(root, 'apps/one', 'one', {

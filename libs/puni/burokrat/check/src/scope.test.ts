@@ -24,7 +24,7 @@ import { codeRules, crossProjectRules } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { makeRepository, regenerateIndex } from './repository-pair.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 let host: CheckHost;
@@ -47,7 +47,7 @@ function listProjects() {
 
 /** The fixture repository with a second project, `two`, and its index regenerated. */
 async function makeTwoProjectRepository(): Promise<string> {
-  const repository = await makeRepository(scratch);
+  const repository = await makeRepository(scratchDirectories);
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
@@ -180,7 +180,7 @@ describe('every project check, the cross-project check and the whole-level rules
   test('the seeds break every code rule', async () => {
     const broken = new Set<string>();
     for (const [, seed] of seeds) {
-      root = await makeRepository(scratch);
+      root = await makeRepository(scratchDirectories);
       writeProject(root, 'libs/two', 'two', {
         readWhen: 'changing two',
         readFirst: 'src/index.ts',

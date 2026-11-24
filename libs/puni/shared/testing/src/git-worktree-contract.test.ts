@@ -7,7 +7,7 @@ import { memoryHost } from './memory-host';
 import { runGit } from './repository-files';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
-const scratch = removeScratchDirectoriesAfterAll();
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 /**
  * A git, a repository `root` on `main` with one commit, and how to make the worktree at a path
@@ -23,7 +23,7 @@ interface Subject {
 const identity = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
 
 function openBunGit(): Subject {
-  const parent = scratch.createDirectory('puni-git-worktree-');
+  const parent = scratchDirectories.createDirectory('puni-git-worktree-');
   const root = join(parent, 'repo');
   runGit(parent, ['init', '-q', '-b', 'main', root]);
   writeFileSync(join(root, 'a.md'), 'a');

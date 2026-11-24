@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { readRulesSection } from '@puni/shared-checkout';
 import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 const checkout = new URL('../../../../', import.meta.url).pathname;
@@ -31,7 +31,7 @@ describe('burokrat repo init through the entrypoint, in an empty temporary direc
   let records = '';
 
   beforeEach(() => {
-    parent = scratch.createDirectory('puni-repo-init-');
+    parent = scratchDirectories.createDirectory('puni-repo-init-');
     state = join(parent, 'shop');
     records = join(parent, 'shop-records');
     mkdirSync(state);

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 /**
  * The file the `build` target writes. The `test` target depends on `build`, so under Nx this is
@@ -28,7 +28,7 @@ describe('the built puni.js', () => {
     if (!existsSync(bundle)) {
       throw new Error(`${bundle} is missing; run bunx nx run puni-cli:build`);
     }
-    parent = scratch.createDirectory('puni-bundle-');
+    parent = scratchDirectories.createDirectory('puni-bundle-');
   });
 
   test('prints its version', () => {

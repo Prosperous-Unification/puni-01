@@ -28,7 +28,7 @@ import { DiBag } from 'di-bag';
 import { burokratWikiModule } from './module';
 import { fixtureCommands, makeRepository } from './wiki.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 
@@ -74,7 +74,7 @@ function render(): Map<string, string> {
 }
 
 beforeEach(() => {
-  root = makeRepository(scratch);
+  root = makeRepository(scratchDirectories);
 });
 
 describe('renderIndex', () => {

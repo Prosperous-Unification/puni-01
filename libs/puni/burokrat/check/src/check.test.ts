@@ -53,7 +53,7 @@ import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/w
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 let host: CheckHost;
@@ -67,7 +67,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository(scratch);
+  root = await makeRepository(scratchDirectories);
 });
 
 function judge(rule: Rule): Judged[] {

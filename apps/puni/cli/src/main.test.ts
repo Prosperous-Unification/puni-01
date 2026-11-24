@@ -11,7 +11,7 @@ import { type CommandSelection, runProcess, runPuni } from './main';
 import { makeStateRepository } from './repository.test-host';
 import { puniProgram } from './root-parser';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
   return readProgramInvocation(puniProgram, args, stdout);
@@ -98,7 +98,7 @@ describe('runPuni', () => {
   });
 
   test('wiki index partitions the live command tree by role, projects by scope', () => {
-    const root = makeStateRepository(scratch);
+    const root = makeStateRepository(scratchDirectories);
     const written = ['app', 'burokrat', 'dash', 'index', 'navigator'];
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 0,
@@ -116,7 +116,7 @@ describe('runPuni', () => {
   });
 
   test('wiki index refuses defective inputs with one error line and exit 1', () => {
-    const root = makeStateRepository(scratch);
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'apps/one/project.json'), JSON.stringify({ name: 'one' }));
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 1,
@@ -126,7 +126,7 @@ describe('runPuni', () => {
   });
 
   test('check judges with the live command tree and exits 1 on findings', () => {
-    const root = makeStateRepository(scratch);
+    const root = makeStateRepository(scratchDirectories);
     const run = runIn(root, ['burokrat', 'check']);
     expect(run.code).toBe(1);
     expect(run.printed).toContain('agents.exists AGENTS.md: is missing; fix: ');
@@ -134,7 +134,7 @@ describe('runPuni', () => {
   });
 
   test('check --project naming no project exits 2 with one error line', () => {
-    const root = makeStateRepository(scratch);
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
     expect(runIn(root, ['burokrat', 'check', '--project', 'nope'])).toEqual({
       code: 2,

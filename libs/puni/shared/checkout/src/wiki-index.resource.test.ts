@@ -16,7 +16,7 @@ import { CheckoutUnlistable } from './failures';
 import { checkoutModule } from './module';
 import { indexFile } from './render-index';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const track = closeAfterEach();
 
@@ -159,7 +159,7 @@ describe('compare and write', () => {
 
 describe('a path git ignores is invisible', () => {
   test('an ignored page, project.json or index file is not read, compared or removed', () => {
-    const root = join(scratch.createDirectory('puni-wiki-index-'), 'demo');
+    const root = join(scratchDirectories.createDirectory('puni-wiki-index-'), 'demo');
     writeProject(root, 'apps/one', 'one', {
       readWhen: 'changing one',
       readFirst: 'src/index.ts',

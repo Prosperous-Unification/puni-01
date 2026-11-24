@@ -3,7 +3,7 @@ import { throws } from 'node:assert/strict';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import syncWikiIndex from './wiki-index.cjs';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 /** The part of an Nx tree the generator uses, over a map of files. */
 function makeTree(files: Record<string, string>, root = '/nowhere') {
@@ -82,7 +82,7 @@ describe('the wiki index sync generator', () => {
   });
 
   test('a failing command throws naming it and its error, so sync:check cannot pass', async () => {
-    const root = scratch.createDirectory('puni-nx-sync-');
+    const root = scratchDirectories.createDirectory('puni-nx-sync-');
     let failure: unknown;
     try {
       await syncWikiIndex(makeTree({}, root));

@@ -7,7 +7,7 @@ import type { ProcessRunner } from '@puni/shared-ports';
 import { createMemoryProcessRunner } from './memory-host';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
-const scratch = removeScratchDirectoriesAfterAll();
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 const exitSeven = ['sh', '-c', 'exit 7'];
 const subjects: readonly (readonly [string, () => ProcessRunner])[] = [
@@ -39,7 +39,7 @@ describe('the bun adapter run attached', () => {
   });
 
   test('the child reads and writes the standard streams of this process', () => {
-    const directory = scratch.createDirectory('puni-attached-');
+    const directory = scratchDirectories.createDirectory('puni-attached-');
     const script = join(directory, 'attached.ts');
     const adapters = new URL('../../adapters/src/index.ts', import.meta.url).pathname;
     writeFileSync(

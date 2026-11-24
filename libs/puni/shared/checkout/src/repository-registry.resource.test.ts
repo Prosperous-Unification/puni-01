@@ -19,7 +19,7 @@ import {
 } from './registry';
 import { makeRegistryPair, type RegistryPair } from './registry.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let pair: RegistryPair = { state: '', records: '' };
 
@@ -32,7 +32,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  pair = makeRegistryPair(scratch);
+  pair = makeRegistryPair(scratchDirectories);
 });
 
 function findRepository(cwd: string): Repository {

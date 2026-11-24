@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import { removeScratchDirectoriesAfterEach } from './scratch-directories';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 
 beforeEach(() => {
-  root = scratch.createDirectory('puni-bun-git-');
+  root = scratchDirectories.createDirectory('puni-bun-git-');
 });
 
 describe('createBunGit over a directory on disk', () => {

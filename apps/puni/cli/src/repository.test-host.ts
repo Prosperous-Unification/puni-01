@@ -9,12 +9,12 @@ import {
 } from '@puni/shared-testing';
 
 /**
- * A fresh system-state git repository `demo` in a directory `scratch` creates, nothing staged:
+ * A fresh system-state git repository `demo` in a directory `scratchDirectories` creates, nothing staged:
  * `puni.json`, one project `one` under `apps/` whose index line reads "changing one", and an
- * empty `libs/`. `scratch` removes it and anything built beside it.
+ * empty `libs/`. `scratchDirectories` removes it and anything built beside it.
  */
-export function makeStateRepository(scratch: ScratchDirectoryOwner): string {
-  const root = join(scratch.createDirectory('puni-cli-'), 'demo');
+export function makeStateRepository(scratchDirectories: ScratchDirectoryOwner): string {
+  const root = join(scratchDirectories.createDirectory('puni-cli-'), 'demo');
   writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
   writeProject(root, 'apps/one', 'one', { readWhen: 'changing one', readFirst: 'src/index.ts' });
   writeRepositoryFile(root, 'libs/.gitkeep', '');

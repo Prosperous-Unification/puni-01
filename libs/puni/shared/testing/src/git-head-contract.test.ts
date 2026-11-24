@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
@@ -7,7 +7,7 @@ import { memoryHost } from './memory-host';
 import { runGit } from './repository-files';
 import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
-const scratch = removeScratchDirectoriesAfterAll();
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 /** A git and two repositories: `committed`, whose HEAD names a commit, and `empty`, with none. */
 interface Subject {
@@ -17,7 +17,7 @@ interface Subject {
 }
 
 function openBunGit(): Subject {
-  const parent = scratch.createDirectory('puni-git-head-');
+  const parent = scratchDirectories.createDirectory('puni-git-head-');
   const [committed, empty] = [join(parent, 'committed'), join(parent, 'empty')];
   for (const root of [committed, empty]) runGit(parent, ['init', '-q', root]);
   writeFileSync(join(committed, 'a.md'), 'a');
@@ -35,7 +35,12 @@ describe.each([
   ['the bun adapter', openBunGit],
   ['the memory fake', openMemoryGit],
 ] as const)('the Git HEAD contract: %s', (_name, open) => {
-  const { git, committed, empty } = open();
+  let git: Git;
+  let committed: string;
+  let empty: string;
+  beforeAll(() => {
+    ({ git, committed, empty } = open());
+  });
 
   test('a repository with a commit gives its abbreviated hash', () => {
     const head = git.readHeadCommit(committed);

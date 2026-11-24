@@ -16,7 +16,7 @@ import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing'
 import cliPackage from '../package.json' with { type: 'json' };
 import { makeStateRepository } from './repository.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -94,7 +94,7 @@ describe('entrypoint', () => {
     }
 
     beforeEach(() => {
-      state = makeStateRepository(scratch);
+      state = makeStateRepository(scratchDirectories);
       parent = dirname(state);
       records = join(parent, 'demo-records');
       mkdirSync(join(records, 'nav/plans'), { recursive: true });
@@ -160,7 +160,7 @@ describe('entrypoint', () => {
       });
 
       afterEach(() => {
-        chmodSync(join(state, 'locked'), 0o700);
+        if (existsSync(join(state, 'locked'))) chmodSync(join(state, 'locked'), 0o700);
       });
 
       test('exits 3 with one error line naming the reference and a private report file', () => {

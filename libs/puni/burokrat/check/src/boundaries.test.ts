@@ -17,7 +17,7 @@ import {
   forbiddenAddress,
 } from './secrets.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 let host: CheckHost;
@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository(scratch);
+  root = await makeRepository(scratchDirectories);
 });
 
 function judge(rule: Rule) {

@@ -36,7 +36,7 @@ export const fixtureNx = { sync: { globalGenerators: ['@puni/nx-sync:wiki-index'
  * the checkout resources over this machine.
  *
  * @throws Error when the sources have defects; fixtures are expected to be valid here.
- * @throws ScratchRemovalRefused when `root` does not lie below the temporary directory.
+ * @throws ScratchRemovalRefused when `root` does not lie below this process's scratch root.
  */
 export async function regenerateIndex(root: string): Promise<void> {
   const container = DiBag.createBuilder()
@@ -123,10 +123,12 @@ export interface RepositoryPair {
 
 /**
  * A fresh pair in one temporary directory: `demo` (system-state) and `demo-records`
- * (system-records), each passing every rule of its type. `scratch` removes both.
+ * (system-records), each passing every rule of its type. `scratchDirectories` removes both.
  */
-export async function makeRepositoryPair(scratch: ScratchDirectoryOwner): Promise<RepositoryPair> {
-  const parent = scratch.createDirectory('puni-pair-');
+export async function makeRepositoryPair(
+  scratchDirectories: ScratchDirectoryOwner,
+): Promise<RepositoryPair> {
+  const parent = scratchDirectories.createDirectory('puni-pair-');
   const pair = { state: join(parent, 'demo'), records: join(parent, 'demo-records') };
   await buildStateRepository(pair.state);
   buildRecordsRepository(pair.records);
@@ -134,13 +136,15 @@ export async function makeRepositoryPair(scratch: ScratchDirectoryOwner): Promis
 }
 
 /** The system-state repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRepository(scratch: ScratchDirectoryOwner): Promise<string> {
-  return (await makeRepositoryPair(scratch)).state;
+export async function makeRepository(scratchDirectories: ScratchDirectoryOwner): Promise<string> {
+  return (await makeRepositoryPair(scratchDirectories)).state;
 }
 
 /** The records repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRecordsRepository(scratch: ScratchDirectoryOwner): Promise<string> {
-  return (await makeRepositoryPair(scratch)).records;
+export async function makeRecordsRepository(
+  scratchDirectories: ScratchDirectoryOwner,
+): Promise<string> {
+  return (await makeRepositoryPair(scratchDirectories)).records;
 }
 
 /** Front matter for a fixture record: every required key, valid for `path`, then `extra`. */

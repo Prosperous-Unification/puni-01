@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -20,7 +20,7 @@ describe('dash resources through the entrypoint, in a committed demo repository'
   let state = '';
 
   beforeEach(() => {
-    state = makeStateRepository(scratch);
+    state = makeStateRepository(scratchDirectories);
     writeFileSync(join(state, '.gitignore'), '.worktrees/\n');
     runGit(state, ['add', '-A']);
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);

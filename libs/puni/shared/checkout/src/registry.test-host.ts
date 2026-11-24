@@ -13,9 +13,9 @@ export interface RegistryPair {
   readonly records: string;
 }
 
-/** A fresh {@link RegistryPair} in one directory `scratch` creates and removes. */
-export function makeRegistryPair(scratch: ScratchDirectoryOwner): RegistryPair {
-  const parent = scratch.createDirectory('puni-registry-');
+/** A fresh {@link RegistryPair} in one directory `scratchDirectories` creates and removes. */
+export function makeRegistryPair(scratchDirectories: ScratchDirectoryOwner): RegistryPair {
+  const parent = scratchDirectories.createDirectory('puni-registry-');
   const pair = { state: join(parent, 'demo'), records: join(parent, 'demo-records') };
   writeRepositoryFile(pair.state, 'puni.json', formatRegistry('system-state', fixtureRemotes));
   mkdirSync(pair.records);

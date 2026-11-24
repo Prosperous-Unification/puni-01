@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 
-const scratch = removeScratchDirectoriesAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const root = new URL('../', import.meta.url).pathname;
 
@@ -218,7 +218,7 @@ function readFormatStep(name: string): string {
  * for a package script.
  */
 function runFormatStep(step: string, exitCode: number) {
-  const bin = scratch.createDirectory('puni-format-step-');
+  const bin = scratchDirectories.createDirectory('puni-format-step-');
   writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
   const child = Bun.spawnSync(['sh', '-c', step], {
     env: { PATH: `${bin}:/usr/bin:/bin` },
