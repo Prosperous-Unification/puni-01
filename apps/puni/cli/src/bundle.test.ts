@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 /**
  * The file the `build` target writes: the app's own code in one file, its packages left to
@@ -29,11 +30,7 @@ describe('the built puni.js', () => {
     if (!existsSync(bundle)) {
       throw new Error(`${bundle} is missing; run bunx nx run puni-cli:build`);
     }
-    parent = mkdtempSync(join(tmpdir(), 'puni-bundle-'));
-  });
-
-  afterEach(() => {
-    rmSync(parent, { recursive: true, force: true });
+    parent = scratchDirectories.createDirectory('puni-bundle-');
   });
 
   test('prints its version', () => {

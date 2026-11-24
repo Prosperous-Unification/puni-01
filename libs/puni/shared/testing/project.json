@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["scope:shared", "type:testing"],
   "metadata": {
-    "readWhen": "writing a test that needs a memory host or a real repository pair",
+    "readWhen": "writing a test that needs a memory host, a real repository pair or a temporary directory",
     "readFirst": "src/index.ts"
   },
   "sourceRoot": "libs/puni/shared/testing/src",

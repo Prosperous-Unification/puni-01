@@ -1,15 +1,17 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { rejects } from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sourceDefectRemedies } from '@puni/shared-checkout';
 import { readInvocation as readProgramInvocation } from '@puni/shared-command';
-import { removeFixture } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { createPuniContainer, type PuniContainer } from './composition';
 import { type CommandSelection, runProcess, runPuni } from './main';
 import { makeStateRepository } from './repository.test-host';
 import { puniProgram } from './root-parser';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
   return readProgramInvocation(puniProgram, args, stdout);
@@ -55,18 +57,6 @@ function runIn(
   return { code, printed, errors };
 }
 
-const repositories: string[] = [];
-
-function makeRepository(): string {
-  const root = makeStateRepository();
-  repositories.push(root);
-  return root;
-}
-
-afterEach(() => {
-  for (const root of repositories.splice(0)) removeFixture(root);
-});
-
 describe('runPuni', () => {
   test.each(['navigator', 'dash'] as const)(
     'a bare %s prints its group help and exits 0',
@@ -108,7 +98,7 @@ describe('runPuni', () => {
   });
 
   test('wiki index partitions the live command tree by role, projects by scope', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     const written = ['app', 'burokrat', 'dash', 'index', 'navigator'];
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 0,
@@ -126,7 +116,7 @@ describe('runPuni', () => {
   });
 
   test('wiki index refuses defective inputs with one error line and exit 1', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'apps/one/project.json'), JSON.stringify({ name: 'one' }));
     expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
       code: 1,
@@ -136,7 +126,7 @@ describe('runPuni', () => {
   });
 
   test('check judges with the live command tree and exits 1 on findings', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     const run = runIn(root, ['burokrat', 'check']);
     expect(run.code).toBe(1);
     expect(run.printed).toContain('agents.exists AGENTS.md: is missing; fix: ');
@@ -144,7 +134,7 @@ describe('runPuni', () => {
   });
 
   test('check --project naming no project exits 2 with one error line', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
     expect(runIn(root, ['burokrat', 'check', '--project', 'nope'])).toEqual({
       code: 2,

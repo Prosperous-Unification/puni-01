@@ -23,8 +23,8 @@ own tests are the model.
   exit code of the entrypoint. Spawn with `CLAUDECODE` and `AGENT` set to `0`, because Bun changes
   its output under agents. `bundle.test.ts` does the same for the built bundle.
 - **A real repository pair**, when the behaviour needs a git that a memory host cannot model:
-  `writeProject`, `writeRepositoryFile` and `runGit` of `@puni/shared-testing`, removed with
-  `removeFixture`.
+  `writeProject`, `writeRepositoryFile` and `runGit` of `@puni/shared-testing`, in a directory
+  from `removeScratchDirectoriesAfterEach`, which removes only what it created.
 
 A port's contract is one suite every implementation passes: the `*-contract.test.ts` files of
 `libs/puni/shared/testing/src` run against both the node adapters and the memory host.

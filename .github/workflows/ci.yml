@@ -2,7 +2,8 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
+    tags: ['**']
   pull_request:
   merge_group:
 
@@ -10,7 +11,35 @@ permissions:
   contents: read
 
 jobs:
+  # Every push is public, so every push is judged for secrets, apart from the gate so that no gate
+  # failure or timeout skips it. A deleted ref pushes no commit and is skipped.
+  pushed-commits:
+    if: github.event_name == 'push' && !github.event.deleted
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile --production
+      - name: secrets in the pushed commits
+        env:
+          PUSHED_RANGE_BASE: ${{ github.event.before }}
+          PUSHED_RANGE_HEAD: ${{ github.event.after }}
+        # A new ref has no before: its range starts at main. Main and tags are merged history.
+        run: |
+          base="$PUSHED_RANGE_BASE"
+          if [ "$base" = 0000000000000000000000000000000000000000 ]; then base=origin/main; fi
+          git cat-file -e "$base^{commit}"
+          merged=
+          case "$GITHUB_REF" in refs/heads/main | refs/tags/*) merged=--merged ;; esac
+          bun run puni burokrat check --commits "$base..$PUSHED_RANGE_HEAD" $merged
+
   gate:
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -20,6 +49,13 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - name: secrets in the merge group
+        if: github.event_name == 'merge_group'
+        env:
+          MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          git cat-file -e "$MERGE_GROUP_BASE^{commit}"
+          bun run puni burokrat check --commits "$MERGE_GROUP_BASE..HEAD"
       - name: gate
         timeout-minutes: 2
         env:

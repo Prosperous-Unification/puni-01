@@ -7,6 +7,8 @@ import type {
   Git,
   GitBranches,
   GitChange,
+  GitCommit,
+  GitCommits,
   GitListing,
   GitMerge,
   GitMerges,
@@ -61,6 +63,11 @@ export interface MemoryHostOptions {
    * `<ancestry> <revisions>`, newest first; any other revision is unknown.
    */
   readonly merges?: Readonly<Record<string, Readonly<Record<string, readonly GitMerge[]>>>>;
+  /**
+   * The commits `git log` lists in each repository by its absolute root, then by
+   * `<base>..<head>`, oldest first; any other range names an unknown `head`.
+   */
+  readonly commits?: Readonly<Record<string, Readonly<Record<string, readonly GitCommit[]>>>>;
 }
 
 /** The instant a memory host's clock reads unless told otherwise. */
@@ -178,14 +185,14 @@ export function createMemoryFileSystem(
  * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, and
  * holds `staged` in its index, or fails every listing with `failure`. Each repository starts
  * with one worktree, its root on the branch `main`; added worktrees are directories of
- * `fileSystem`, their changes, unmerged branches and merges as `history` says.
+ * `fileSystem`, their changes, unmerged branches, merges and commits as `history` says.
  */
 export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
   staged: MemoryStaged = {},
   heads: Readonly<Record<string, string>> = {},
-  history: Pick<MemoryHostOptions, 'changed' | 'unmerged' | 'merges'> = {},
+  history: Pick<MemoryHostOptions, 'changed' | 'unmerged' | 'merges' | 'commits'> = {},
 ): Git {
   const repositories = new Map<string, { worktrees: GitWorktree[]; branches: Set<string> }>();
   const open = (root: string) => {
@@ -241,6 +248,11 @@ export function createMemoryGit(
       return merges === undefined
         ? { failure: `unknown revision ${revisions} in ${root}` }
         : { merges: [...merges] };
+    },
+    listCommits(root, base, head): GitCommits {
+      if (failure !== undefined) return { failure };
+      const commits = history.commits?.[root]?.[`${base}..${head}`];
+      return commits === undefined ? { unknown: head } : { commits: [...commits] };
     },
     readHeadCommit(root): GitText {
       const head = heads[root];

@@ -1,3 +1,10 @@
+/** A UUID of the shape a WBS API key carries. */
+const wbsKeyId = '1234abcd-12ab-34cd-56ef-1234567890ab';
+
+/** The prefixes of an age secret key and a WBS API key, built so that no file holds them. */
+const agePrefix = `${['AGE', 'SECRET', 'KEY'].join('-')}-1`;
+const wbsPrefix = `${['wbs', 'mk'].join('_')}_`;
+
 /**
  * One sample of each credential shape, built when the tests run so that no file of this
  * repository holds one and its own `secrets.plaintext` scan stays clean.
@@ -15,6 +22,8 @@ export const credentialSamples: readonly (readonly [string, string])[] = [
     [['ey', 'J'].join('') + 'hbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjMifQ', 'c2lnbmF0dXJlLXg'].join('.'),
   ],
   ['a Google API key', `${['AI', 'za'].join('')}${'Sy7'.repeat(11)}Qx`],
+  ['an age secret key', `# key: ${agePrefix}${'QZ7'.repeat(19)}X`],
+  ['a WBS API key', `WBS_KEY ${wbsPrefix}${wbsKeyId}.${'aB3_-'.repeat(8)}abc`],
   ['a credential assigned a literal', `${['pass', 'word'].join('')} = "${'hunter2'.repeat(3)}"`],
   ['a credential assigned a literal', `GITHUB_${['TOK', 'EN'].join('')}=${'Zq3'.repeat(6)}`],
   ['a credential assigned a literal', `"api${['Ke', 'y'].join('')}": "${'v4lue'.repeat(4)}"`],
@@ -47,6 +56,8 @@ export const credentialLookalikes: readonly string[] = [
   'http://localhost:8080/a@b',
   `${['ey', 'J'].join('')}hbGciOiJIUzI1NiJ9.only-two`,
   `${['AI', 'za'].join('')}TooShort`,
+  `${agePrefix}${'QZ7'.repeat(19)}`,
+  `${wbsPrefix}${wbsKeyId}.${'aB3_-'.repeat(8)}ab`,
 ];
 
 /** Configuration lines near {@link configuredSamples} that hold no credential. */

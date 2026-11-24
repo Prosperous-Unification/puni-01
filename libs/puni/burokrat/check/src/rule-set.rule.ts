@@ -115,14 +115,21 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
  */
 export const crossProjectRules: readonly Rule[] = [resolveLinks, judgeDocPaths, judgeDocSymbols];
 
-/** The rules `check --staged` applies to the staged files, as the git index holds them. */
-export const stagedRules: readonly Rule[] = [forbidPlaintextSecrets];
+/**
+ * The rules judging what a commit makes public, by the type of the repository judged: its
+ * credentials and its addresses. `check --staged` applies them to the staged files as the git
+ * index holds them, and `check --commits` to what each commit of a range adds and to its message.
+ */
+export const secretRules: Readonly<Record<RepositoryType, readonly Rule[]>> = {
+  'system-state': [forbidPlaintextSecrets, forbidStateAddresses],
+  'system-records': [forbidPlaintextSecrets, forbidRecordsAddresses],
+};
 
 /** Every rule `puni burokrat check` judges by, as the module supplies it. */
 export const checkRules: CheckRules = {
   sets: ruleSets,
   crossProject: crossProjectRules,
-  staged: stagedRules,
+  secrets: secretRules,
   agentsRulesDigests,
 };
 

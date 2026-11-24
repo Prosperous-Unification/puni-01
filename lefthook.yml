@@ -1,13 +1,4 @@
 pre-commit:
-  parallel: true
   commands:
-    format:
-      run: bun fmt --check {staged_files}
-      glob: '*.{ts,js,cjs,json,md,yml,yaml}'
-      exclude:
-        - CLAUDE.md
-    lint:
-      run: bunx eslint {staged_files}
-      glob: '*.{ts,js,cjs}'
     secrets:
       run: bun apps/puni/cli/src/entrypoint.ts burokrat check --staged

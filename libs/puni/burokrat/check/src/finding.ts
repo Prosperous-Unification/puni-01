@@ -84,14 +84,15 @@ export interface LeveledRule {
 }
 
 /**
- * The rules `check` judges by: each repository type's rule set, the rules of the scoped runs
- * `--cross-project-links` and `--staged`, and the digest of the `AGENTS.md` rules section from
+ * The rules `check` judges by: each repository type's rule set, the rules of the scoped run
+ * `--cross-project-links`, each type's secret rules, which `--staged` and `--commits` apply, and
+ * the digest of the `AGENTS.md` rules section from
  * each epoch at which it changed, from which the sets' `agents.rules` rules are made.
  */
 export interface CheckRules {
   readonly sets: Readonly<Record<RepositoryType, readonly LeveledRule[]>>;
   readonly crossProject: readonly Rule[];
-  readonly staged: readonly Rule[];
+  readonly secrets: Readonly<Record<RepositoryType, readonly Rule[]>>;
   readonly agentsRulesDigests: Readonly<Record<number, string>>;
 }
 
@@ -100,7 +101,7 @@ export function listEveryRule(rules: CheckRules): Rule[] {
   return [
     ...Object.values(rules.sets).flatMap((set) => set.map(({ rule }) => rule)),
     ...rules.crossProject,
-    ...rules.staged,
+    ...Object.values(rules.secrets).flat(),
   ];
 }
 

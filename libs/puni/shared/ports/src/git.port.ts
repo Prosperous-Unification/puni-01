@@ -31,6 +31,34 @@ export type GitMerges = { readonly merges: readonly GitMerge[] } | { readonly fa
 /** Which ancestors of a revision a history walk follows: every parent, or only the first. */
 export type GitAncestry = 'all' | 'first-parent';
 
+/** One line a commit adds: the file's path, its line number in that commit, and its text. */
+export interface GitAddedLine {
+  readonly path: string;
+  readonly line: number;
+  readonly text: string;
+}
+
+/**
+ * One commit of a range: its full hash, the short hash git abbreviates it to (for display only,
+ * since a ref may share its name), its whole message, and the lines it adds against its first
+ * parent, or against nothing for a commit with no parent.
+ */
+export interface GitCommit {
+  readonly fullHash: string;
+  readonly shortHash: string;
+  readonly message: string;
+  readonly addedLines: readonly GitAddedLine[];
+}
+
+/**
+ * The commits of a range, oldest first; or the revision of it that names no commit; or why git
+ * gave none.
+ */
+export type GitCommits =
+  | { readonly commits: readonly GitCommit[] }
+  | { readonly unknown: string }
+  | { readonly failure: string };
+
 /** A change git made, or why it made none. */
 export type GitChange = { readonly changed: true } | { readonly failure: string };
 
@@ -70,6 +98,13 @@ export interface Git {
    * a `failure`.
    */
   listMerges(root: string, revisions: string, ancestry: GitAncestry): GitMerges;
+  /**
+   * The commits `head` reaches and `base` does not in the repository at `root`, as
+   * `git log base..head` lists them, oldest first, each with the lines it adds, read as text
+   * whatever attributes the repository gives a path. A `base` or `head` naming no commit is
+   * `unknown`, naming it.
+   */
+  listCommits(root: string, base: string, head: string): GitCommits;
   /** Adds a worktree at `path`, checking out a new `branch` that starts at the commit `from`. */
   addWorktree(root: string, path: string, branch: string, from: string): GitChange;
   /**

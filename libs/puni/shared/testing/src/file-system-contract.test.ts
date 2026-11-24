@@ -1,19 +1,14 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
 import type { FileSystem } from '@puni/shared-ports';
 import { createMemoryFileSystem, type MemoryTree } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 /** The tree every implementation is judged over, by path below its root. */
 const tree: MemoryTree = {
@@ -37,15 +32,8 @@ interface Subject {
   readonly root: string;
 }
 
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
-
 function writeNodeTree(): Subject {
-  const root = mkdtempSync(join(tmpdir(), 'puni-file-system-'));
-  temporaries.push(root);
+  const root = scratchDirectories.createDirectory('puni-file-system-');
   for (const [path, node] of Object.entries(tree)) {
     const absolute = join(root, path);
     mkdirSync(dirname(absolute), { recursive: true });
@@ -74,7 +62,11 @@ const subjects: readonly (readonly [string, () => Subject])[] = [
 ];
 
 describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
-  const { fileSystem, root } = open();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = open());
+  });
   const at = (path: string) => join(root, path);
 
   test('stat describes a symlink by itself, or by its target when followed', () => {
@@ -186,7 +178,11 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
 });
 
 describe('the node adapter where the memory fake cannot follow', () => {
-  const { fileSystem, root } = writeNodeTree();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = writeNodeTree());
+  });
 
   test('the home directory is the one the operating system names', () => {
     expect(fileSystem.homeDirectory()).toBe(homedir());
@@ -201,7 +197,11 @@ describe('the node adapter where the memory fake cannot follow', () => {
 });
 
 describe('the node adapter on failures the memory fake cannot hold', () => {
-  const { fileSystem, root } = writeNodeTree();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = writeNodeTree());
+  });
 
   test('a name too long throws ENAMETOOLONG from stat and does not exist', () => {
     const long = join(root, 'n'.repeat(300));

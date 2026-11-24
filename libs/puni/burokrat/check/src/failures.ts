@@ -13,3 +13,16 @@ export const ScopeOptionsConflict = defineException({
   message: ({ options }: { options: readonly string[] }) =>
     `${options.join(' and ')} each choose what to judge; give at most one`,
 });
+
+/** A `--commits` value that is not one range `<base>..<head>`: a refused command line. */
+export const CommitRangeRefused = defineException({
+  tag: 'puni/burokrat-check/CommitRangeRefused',
+  message: ({ range }: { range: string }) =>
+    `--commits ${JSON.stringify(range)} is not a range <base>..<head> of two revisions`,
+});
+
+/** `--merged` without `--commits`, the range it describes: a refused command line. */
+export const MergedNeedsCommits = defineException({
+  tag: 'puni/burokrat-check/MergedNeedsCommits',
+  message: '--merged describes the range of --commits; give it with --commits',
+});

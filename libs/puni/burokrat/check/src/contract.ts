@@ -12,13 +12,17 @@ import type { RecordsCatalog } from '@puni/shared-records';
 
 /**
  * A parsed `check` request: the repository type to judge, and at most one choice of what in it to
- * judge: one project, only the references crossing projects, or only the staged files.
+ * judge: one project, only the references crossing projects, only the staged files, or what the
+ * commits of a range `<base>..<head>` add.
  */
 export interface CheckRequest {
   readonly repo?: RepositoryType | undefined;
   readonly project?: string | undefined;
   readonly crossProjectLinks?: boolean | undefined;
   readonly staged?: boolean | undefined;
+  readonly commits?: string | undefined;
+  /** Whether the `commits` range is merged history, which is never rewritten. */
+  readonly merged?: boolean | undefined;
 }
 
 /** The rules a check left unapplied: the repository's pin, and the ids of the later rules. */
@@ -49,8 +53,11 @@ export interface RepositoryCheck {
    * @throws ProjectUnknown when `project` names no project.
    * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository
    *   other than `system-state`.
-   * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks` and
-   *   `staged` is given.
+   * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks`, `staged`
+   *   and `commits` is given.
+   * @throws CommitRangeRefused when `commits` is not `<base>..<head>`.
+   * @throws MergedNeedsCommits when `merged` is given without `commits`.
+   * @throws RevisionUnknown when an end of `commits` names no commit.
    */
   check(request: CheckRequest, cwd: string): CheckVerdict;
 }

@@ -26,7 +26,12 @@ import {
   type Rule,
   type RuleReading,
 } from './finding';
-import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+import {
+  CommitRangeRefused,
+  MergedNeedsCommits,
+  ProjectScopeRefused,
+  ScopeOptionsConflict,
+} from './failures';
 
 /** What the check features need: the module's requirements and the rules it judges by. */
 type CheckServices = CheckRequirements & { readonly checkRules: CheckRules };
@@ -36,7 +41,13 @@ type CheckMode =
   | { readonly kind: 'whole' }
   | { readonly kind: 'project'; readonly name: string }
   | { readonly kind: 'cross-project' }
-  | { readonly kind: 'staged' };
+  | { readonly kind: 'staged' }
+  | {
+      readonly kind: 'commits';
+      readonly base: string;
+      readonly head: string;
+      readonly merged: boolean;
+    };
 
 /** A run: the scope it lists files in, the references it reaches, its rules and its label. */
 interface RunPlan {
@@ -48,6 +59,52 @@ interface RunPlan {
 
 const needsState = new Set<CheckMode['kind']>(['project', 'cross-project']);
 
+/**
+ * The ends of `range`, `<base>..<head>`: two non-empty revisions around one `..`, which no
+ * revision name holds; a symmetric `...`, and an end starting `^`, which would negate it, are
+ * refused.
+ *
+ * @throws CommitRangeRefused when `range` is not that.
+ */
+function parseCommitRange(range: string): { readonly base: string; readonly head: string } {
+  const [base, head, ...rest] = range.split('..');
+  if (
+    base === undefined ||
+    head === undefined ||
+    rest.length > 0 ||
+    base === '' ||
+    head === '' ||
+    head.startsWith('.') ||
+    base.startsWith('^') ||
+    head.startsWith('^')
+  ) {
+    throw new CommitRangeRefused({ details: { range } });
+  }
+  return { base, head };
+}
+
+/**
+ * `finding`, made in the commit `shortHash`, as the range check prints it: its path prefixed with
+ * the commit, its remedy saying that the commit is public and how to take it out: on a branch not
+ * yet merged, by rewriting the branch from `base`; in `merged` history, which is never rewritten,
+ * by a pull request removing it.
+ */
+function locateInCommit(
+  finding: Finding,
+  shortHash: string,
+  base: string,
+  merged: boolean,
+): Finding {
+  const removal = merged
+    ? `${shortHash} is merged, so it is public and stays in history: rotate any credential it exposed, and open a pull request that removes it`
+    : `${shortHash} is pushed, so it is public: rotate any credential it exposed, and before merge rewrite the branch so that no commit holds it (\`git rebase -i ${base}\`, edit ${shortHash}, \`git push --force-with-lease\`)`;
+  return {
+    ...finding,
+    path: `${shortHash}:${finding.path}`,
+    remedy: `${finding.remedy}; ${removal}`,
+  };
+}
+
 function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
   const modes: (readonly [string, CheckMode])[] = [];
   if (request.project !== undefined) {
@@ -57,6 +114,12 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
     modes.push(['--cross-project-links', { kind: 'cross-project' }]);
   }
   if (request.staged === true) modes.push(['--staged', { kind: 'staged' }]);
+  if (request.commits !== undefined) {
+    const range = parseCommitRange(request.commits);
+    modes.push(['--commits', { kind: 'commits', ...range, merged: request.merged === true }]);
+  } else if (request.merged === true) {
+    throw new MergedNeedsCommits();
+  }
   if (modes.length > 1) {
     throw new ScopeOptionsConflict({ details: { options: modes.map(([option]) => option) } });
   }
@@ -67,6 +130,11 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
     throw new ProjectScopeRefused({ details: { option, type } });
   }
   return mode;
+}
+
+/** `<n> rule` or `<n> rules`. */
+function countRules(rules: readonly Rule[]): string {
+  return `${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
 }
 
 /** `findings` sorted by their printed form. */
@@ -128,10 +196,12 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
  * rule. With `project`, only what that project of the `system-state` repository owns, by the
  * rules of its level, references reaching only paths the same project owns. With
  * `crossProjectLinks`, every file, by its cross-project rules, references reaching only paths
- * another project owns. So every
- * project check, the cross-project check and the `whole`-level rules together find what the
- * whole check finds. With `staged`, the staged files as the index holds them, by its staged
- * rules. Every run applies only the rules that apply at its `puni.json` pin, by
+ * another project owns. So every project check, the cross-project check and the `whole`-level
+ * rules together find what the whole check finds. With `staged`, the staged files as the index
+ * holds them, by the secret rules of the type. With `commits`, what each commit of the range adds
+ * and its message, judged apart, by the same rules, each finding's path `<commit>:<path>` and its
+ * remedy saying how to take the commit out: by rewriting the branch, or, with `merged`, by a pull
+ * request. Every run applies only the rules that apply at its `puni.json` pin, by
  * {@link appliesAt}, and names those that start after it. Findings are sorted by their printed
  * form.
  */
@@ -139,7 +209,12 @@ export function createRepositoryCheck(services: CheckServices): RepositoryCheck 
   const { checkoutRegistry, checkoutFiles, checkoutProjectScope, programSource, checkRules } =
     services;
   const latest = latestEpoch(listEveryRule(checkRules));
-  const plan = (mode: CheckMode, rules: readonly LeveledRule[], files: CheckoutFiles): RunPlan => {
+  const plan = (
+    mode: Exclude<CheckMode, { kind: 'commits' }>,
+    type: RepositoryType,
+    files: CheckoutFiles,
+  ): RunPlan => {
+    const rules = checkRules.sets[type];
     switch (mode.kind) {
       case 'whole':
         return {
@@ -168,7 +243,7 @@ export function createRepositoryCheck(services: CheckServices): RepositoryCheck 
         return {
           scope: repositoryScope,
           references: { kind: 'all' },
-          rules: checkRules.staged,
+          rules: checkRules.secrets[type],
           label: 'staged files, ',
         };
     }
@@ -185,13 +260,30 @@ export function createRepositoryCheck(services: CheckServices): RepositoryCheck 
         const { root, registry } = checkoutRegistry.resolve(found, type);
         requirePinReached(registry, latest, programSource.version);
         const pin = registry.rules;
+        const pinned = (all: readonly Rule[]): readonly Rule[] => {
+          const ids = listNewer(all, pin);
+          if (ids.length > 0) newer = { pin, ids };
+          return all.filter((rule) => appliesAt(rule, pin));
+        };
+        if (mode.kind === 'commits') {
+          const rules = pinned(checkRules.secrets[type]);
+          const commits = checkoutFiles.openCommits(root, mode.base, mode.head);
+          const count = `${String(commits.length)} ${commits.length === 1 ? 'commit' : 'commits'}`;
+          summary = `${type}, commits ${mode.base}..${mode.head}, ${count}, ${countRules(rules)}`;
+          return commits.flatMap(({ shortHash, files, message }) =>
+            [files, message]
+              .flatMap((view) => {
+                const reading = readWhole(services, view, registry);
+                return rules.flatMap((rule) => applyRule(rule, reading));
+              })
+              .map((finding) => locateInCommit(finding, shortHash, mode.base, mode.merged)),
+          );
+        }
         const files =
           mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
-        const { scope, references, rules: all, label } = plan(mode, checkRules.sets[type], files);
-        const rules = all.filter((rule) => appliesAt(rule, pin));
-        const ids = listNewer(all, pin);
-        if (ids.length > 0) newer = { pin, ids };
-        summary = `${type}, ${label}${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
+        const { scope, references, rules: all, label } = plan(mode, type, files);
+        const rules = pinned(all);
+        summary = `${type}, ${label}${countRules(rules)}`;
         const reading: RuleReading = { ...readWhole(services, files, registry), scope, references };
         return rules.flatMap((rule) => applyRule(rule, reading));
       });

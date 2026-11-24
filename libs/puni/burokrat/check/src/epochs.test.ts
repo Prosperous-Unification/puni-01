@@ -1,8 +1,8 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry } from '@puni/shared-checkout';
-import { fixtureRemotes, removeFixture } from '@puni/shared-testing';
+import { formatRegistry, repositoryScope } from '@puni/shared-checkout';
+import { fixtureRemotes, removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { digestRulesSection, rulesDigestAt } from './agents-rules';
 import {
   type CheckHost,
@@ -35,6 +35,17 @@ function finds(id: string, path: string, since: number, until?: number): Rule {
   };
 }
 
+/** A rule that finds `path` when the checkout shows it, as a staged or commit view does. */
+function shows(id: string, path: string, since: number): Rule {
+  return {
+    id,
+    since,
+    remedy: `remove ${path}`,
+    judge: ({ files }) =>
+      files.listVisible(repositoryScope).includes(path) ? [{ path, message: 'exists' }] : [],
+  };
+}
+
 /** The rules section the fixture's `AGENTS.md` must hold from epoch 2. */
 const secondRules = '## Rules\n\n1. **The second rules.** Stricter than the first.\n';
 
@@ -63,9 +74,13 @@ const laterRules: CheckRules = {
     ],
   },
   crossProject: [...base.crossProject, finds('demo.cross', 'later.md', 2)],
-  staged: [...base.staged, finds('demo.staged', 'later.md', 2)],
+  secrets: {
+    'system-state': [...base.secrets['system-state'], shows('demo.staged', 'later.md', 2)],
+    'system-records': [...base.secrets['system-records'], shows('demo.secret', 'AGENTS.md', 2)],
+  },
 };
 
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 let state = '';
 let records = '';
 let host: CheckHost;
@@ -79,13 +94,22 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  ({ state, records } = await makeRepositoryPair());
+  ({ state, records } = await makeRepositoryPair(scratchDirectories));
   writeFileSync(join(state, 'later.md'), 'breaks the later rules\n');
+  git(state, 'add', 'later.md');
+  git(records, 'add', 'AGENTS.md');
 });
 
-afterEach(() => {
-  removeFixture(state);
-});
+/** Runs git in `root` as a fixed author, returning what it printed, trimmed. */
+function git(root: string, ...args: string[]): string {
+  const child = Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+    cwd: root,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  if (child.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${child.stderr.toString()}`);
+  return child.stdout.toString().trim();
+}
 
 /** Pins the fixture at `rules`; from epoch 2 its `AGENTS.md` holds {@link secondRules}. */
 function pin(rules: number): void {
@@ -121,8 +145,14 @@ const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     '--staged',
     { staged: true },
-    `ok: system-state, staged files, 1 rule, no findings.\n${newer('demo.staged is')}`,
-    `${later('demo.staged')}\nfail: system-state, staged files, 2 rules, 1 finding.\n`,
+    `ok: system-state, staged files, 2 rules, no findings.\n${newer('demo.staged is')}`,
+    `${later('demo.staged')}\nfail: system-state, staged files, 3 rules, 1 finding.\n`,
+  ],
+  [
+    '--repo system-records --staged',
+    { repo: 'system-records', staged: true },
+    `ok: system-records, staged files, 2 rules, no findings.\n${newer('demo.secret is')}`,
+    'demo.secret AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, staged files, 3 rules, 1 finding.\n',
   ],
   [
     '--repo system-records',
@@ -140,6 +170,27 @@ describe('check at a rules pin', () => {
   test.each(modes)('%s at pin 2 applies them, with nothing newer', (_mode, request, _ok, out) => {
     pin(2);
     expect(host.runCheck(request, state)).toEqual({ code: 1, stdout: out, stderr: '' });
+  });
+
+  test('--commits at pin 1 applies no later secret rule and names it; at pin 2 it applies', () => {
+    git(state, 'reset', '-q', 'later.md');
+    git(state, 'add', '-A');
+    git(state, 'reset', '-q', 'later.md');
+    git(state, 'commit', '-q', '-m', 'base');
+    git(state, 'add', 'later.md');
+    git(state, 'commit', '-q', '-m', 'later');
+    const hash = git(state, 'rev-parse', '--short', 'HEAD');
+    expect(host.runCheck({ commits: 'HEAD~1..HEAD' }, state)).toEqual({
+      code: 0,
+      stdout: `ok: system-state, commits HEAD~1..HEAD, 1 commit, 2 rules, no findings.\n${newer('demo.staged is')}`,
+      stderr: '',
+    });
+    pin(2);
+    expect(host.runCheck({ commits: 'HEAD~1..HEAD' }, state)).toEqual({
+      code: 1,
+      stdout: `demo.staged ${hash}:later.md: exists; fix: remove later.md; ${hash} is pushed, so it is public: rotate any credential it exposed, and before merge rewrite the branch so that no commit holds it (\`git rebase -i HEAD~1\`, edit ${hash}, \`git push --force-with-lease\`)\nfail: system-state, commits HEAD~1..HEAD, 1 commit, 3 rules, 1 finding.\n`,
+      stderr: '',
+    });
   });
 
   test('a retired rule applies before its until and is neither applied nor newer after', () => {
@@ -243,7 +294,7 @@ describe('the production rules', () => {
     const lists: readonly (readonly Rule[])[] = [
       ...Object.values(checkRules.sets).map((set) => set.map(({ rule }) => rule)),
       checkRules.crossProject,
-      checkRules.staged,
+      ...Object.values(checkRules.secrets),
     ];
     for (const rules of lists) {
       for (let at = 1; at < latestRulesEpoch; at += 1) {
