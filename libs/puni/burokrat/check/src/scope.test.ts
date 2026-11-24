@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
 import { appendFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,7 +12,7 @@ import {
 import {
   FixtureGitFailed,
   fixtureRemotes,
-  removeFixture,
+  removeScratchDirectoriesAfterEach,
   runGit,
   writeProject,
   writeRepositoryFile,
@@ -23,6 +23,8 @@ import { formatFinding } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { makeRepository, regenerateIndex } from './repository-pair.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let root = '';
 let host: CheckHost;
@@ -45,7 +47,7 @@ function listProjects() {
 
 /** The fixture repository with a second project, `two`, and its index regenerated. */
 async function makeTwoProjectRepository(): Promise<string> {
-  const repository = await makeRepository();
+  const repository = await makeRepository(scratchDirectories);
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
@@ -56,10 +58,6 @@ async function makeTwoProjectRepository(): Promise<string> {
 
 beforeEach(async () => {
   root = await makeTwoProjectRepository();
-});
-
-afterEach(() => {
-  removeFixture(root);
 });
 
 interface Run {
@@ -187,8 +185,7 @@ describe('every project check, the cross-project check and the whole-level rules
   test('the seeds break every code rule', async () => {
     const broken = new Set<string>();
     for (const [, seed] of seeds) {
-      removeFixture(root);
-      root = await makeRepository();
+      root = await makeRepository(scratchDirectories);
       writeProject(root, 'libs/two', 'two', {
         readWhen: 'changing two',
         readFirst: 'src/index.ts',

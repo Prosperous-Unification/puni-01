@@ -1,9 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -45,7 +49,7 @@ describe('burokrat assess outcomes through the entrypoint, over a repository wit
   let logs = '';
 
   beforeEach(() => {
-    state = makeStateRepository();
+    state = makeStateRepository(scratchDirectories);
     runGit(state, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
     runGitAt(state, ['add', '-A'], '2026-11-22T08:00:00Z');
     runGitAt(state, ['commit', '-qm', 'state'], '2026-11-22T08:00:00Z');
@@ -59,18 +63,13 @@ describe('burokrat assess outcomes through the entrypoint, over a repository wit
       ['merge', '-q', '--no-ff', '-m', 'Merge pull request #7 from acme/feat-a', 'feat-a'],
       '2026-11-22T12:00:00Z',
     );
-    logs = mkdtempSync(join(tmpdir(), 'puni-assess-logs-'));
+    logs = scratchDirectories.createDirectory('puni-assess-logs-');
     writeRepositoryFile(
       logs,
       'claude/-demo/s1.jsonl',
       `${[claudeLine(10_000), claudeLine(100_000), '{"type":"assis'].join('\n')}\n`,
     );
     writeRepositoryFile(logs, 'codex/2026/11/22/rollout.jsonl', '');
-  });
-
-  afterEach(() => {
-    removeFixture(state);
-    rmSync(logs, { recursive: true, force: true });
   });
 
   const assess = (cwd: string, ...extra: string[]) =>

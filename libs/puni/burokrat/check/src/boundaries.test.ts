@@ -1,7 +1,7 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { removeFixture, writeRepositoryFile } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, dropRemedies, openCheckHost } from './check.test-host';
 import type { Rule } from './finding';
 import { listAnchors, slugHeading } from './links';
@@ -17,6 +17,8 @@ import {
   forbiddenAddress,
 } from './secrets.test-host';
 
+const scratchDirectories = removeScratchDirectoriesAfterEach();
+
 let root = '';
 let host: CheckHost;
 
@@ -29,11 +31,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository();
-});
-
-afterEach(() => {
-  removeFixture(root);
+  root = await makeRepository(scratchDirectories);
 });
 
 function judge(rule: Rule) {
