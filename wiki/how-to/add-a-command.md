@@ -52,7 +52,9 @@ Each seam as [writing a test](write-a-test.md) says:
 10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`, `listCommands`),
     `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
     which provides every command key).
-11. A spawned run of the leaf, for its real streams and exit code.
+11. A run of the leaf over real repositories, in process: its group's `*-commands.test.ts` in
+    `apps/puni/cli/src`, through `openInProcessPuni`. Spawn the entrypoint only for what a
+    process alone shows, as `ops-entrypoint.test.ts` does for a child attached to the terminal.
 
 Then `bun run fix`, which regenerates `wiki/index/` and formats, and `bun run gate`, which must
 exit 0.

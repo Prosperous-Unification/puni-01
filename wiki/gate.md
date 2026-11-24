@@ -12,8 +12,10 @@ keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool k
 per project, which across projects and which only on the whole repository. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
-`puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull
-request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) says.
+`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts: `checks` (sync,
+formatting, Burokrat, typecheck, build), `lint` and `test`.
+[ci.yml](../.github/workflows/ci.yml) runs each as its own job; its `gate` job, the check main
+requires, passes when all three do.
 
 ## When it fails
 
@@ -34,6 +36,8 @@ request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) 
   rotate a credential first, then do what the remedy says: rewrite an unmerged branch, or, with
   `--merged` (main and tags), open a pull request removing it. Locally it needs `NX_BASE`:
   `NX_BASE=origin/main bun run gate:affected`.
+- **A part over its time budget** in CI nears the cap that would kill it: make it faster or split
+  it; raising the cap is the owner's call.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of
   `eslint.config.js` refused the code and why.
