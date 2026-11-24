@@ -180,15 +180,94 @@ describe('puni-bur-check targets', () => {
   });
 });
 
+const workflowText = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+const workflow: unknown = Bun.YAML.parse(workflowText);
+
+/** The `run` script of the step named `name` in the job `job` of the CI workflow. */
+function readStepScript(job: string, name: string): string {
+  const steps = field(workflow, 'jobs', job, 'steps');
+  if (!Array.isArray(steps)) throw new Error(`the CI job ${job} has no steps`);
+  const script = field(
+    steps.find((step: unknown) => field(step, 'name') === name),
+    'run',
+  );
+  if (typeof script !== 'string') throw new Error(`the CI job ${job} has no step ${name}`);
+  return script;
+}
+
+/**
+ * Runs the time-budget step of a gate part `elapsed` seconds after its clock started, with `date`
+ * a stub, through `sh` as GitHub runs a step.
+ */
+function runTimeBudget(elapsed: number) {
+  const bin = mkdtempSync(join(tmpdir(), 'puni-time-budget-'));
+  try {
+    writeFileSync(join(bin, 'date'), `#!/bin/sh\necho ${String(1000 + elapsed)}\n`, {
+      mode: 0o755,
+    });
+    const child = Bun.spawnSync(['sh', '-e', '-c', readStepScript('part', 'time budget')], {
+      env: {
+        PATH: `${bin}:/usr/bin:/bin`,
+        GATE_STARTED: '1000',
+        GATE_MINUTES: String(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')),
+        GATE_PART: 'lint',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    return {
+      exitCode: child.exitCode,
+      stdout: child.stdout.toString(),
+      stderr: child.stderr.toString(),
+    };
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
+  }
+}
+
 describe('the CI workflow', () => {
   test('runs for pushes to main, pull requests and the merge queue', () => {
-    const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-    const triggers = /^on:\n((?: {2}.*\n)+)/mu.exec(workflow)?.[1] ?? '';
+    const triggers = /^on:\n((?: {2}.*\n)+)/mu.exec(workflowText)?.[1] ?? '';
     expect(triggers.match(/^ {2}[a-z_]+:/gmu)).toEqual([
       '  push:',
       '  pull_request:',
       '  merge_group:',
     ]);
+  });
+
+  test('a gate part within 60% of its cap passes; one past it fails, naming the part', () => {
+    expect(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')).toBe(2);
+    expect(runTimeBudget(72)).toEqual({
+      exitCode: 0,
+      stdout: 'gate part lint took 72 s of its 72 s budget\n',
+      stderr: '',
+    });
+    expect(runTimeBudget(73)).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'error: gate part lint took 73 s, over its budget of 72 s, 60% of its 2-minute cap; make the part faster or split it\n',
+    });
+  });
+
+  test('the gate job, the check main requires, waits for every part and fails unless all passed', () => {
+    expect(field(workflow, 'jobs', 'gate', 'needs')).toBe('part');
+    expect(field(workflow, 'jobs', 'gate', 'if')).toBe('always()');
+    const steps = field(workflow, 'jobs', 'gate', 'steps');
+    const script = field(Array.isArray(steps) ? steps[0] : undefined, 'run');
+    if (typeof script !== 'string') throw new Error('the CI job gate runs no script');
+    for (const [ending, exitCode] of [
+      ['success', 0],
+      ['failure', 1],
+      ['cancelled', 1],
+      ['skipped', 1],
+    ] as const) {
+      const child = Bun.spawnSync(['sh', '-e', '-c', script], {
+        env: { PATH: '/usr/bin:/bin', PARTS: ending },
+        stderr: 'pipe',
+      });
+      expect([ending, child.exitCode]).toEqual([ending, exitCode]);
+    }
   });
 });
 
@@ -199,8 +278,8 @@ describe('versions', () => {
   });
 });
 
-/** The scripts of the root `package.json` that run the gate. */
-const gateScripts = ['gate', 'gate:affected'];
+/** The scripts of the root `package.json` that run the gate's `bun fmt --check`. */
+const gateScripts = ['gate:checks', 'gate:checks:affected'];
 
 /** The `&&`-joined step of the `name` script that runs `bun fmt --check`. */
 function readFormatStep(name: string): string {

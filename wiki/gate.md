@@ -12,12 +12,16 @@ keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool k
 per project, which across projects and which only on the whole repository. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
-`puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull
-request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) says.
+`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts in turn:
+`checks` (sync, formatting, Burokrat, typecheck and build), `lint` and `test`. CI runs each part
+as its own job, the affected part on a pull request and the whole part on everything else, and
+fails a part that takes over 60% of its time cap, as [ci.yml](../.github/workflows/ci.yml) says.
+Its `gate` job, the check main requires, passes only when every part passed.
 
 ## When it fails
 
-`bun run gate` runs its steps in order and stops at the first that fails.
+`bun run gate` runs its steps in order and stops at the first that fails; in CI each part
+fails on its own.
 
 - **`nx sync:check`** names a stale or hand-made file under `wiki/index/`: run `bun run fix`. If
   the generator itself fails, fix what its message names; never remove it from `nx.json` as Nx
@@ -26,6 +30,8 @@ request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) 
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word
   budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`.
+- **A part over its time budget** in CI: the part still passed, but nears the cap that would kill
+  it with nothing to fix. Make it faster or split it; raising the cap is the owner's call.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of
   `eslint.config.js` refused the code and why.

@@ -1,18 +1,23 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
+import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
 
-const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
+let puni: InProcessPuni;
+
+beforeAll(() => {
+  puni = openInProcessPuni();
+});
+
+afterAll(async () => {
+  await puni.close();
+});
 
 function runPuni(args: readonly string[], cwd: string) {
-  const child = Bun.spawnSync([process.execPath, entrypoint, ...args], {
-    cwd,
-    env: { ...process.env, CLAUDECODE: '0', AGENT: '0' },
-  });
-  return { code: child.exitCode, stdout: child.stdout.toString(), stderr: child.stderr.toString() };
+  return puni.run(args, cwd);
 }
 
 /** Runs git in `root` with its commits dated `date`. */
@@ -40,7 +45,7 @@ function claudeLine(output: number): string {
   });
 }
 
-describe('burokrat assess outcomes through the entrypoint, over a repository with a merge', () => {
+describe('burokrat assess outcomes in process, over a repository with a merge', () => {
   let state = '';
   let logs = '';
 

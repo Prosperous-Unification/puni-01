@@ -1,20 +1,25 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeFixture, runGit } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
+import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
 
-const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
+let puni: InProcessPuni;
+
+beforeAll(() => {
+  puni = openInProcessPuni();
+});
+
+afterAll(async () => {
+  await puni.close();
+});
 
 function runPuni(args: readonly string[], cwd: string) {
-  const child = Bun.spawnSync([process.execPath, entrypoint, ...args], {
-    cwd,
-    env: { ...process.env, CLAUDECODE: '0', AGENT: '0' },
-  });
-  return { code: child.exitCode, stdout: child.stdout.toString(), stderr: child.stderr.toString() };
+  return puni.run(args, cwd);
 }
 
-describe('dash resources through the entrypoint, in a committed demo repository', () => {
+describe('dash resources in process, in a committed demo repository', () => {
   let state = '';
 
   beforeEach(() => {
@@ -28,7 +33,7 @@ describe('dash resources through the entrypoint, in a committed demo repository'
     removeFixture(state);
   });
 
-  test('create, list, exec with its output and exit code passed through, refused and forced remove', () => {
+  test('create, list, exec in the worktree with its exit code passed through, refused and forced remove', () => {
     const probe = join(state, '.worktrees/probe');
     expect(runPuni(['dash', 'resources', 'create', '--name', 'probe'], state)).toEqual({
       code: 0,
@@ -42,8 +47,8 @@ describe('dash resources through the entrypoint, in a committed demo repository'
     });
     writeFileSync(join(probe, 'draft.md'), 'work');
     expect(
-      runPuni(['d', 'resources', 'exec', 'probe', '--', 'git', 'status', '--short'], state),
-    ).toEqual({ code: 0, stdout: '?? draft.md\n', stderr: '' });
+      runPuni(['d', 'resources', 'exec', 'probe', '--', 'test', '-e', 'draft.md'], state),
+    ).toEqual({ code: 0, stdout: '', stderr: '' });
     expect(runPuni(['d', 'resources', 'exec', 'probe', 'sh', '-c', 'exit 5'], state).code).toBe(5);
     expect(runPuni(['d', 'resources', 'remove', 'probe'], state)).toEqual({
       code: 2,

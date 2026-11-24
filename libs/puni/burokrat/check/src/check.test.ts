@@ -803,6 +803,65 @@ describe('rule boundaries', () => {
     ]);
   });
 
+  test('ci.gate accepts a gate run as every bun run part its script is made of, and names a missing part', () => {
+    writeRepositoryFile(
+      root,
+      'package.json',
+      JSON.stringify({
+        name: 'demo',
+        scripts: {
+          gate: 'bun run gate:checks && bun run gate:test',
+          'gate:affected': 'bun run gate:checks:affected && bun run gate:test:affected',
+        },
+      }),
+    );
+    const runs = (scripts: readonly string[]) => {
+      writeRepositoryFile(
+        root,
+        '.github/workflows/ci.yml',
+        `jobs:\n  part:\n    steps:\n${scripts.map((script) => `      - run: bun run ${script}\n`).join('')}`,
+      );
+      return judge(requireCiGate);
+    };
+    expect(
+      runs(['gate:checks', 'gate:test', 'gate:checks:affected', 'gate:test:affected']),
+    ).toEqual([]);
+    expect(runs(['gate:checks', 'gate:checks:affected', 'gate:test:affected'])).toEqual([
+      {
+        rule: 'ci.gate',
+        path: '.github/workflows/ci.yml',
+        message: 'does not run bun run gate, nor its parts bun run gate:test',
+      },
+    ]);
+    expect(runs(['gate:test:affected-later'])).toEqual([
+      { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'does not run bun run gate' },
+      {
+        rule: 'ci.gate',
+        path: '.github/workflows/ci.yml',
+        message: 'does not run bun run gate:affected',
+      },
+    ]);
+  });
+
+  test('ci.gate takes no parts from a gate script with any step but bun run', () => {
+    writeRepositoryFile(
+      root,
+      'package.json',
+      JSON.stringify({
+        name: 'demo',
+        scripts: { gate: 'bun run gate:checks && nx run-many -t test' },
+      }),
+    );
+    writeRepositoryFile(
+      root,
+      '.github/workflows/ci.yml',
+      'jobs:\n  part:\n    steps:\n      - run: bun run gate:checks\n      - run: bun run gate:affected\n',
+    );
+    expect(judge(requireCiGate)).toEqual([
+      { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'does not run bun run gate' },
+    ]);
+  });
+
   test('the rules digest is FNV-1a 64 of the whitespace-normalised text', () => {
     expect(['', 'a', ' \n a\n'].map(digestRulesSection)).toEqual([
       'cbf29ce484222325',

@@ -14,8 +14,14 @@
     "typecheck": "nx run-many -t typecheck",
     "format": "bun fmt",
     "format:check": "bun fmt --check",
-    "gate": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t lint typecheck test build",
-    "gate:affected": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && nx affected -t puni-bur-check puni-bur-links && nx affected -t lint typecheck test build",
+    "gate": "bun run gate:checks && bun run gate:lint && bun run gate:test",
+    "gate:affected": "bun run gate:checks:affected && bun run gate:lint:affected && bun run gate:test:affected",
+    "gate:checks": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t typecheck build",
+    "gate:checks:affected": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && nx affected -t puni-bur-check puni-bur-links && nx affected -t typecheck build",
+    "gate:lint": "nx run-many -t lint",
+    "gate:lint:affected": "nx affected -t lint",
+    "gate:test": "nx run-many -t test",
+    "gate:test:affected": "nx affected -t test",
     "fix": "nx sync && bun fmt"
   },
   "dependencies": {
