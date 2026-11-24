@@ -32,3 +32,15 @@ export const BodyFileMissing = defineException({
   tag: 'puni/shared-records/BodyFileMissing',
   message: ({ path }: { path: string }) => `the body file ${path} does not exist`,
 });
+
+/** A draft's body does not satisfy the schema for its kind. */
+export const RecordBodyRefused = defineException({
+  tag: 'puni/shared-records/RecordBodyRefused',
+  message: ({ problem }: { problem: string }) => `body ${problem}`,
+});
+
+/** A missing, unreadable or malformed assessment criteria map. */
+export const ReviewTemplateFailed = defineException({
+  tag: 'puni/shared-records/ReviewTemplateFailed',
+  message: ({ reason }: { readonly reason: string }) => reason,
+});

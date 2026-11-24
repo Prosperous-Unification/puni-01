@@ -1,19 +1,24 @@
 import {
   closeSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
+import { dirname, isAbsolute, join } from 'node:path';
 import type { DirectoryEntry, FileSystem, PathKind } from '@puni/shared-ports';
+import { PathNotAbsolute } from './failures';
 
 interface Described {
   isFile(): boolean;
@@ -71,7 +76,32 @@ function* readLines(path: string): Generator<string> {
   }
 }
 
-/** The {@link FileSystem} of this machine, through `node:fs` and `node:os`. */
+/**
+ * `path`, which a method changing the file system is given.
+ *
+ * @throws PathNotAbsolute when it is relative.
+ */
+function requireAbsolute(path: string): string {
+  if (!isAbsolute(path)) throw new PathNotAbsolute({ details: { path } });
+  return path;
+}
+
+/** Publishes a complete file from a private temporary directory without replacing the target. */
+function writeNew(path: string, text: string): void {
+  const staging = mkdtempSync(join(dirname(requireAbsolute(path)), '.puni-write-'));
+  const temporary = join(staging, 'text');
+  try {
+    writeFileSync(temporary, text, { mode: 0o600 });
+    linkSync(temporary, path);
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The {@link FileSystem} of this machine, through `node:fs` and `node:os`. A relative path to a
+ * method that changes the file system throws `PathNotAbsolute`.
+ */
 export function createNodeFileSystem(): FileSystem {
   return {
     readText: (path) => readFileSync(path, 'utf8'),
@@ -94,13 +124,14 @@ export function createNodeFileSystem(): FileSystem {
         kind: kindOf(entry),
       })),
     write(path, text) {
-      writeFileSync(path, text);
+      writeFileSync(requireAbsolute(path), text);
     },
+    writeNew,
     makeDirectory(path) {
-      mkdirSync(path, { recursive: true });
+      mkdirSync(requireAbsolute(path), { recursive: true });
     },
     makeLink(path, target) {
-      symlinkSync(target, path);
+      symlinkSync(target, requireAbsolute(path));
     },
   };
 }

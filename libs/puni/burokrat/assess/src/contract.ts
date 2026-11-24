@@ -1,4 +1,5 @@
 import type { RepositoryRegistryResource } from '@puni/shared-checkout';
+import type { ReviewTemplates } from '@puni/shared-records';
 import type { Command } from '@puni/shared-command';
 
 /**
@@ -234,10 +235,18 @@ export interface OutcomeAssessment {
  * its resources name in their own requirements because only a resource sees the ports.
  */
 export interface AssessRequirements {
+  readonly reviewTemplates: ReviewTemplates;
   readonly checkoutRegistry: RepositoryRegistryResource;
+}
+
+/** The template list command, optionally printed as JSON. */
+export interface TemplatesRequest {
+  readonly kind: 'assess templates';
+  readonly json: boolean;
 }
 
 /** What the assess module exports. */
 export interface AssessExports {
+  readonly burokratAssessTemplatesCommand: Command<TemplatesRequest>;
   readonly burokratAssessOutcomesCommand: Command<OutcomesRequest>;
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import { removeScratchDirectoriesAfterEach } from './scratch-directories';
@@ -60,5 +60,62 @@ describe('createBunGit over a directory on disk', () => {
     expect(git.readStagedText(root, 'a.md')).toEqual({ text: 'staged' });
     const unstaged = git.readStagedText(root, 'b.md');
     expect('failure' in unstaged && unstaged.failure).toStartWith('git cat-file exited 128: ');
+  });
+
+  /** Runs git in the scratch root with a fixed identity, returning its exit code. */
+  const runIn = (...args: string[]) =>
+    Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: root })
+      .exitCode;
+  const commitHash = '0123456789abcdef0123456789abcdef01234567';
+
+  test('lists index entries by the kind their mode names, a symlink with its target', () => {
+    runIn('init', '-q');
+    writeFileSync(join(root, 'a.md'), 'a');
+    writeFileSync(join(root, 'run.sh'), '#!/bin/sh\n');
+    chmodSync(join(root, 'run.sh'), 0o755);
+    symlinkSync('a.md', join(root, 'link'));
+    symlinkSync('/nowhere/at/all', join(root, 'far'));
+    writeFileSync(join(root, 'untracked.md'), 'u');
+    runIn('add', 'a.md', 'run.sh', 'link', 'far');
+    runIn('update-index', '--add', '--cacheinfo', `160000,${commitHash},vendor/sub`);
+    expect(git.listIndexEntries(root)).toEqual({
+      entries: [
+        { path: 'a.md', kind: 'file' },
+        { path: 'far', kind: 'symlink', target: '/nowhere/at/all' },
+        { path: 'link', kind: 'symlink', target: 'a.md' },
+        { path: 'run.sh', kind: 'file' },
+        { path: 'vendor/sub', kind: 'gitlink' },
+      ],
+    });
+  });
+
+  test('index entries of an index holding unmerged entries are a failure naming them', () => {
+    runIn('init', '-q', '-b', 'main');
+    writeFileSync(join(root, 'a.md'), 'base\n');
+    runIn('add', '-A');
+    runIn('commit', '-qm', 'base');
+    runIn('switch', '-qc', 'side');
+    writeFileSync(join(root, 'a.md'), 'side\n');
+    runIn('commit', '-qam', 'side');
+    runIn('switch', '-q', 'main');
+    writeFileSync(join(root, 'a.md'), 'main\n');
+    runIn('commit', '-qam', 'main');
+    expect(runIn('merge', '-q', 'side')).not.toBe(0);
+    expect(git.listIndexEntries(root)).toEqual({
+      failure: 'the git index has unmerged entries: a.md',
+    });
+  });
+
+  test('staged files are the new paths of files and symlinks, never a gitlink', () => {
+    runIn('init', '-q');
+    writeFileSync(join(root, 'old.md'), 'a long enough text for git to see a rename\n');
+    runIn('add', '-A');
+    runIn('commit', '-qm', 'base');
+    renameSync(join(root, 'old.md'), join(root, 'new.md'));
+    symlinkSync('new.md', join(root, 'link'));
+    runIn('add', '-A');
+    runIn('update-index', '--add', '--cacheinfo', `160000,${commitHash},vendor/sub`);
+    expect(git.listStagedFiles(root)).toEqual({ files: ['link', 'new.md'] });
+    expect(git.readStagedText(root, 'link')).toEqual({ text: 'new.md' });
   });
 });

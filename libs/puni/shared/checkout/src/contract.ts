@@ -1,9 +1,9 @@
-import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
+import type { FileSystem, Git, GitIndexEntry, PathKind } from '@puni/shared-ports';
 import type { ProjectReading } from './map-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
-export type { FileSystem, Git, GitListing, PathKind } from '@puni/shared-ports';
+export type { FileSystem, Git, GitIndexEntry, GitListing, PathKind } from '@puni/shared-ports';
 
 /** What the checkout module needs from its host. */
 export interface CheckoutRequirements {
@@ -79,11 +79,24 @@ export interface CheckoutFiles {
   /** Every path git shows that exists in the working tree, of whatever kind. */
   listVisibleEntries(): readonly CheckoutEntry[];
   /**
+   * The entries of the git index that `scope` owns, each by the kind its mode names, whatever the
+   * working tree holds there: the one listing that shows a symlink's target as git records it,
+   * and a gitlink at all. A staged or commit view lists none, since its visible files already
+   * read each symlink as its target text.
+   */
+  listIndexEntries(scope: CheckScope): readonly GitIndexEntry[];
+  /**
    * Writes `text` at `path`, creating its directories, replacing a file there. A system-state
    * checkout writes only `puni.json` and `AGENTS.md`; a records checkout only directly inside a
    * kind directory. Any other path is refused with `CheckoutPathRefused`.
    */
   write(path: string, text: string): void;
+  /**
+   * Publishes a new file in the checkout's write area, creating its directories. Returns
+   * `exists` when the destination is already occupied, and refuses a non-directory ancestor
+   * (including symlinks) or a path outside the write area with `CheckoutPathRefused`.
+   */
+  createFile(path: string, text: string): 'created' | 'exists';
 }
 
 /**

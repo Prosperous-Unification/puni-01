@@ -7,9 +7,15 @@ import { type CommandContainer, runPuni } from './main';
 const exportedKeys = [
   'burokratAdrAddCommand',
   'burokratAssessOutcomesCommand',
+  'burokratAssessTemplatesCommand',
   'burokratCheckCommand',
   'burokratRepoInitCommand',
   'burokratRepoUpgradeCommand',
+  'burokratReviewFileCommand',
+  'burokratReviewNextCommand',
+  'burokratReviewStartCommand',
+  'burokratReviewSubmitCommand',
+  'burokratSkillsInstallCommand',
   'burokratWikiMapCommand',
   'checkoutFiles',
   'checkoutProjectScope',
@@ -34,6 +40,8 @@ const exportedKeys = [
   'projectSources',
   'recordFiling',
   'recordsCatalog',
+  'reviewTemplates',
+  'workingTreeDigest',
 ] as const;
 
 const track = closeAfterEach();

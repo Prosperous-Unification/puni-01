@@ -125,6 +125,17 @@ const seeds: readonly (readonly [string, () => void])[] = [
         `---\ntitle: Long\nread-when: reading long\n---\n\n${'word '.repeat(pageWordBudget)}\n`,
       );
       rmSync(join(root, '.github'), { recursive: true });
+      symlinkSync('/nowhere/absolute', join(root, 'libs/two/far'));
+      symlinkSync('../../../outside', join(root, 'apps/one/out'));
+      symlinkSync('gone.md', join(root, 'apps/one/near'));
+      symlinkSync('../../apps/one/gone.md', join(root, 'libs/two/across'));
+      runGit(root, ['add', 'libs/two/far', 'apps/one/out', 'apps/one/near', 'libs/two/across']);
+      runGit(root, [
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `160000,${'1'.repeat(40)},libs/two/vendor`,
+      ]);
     },
   ],
   [
@@ -148,9 +159,13 @@ const seeds: readonly (readonly [string, () => void])[] = [
     },
   ],
   [
-    'AGENTS.md giving no records location',
+    'AGENTS.md giving no records location, with a section puni does not declare',
     () => {
-      writeRepositoryFile(root, 'AGENTS.md', 'Start at `puni burokrat wiki map`.\n');
+      writeRepositoryFile(
+        root,
+        'AGENTS.md',
+        'Start at `puni burokrat wiki map`.\n\n## Exceptions\n\nNone.\n',
+      );
     },
   ],
 ];
@@ -185,6 +200,7 @@ describe('every project check and the cross-project check are the whole check', 
     expect([...broken].sort()).toEqual(
       [
         'agents.exists',
+        'agents.headings',
         'agents.index',
         'claude.symlink',
         'agents.words',
@@ -211,6 +227,7 @@ describe('every project check and the cross-project check are the whole check', 
         'agents.rules',
         'secrets.addresses',
         'code.header',
+        'entries.kind',
       ].sort(),
     );
     expect(broken).toEqual(new Set(codeRules.map(({ rule }) => rule.id)));
