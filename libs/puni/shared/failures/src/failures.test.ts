@@ -18,6 +18,8 @@ const sample = {
   tokenKey: ['tok', 'en'].join(''),
   contextToken: 'Kp7'.repeat(6),
   githubToken: `${['gh', 'p_'].join('')}${'a1B2'.repeat(9)}`,
+  ageKey: `${['AGE', 'SECRET', 'KEY'].join('-')}-1${'QZ7'.repeat(19)}X`,
+  wbsKey: `${['wbs', 'mk'].join('_')}_1234abcd-12ab-34cd-56ef-1234567890ab.${'aB3_-'.repeat(8)}abc`,
 };
 
 describe('findDefect', () => {
@@ -86,6 +88,18 @@ describe('reportFailure', () => {
       () => new Error('x'),
       sample.contextToken,
       { note: `${sample.tokenKey}: ${sample.contextToken}` },
+    ],
+    [
+      'an age secret key in an error message',
+      () => new Error(`cannot decrypt with ${sample.ageKey}`),
+      sample.ageKey,
+      {},
+    ],
+    [
+      'a WBS API key in a property',
+      () => ({ header: `X-Api ${sample.wbsKey}` }),
+      sample.wbsKey,
+      {},
     ],
     [
       'a GitHub token in a cause',

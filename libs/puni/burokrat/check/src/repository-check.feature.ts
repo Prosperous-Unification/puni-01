@@ -16,15 +16,16 @@ import {
   type ReferenceReach,
   type Rule,
 } from './finding';
-import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
-import { crossProjectRules, type ruleSets, stagedRules } from './rule-set.rule';
+import { CommitRangeRefused, ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+import { crossProjectRules, type ruleSets, secretRules } from './rule-set.rule';
 
 /** What one run judges, chosen by the request's options. */
 type CheckMode =
   | { readonly kind: 'whole' }
   | { readonly kind: 'project'; readonly name: string }
   | { readonly kind: 'cross-project' }
-  | { readonly kind: 'staged' };
+  | { readonly kind: 'staged' }
+  | { readonly kind: 'commits'; readonly base: string; readonly head: string };
 
 /** A run: the scope it lists files in, the references it reaches, its rules and its label. */
 interface RunPlan {
@@ -36,6 +37,38 @@ interface RunPlan {
 
 const needsState = new Set<CheckMode['kind']>(['project', 'cross-project']);
 
+/**
+ * The ends of `range`, `<base>..<head>`: two non-empty revisions around one `..`, which no
+ * revision name holds; a symmetric `...` is refused.
+ *
+ * @throws CommitRangeRefused when `range` is not that.
+ */
+function parseCommitRange(range: string): { readonly base: string; readonly head: string } {
+  const [base, head, ...rest] = range.split('..');
+  if (
+    base === undefined ||
+    head === undefined ||
+    rest.length > 0 ||
+    base === '' ||
+    head === '' ||
+    head.startsWith('.')
+  ) {
+    throw new CommitRangeRefused({ details: { range } });
+  }
+  return { base, head };
+}
+
+/**
+ * `finding`, made in what `commit` adds, as the range check prints it: its path prefixed with the
+ * commit, its remedy saying that the commit is public and how to take it out of the branch.
+ */
+function locateInCommit(finding: Finding, commit: string, base: string): Finding {
+  return {
+    ...finding,
+    path: `${commit}:${finding.path}`,
+    remedy: `${finding.remedy}; ${commit} is pushed, so it is public: rotate any credential it exposed, and before merge rewrite the branch so that no commit holds it (\`git rebase -i ${base}\`, edit ${commit}, \`git push --force-with-lease\`)`,
+  };
+}
 function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
   const modes: (readonly [string, CheckMode])[] = [];
   if (request.project !== undefined) {
@@ -45,6 +78,9 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
     modes.push(['--cross-project-links', { kind: 'cross-project' }]);
   }
   if (request.staged === true) modes.push(['--staged', { kind: 'staged' }]);
+  if (request.commits !== undefined) {
+    modes.push(['--commits', { kind: 'commits', ...parseCommitRange(request.commits) }]);
+  }
   if (modes.length > 1) {
     throw new ScopeOptionsConflict({ details: { options: modes.map(([option]) => option) } });
   }
@@ -55,6 +91,11 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
     throw new ProjectScopeRefused({ details: { option, type } });
   }
   return mode;
+}
+
+/** `<n> rule` or `<n> rules`. */
+function countRules(rules: readonly Rule[]): string {
+  return `${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
 }
 
 /** The rules a project scope runs: repository- and project-level at the root, else project-level. */
@@ -72,8 +113,10 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
  * rules of its level, references reaching only paths the same project owns. With `crossProjectLinks`, every file, by
  * {@link crossProjectRules}, references reaching only paths another project owns. So every
  * project check, the cross-project check and the `whole`-level rules together find what the
- * whole check finds. With `staged`, the staged files as the index holds them, by
- * {@link stagedRules}. Findings are sorted by their printed form.
+ * whole check finds. With `staged`, the staged files as the index holds them, by the
+ * {@link secretRules} of the type. With `commits`, what each commit of the range adds and its
+ * message, by the same rules, each finding's path `<commit>:<path>` and its remedy saying how to
+ * take the commit out of the branch. Findings are sorted by their printed form.
  */
 export function createRepositoryCheck({
   checkoutRegistry,
@@ -84,7 +127,12 @@ export function createRepositoryCheck({
   commandCatalog,
   checkRuleSets,
 }: CheckRequirements & { readonly checkRuleSets: typeof ruleSets }): RepositoryCheck {
-  const plan = (mode: CheckMode, rules: readonly LeveledRule[], files: CheckoutFiles): RunPlan => {
+  const plan = (
+    mode: Exclude<CheckMode, { kind: 'commits' }>,
+    type: RepositoryType,
+    files: CheckoutFiles,
+  ): RunPlan => {
+    const rules = checkRuleSets[type];
     switch (mode.kind) {
       case 'whole':
         return {
@@ -113,7 +161,7 @@ export function createRepositoryCheck({
         return {
           scope: repositoryScope,
           references: { kind: 'all' },
-          rules: stagedRules,
+          rules: secretRules[type],
           label: 'staged files, ',
         };
     }
@@ -128,20 +176,35 @@ export function createRepositoryCheck({
         const mode = selectMode(request, type);
         summary = type;
         const { root, registry } = checkoutRegistry.resolve(found, type);
-        const files =
-          mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
-        const { scope, references, rules, label } = plan(mode, checkRuleSets[type], files);
-        summary = `${type}, ${label}${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
         const reading = {
-          files,
           registry,
           commands: commandCatalog.list(),
-          scope,
-          references,
+          references: { kind: 'all' } as const,
+          scope: repositoryScope,
           wikiIndex: checkoutWikiIndex,
           records: recordsCatalog,
         };
-        findings = rules.flatMap((rule) => applyRule(rule, reading));
+        if (mode.kind === 'commits') {
+          const rules = secretRules[type];
+          const commits = checkoutFiles.openCommits(root, mode.base, mode.head);
+          const count = `${String(commits.length)} ${commits.length === 1 ? 'commit' : 'commits'}`;
+          summary = `${type}, commits ${mode.base}..${mode.head}, ${count}, ${countRules(rules)}`;
+          findings = commits.flatMap(({ commit, files }) =>
+            rules
+              .flatMap((rule) => applyRule(rule, { ...reading, files }))
+              .map((finding) => locateInCommit(finding, commit, mode.base)),
+          );
+        } else {
+          const files =
+            mode.kind === 'staged'
+              ? checkoutFiles.openStaged(root)
+              : checkoutFiles.open(root, type);
+          const { scope, references, rules, label } = plan(mode, type, files);
+          summary = `${type}, ${label}${countRules(rules)}`;
+          findings = rules.flatMap((rule) =>
+            applyRule(rule, { ...reading, files, scope, references }),
+          );
+        }
       } catch (caught) {
         const defect = findCheckoutDefect(caught);
         if (defect === undefined) throw caught;

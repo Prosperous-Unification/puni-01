@@ -13,7 +13,8 @@ const longValue = '16,';
 /**
  * Text shaped like a credential wherever it appears: a private key block, an AWS access key id,
  * a GitHub token, an `sk-` or Slack token, a bearer token, a URL whose user-info holds a
- * password, a JSON web token, a Google API key, or a password, secret, token or API key assigned
+ * password, a JSON web token, a Google API key, an age secret key, a WBS API key (`wbs_mk_`, a
+ * UUID, `.`, then 43 base64url characters), or a password, secret, token or API key assigned
  * a literal of 16 or more characters (quoted after `=` or `:`, or bare after `=` up to the end of
  * the word). Placeholders (`$NAME`, `<name>`, `${{ … }}`) are no credential.
  */
@@ -39,6 +40,12 @@ export const credentialShapes: readonly CredentialShape[] = [
     pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/u,
   },
   { name: 'a Google API key', pattern: /\bAIza[0-9A-Za-z_-]{35}/u },
+  { name: 'an age secret key', pattern: /\bAGE-SECRET-KEY-1[0-9A-Z]{58}/u },
+  {
+    name: 'a WBS API key',
+    pattern:
+      /\bwbs_mk_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_-]{43}/u,
+  },
   {
     name: 'a credential assigned a literal',
     pattern: new RegExp(

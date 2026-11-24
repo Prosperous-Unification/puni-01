@@ -22,7 +22,7 @@ import {
   openCheckHost,
 } from './check.test-host';
 import type { Rule } from './finding';
-import { codeRules, crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
+import { codeRules, crossProjectRules, ruleSets, secretRules } from './rule-set.rule';
 import {
   agentsExists,
   agentsNamesIndex,
@@ -695,7 +695,7 @@ describe('each rule finds its breach', () => {
     const everyRule = [
       ...Object.values(ruleSets).flatMap((rules) => rules.map(({ rule }) => rule)),
       ...crossProjectRules,
-      ...stagedRules,
+      ...Object.values(secretRules).flat(),
     ];
     for (const rule of everyRule) {
       expect([rule.id, /^[a-z]+\.[a-z-]+$/u.test(rule.id)]).toEqual([rule.id, true]);

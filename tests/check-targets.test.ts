@@ -230,13 +230,31 @@ function runFormatStep(step: string, exitCode: number) {
 }
 
 /** Formatting is Bun's own `bun fmt`; Prettier is not a dependency. */
-test('prettier is not a dependency, and the pre-commit hook formats with bun fmt', () => {
+test('prettier is not a dependency', () => {
   const manifest = readJson('package.json');
   expect(field(manifest, 'devDependencies', 'prettier')).toBeUndefined();
   expect(field(manifest, 'dependencies', 'prettier')).toBeUndefined();
-  expect(readFileSync(join(root, 'lefthook.yml'), 'utf8')).toContain(
-    'bun fmt --check {staged_files}',
-  );
+});
+
+/**
+ * The pre-commit hook runs only the one check whose breach cannot be undone once pushed: the
+ * staged secrets check. CI judges everything else, the commits of a pull request included.
+ */
+test('the pre-commit hook runs only the staged secrets check', () => {
+  const hooks = Bun.YAML.parse(readFileSync(join(root, 'lefthook.yml'), 'utf8'));
+  expect(hooks).toEqual({
+    'pre-commit': {
+      commands: {
+        secrets: { run: 'bun apps/puni/cli/src/entrypoint.ts burokrat check --staged' },
+      },
+    },
+  });
+});
+
+test('gate:affected judges every commit of the pull request for secrets', () => {
+  const script = field(readJson('package.json'), 'scripts', 'gate:affected');
+  if (typeof script !== 'string') throw new Error('package.json has no script gate:affected');
+  expect(script.split(' && ')).toContain('bun run puni burokrat check --commits "$NX_BASE..HEAD"');
 });
 
 describe('the gate format step', () => {

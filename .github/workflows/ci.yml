@@ -24,7 +24,17 @@ jobs:
         timeout-minutes: 2
         env:
           NX_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSHED_BEFORE: ${{ github.event.before }}
+          PUSHED_AFTER: ${{ github.event.after }}
+        # A push to main is judged whole, then every commit it brought; the full history fetched
+        # above holds the range. A merge group holds pull request commits already judged so.
         run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            bun run gate
+            git cat-file -e "$PUSHED_BEFORE^{commit}"
+            bun run puni burokrat check --commits "$PUSHED_BEFORE..$PUSHED_AFTER"
+            exit
+          fi
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
             bun run gate
             exit

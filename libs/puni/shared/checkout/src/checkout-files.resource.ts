@@ -3,6 +3,7 @@ import { compareBytes } from './byte-order';
 import type {
   CheckoutFiles,
   CheckoutFilesResource,
+  CommitCheckout,
   FileSystem,
   Git,
   GitListing,
@@ -13,11 +14,13 @@ import {
   CheckoutPathRefused,
   CheckoutRootRefused,
   CheckoutUnlistable,
+  CommitsUnlistable,
   HeadCommitUnreadable,
+  RevisionUnknown,
   StagedTextUnreadable,
 } from './failures';
 import { ownsPath } from './ownership';
-import { leavesRoot } from './paths';
+import { commitMessagePath, leavesRoot } from './paths';
 import { recordDirectories } from './record-directories';
 import type { RepositoryType } from './registry';
 import { indexDirectory } from './render-index';
@@ -174,6 +177,58 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
 }
 
 /**
+ * The commits of `base..head` in the checkout at `root`, each as its view, as
+ * {@link CheckoutFilesResource.openCommits} says.
+ */
+function openCommits(
+  root: string,
+  base: string,
+  head: string,
+  fileSystem: FileSystem,
+  git: Git,
+): readonly CommitCheckout[] {
+  const listed = git.listCommits(root, base, head);
+  if ('unknown' in listed) throw new RevisionUnknown({ details: { revision: listed.unknown } });
+  if ('failure' in listed) {
+    throw new CommitsUnlistable({
+      details: {
+        rule: 'repository.git',
+        path: '.',
+        range: `${base}..${head}`,
+        reason: listed.failure,
+      },
+    });
+  }
+  const working = openCheckout(root, 'system-state', fileSystem, git);
+  const readOnly = (path: string): never => refuse(path, 'a commit view writes nothing');
+  return listed.commits.map(({ hash, message, added }) => {
+    const texts = new Map<string, string[]>([[commitMessagePath, message.split('\n')]]);
+    for (const { path, line, text } of added) {
+      const lines = texts.get(path) ?? [];
+      while (lines.length < line) lines.push('');
+      lines[line - 1] = text;
+      texts.set(path, lines);
+    }
+    const paths = [...texts.keys()].sort(compareBytes);
+    const files: CheckoutFiles = {
+      ...working,
+      readText(path) {
+        const lines = texts.get(normalise(path));
+        if (lines === undefined) refuse(path, `is not a path commit ${hash} adds to`);
+        return lines.join('\n');
+      },
+      isShown: (path) => isShownIn(paths, path, () => true),
+      listVisible: (scope) => paths.filter((path) => ownsPath(scope, path)),
+      listVisibleEntries: () => paths.map((path) => ({ path, kind: 'file' })),
+      write: readOnly,
+      remove: readOnly,
+      removeEmptyDirectories: readOnly,
+    };
+    return { commit: hash, files };
+  });
+}
+
+/**
  * Whether `path`, repository-relative with no trailing slash, is one of `listed` or a directory
  * above one, counting only listed paths `present` accepts.
  */
@@ -268,6 +323,7 @@ export function createCheckoutFiles({
   return {
     open: (root, type) => openCheckout(root, type, fileSystem, git),
     openStaged: (root) => openStaged(root, fileSystem, git),
+    openCommits: (root, base, head) => openCommits(root, base, head, fileSystem, git),
     create: (root, type, place) => createCheckout(root, type, place, fileSystem),
   };
 }

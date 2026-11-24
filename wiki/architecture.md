@@ -94,4 +94,5 @@ Burokrat judges what no tool knows: `puni burokrat check` applies the rules in
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), each finding printed as
 `<rule> <path>: <message>; fix: <remedy>`. Repository- and project-level rules run per project as
 the cached `puni-bur-check` target, cross-project links as `puni-bur-links`, and `index.current`
-only in the whole check. The `gate` script of [package.json](../package.json) orders it all.
+only in the whole check. The secrets rules (`secretRules`) also judge the staged files
+(`--staged`) and what each commit of a range adds, with its message (`--commits`). The `gate` script of [package.json](../package.json) orders it all.

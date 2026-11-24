@@ -44,6 +44,20 @@ export const CheckoutUnlistable = defineException({
   message: ({ reason }: { rule: 'repository.git'; path: '.'; reason: string }) => reason,
 });
 
+/** Git cannot list the commits of a range; `reason` is git's. */
+export const CommitsUnlistable = defineException({
+  tag: 'puni/shared-checkout/CommitsUnlistable',
+  message: ({
+    range,
+    reason,
+  }: {
+    rule: 'repository.git';
+    path: '.';
+    range: string;
+    reason: string;
+  }) => `the commits of ${range} cannot be listed: ${reason}`,
+});
+
 /** Git gives no `HEAD` commit for a checkout, as in a repository with no commit; `reason` is git's. */
 export const HeadCommitUnreadable = defineException({
   tag: 'puni/shared-checkout/HeadCommitUnreadable',
@@ -102,6 +116,10 @@ export const checkoutDefects = [
       'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
   ),
   remedyDefect(
+    CommitsUnlistable,
+    ({ range }) => `make \`git log ${range}\` succeed in the repository, then rerun`,
+  ),
+  remedyDefect(
     HeadCommitUnreadable,
     ({ root }) => `commit in ${root} so that HEAD names a commit, then rerun`,
   ),
@@ -135,6 +153,13 @@ export const CheckoutPathRefused = defineException({
 export const CheckoutRootRefused = defineException({
   tag: 'puni/shared-checkout/CheckoutRootRefused',
   message: ({ root, reason }: { root: string; reason: string }) => `${root} ${reason}`,
+});
+
+/** An end of a commit range naming no commit of the repository: a refused command line. */
+export const RevisionUnknown = defineException({
+  tag: 'puni/shared-checkout/RevisionUnknown',
+  message: ({ revision }: { revision: string }) =>
+    `${revision} names no commit of the repository; fetch it, or name a commit that exists`,
 });
 
 /** A staged file whose text git does not give, though it listed the file as staged. */

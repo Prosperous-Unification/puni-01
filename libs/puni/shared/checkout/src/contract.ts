@@ -114,6 +114,12 @@ export interface NewCheckout {
   link(path: string, target: string): void;
 }
 
+/** One commit of a range seen as a checkout: its abbreviated hash, and its view. */
+export interface CommitCheckout {
+  readonly commit: string;
+  readonly files: CheckoutFiles;
+}
+
 /** Opens checkouts. */
 export interface CheckoutFilesResource {
   /** The checkout of a repository of `type` whose root is the absolute directory `root`. */
@@ -126,6 +132,17 @@ export interface CheckoutFilesResource {
    * @throws StagedTextUnreadable when git cannot give the staged text of a file.
    */
   openStaged(root: string): CheckoutFiles;
+  /**
+   * The commits `head` reaches and `base` does not, oldest first, each as a view of what it adds:
+   * its visible files are the paths it adds a line to, each read as those lines at their line
+   * numbers with every other line empty, and `commitMessagePath`, read as its message. A
+   * merge adds what it holds beyond its first parent. Describing, existence and the `HEAD`
+   * commit still look at the working tree, and every write is refused.
+   *
+   * @throws RevisionUnknown when `base` or `head` names no commit.
+   * @throws CommitsUnlistable (the `repository.git` defect) when git cannot list the commits.
+   */
+  openCommits(root: string, base: string, head: string): readonly CommitCheckout[];
   /**
    * A new repository of `type` at the absolute directory `root`, which must be `place`. It
    * judges `root` when called and writes nothing until asked.

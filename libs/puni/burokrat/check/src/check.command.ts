@@ -1,13 +1,19 @@
 import { choice, constant, message, object, option, optional, string } from '@optique/core';
 import type { Command } from '@puni/shared-command';
-import { FileUnreadable, ProjectUnknown, repositoryTypes } from '@puni/shared-checkout';
+import {
+  FileUnreadable,
+  ProjectUnknown,
+  RevisionUnknown,
+  repositoryTypes,
+} from '@puni/shared-checkout';
 import type { CheckRequest, RepositoryCheck } from './contract';
-import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
+import { CommitRangeRefused, ProjectScopeRefused, ScopeOptionsConflict } from './failures';
 import { formatFinding } from './finding';
 
 /**
- * `check [--repo TYPE] [--project NAME | --cross-project-links | --staged]`: judges one
- * repository of the project against the rule set of its type, or one part of it.
+ * `check [--repo TYPE] [--project NAME | --cross-project-links | --staged | --commits
+ * BASE..HEAD]`: judges one repository of the project against the rule set of its type, or one
+ * part of it.
  */
 export const checkParser = object({
   kind: constant('check'),
@@ -27,14 +33,20 @@ export const checkParser = object({
   staged: option('--staged', {
     description: message`Judge only the staged files, as the index holds them, for secrets.`,
   }),
+  commits: optional(
+    option('--commits', string({ metavar: 'BASE..HEAD' }), {
+      description: message`Judge what each commit of the range adds, and its message, for secrets.`,
+    }),
+  ),
 });
 
 /**
- * The `check` command. Prints each finding as `<rule-id> <path>: <message>; fix: <remedy>`, then
- * a summary naming the type and scope, and returns 1; with no finding it prints one `ok` line and
- * returns 0. A `project` that names no project, a scoping option when the judged repository is
- * not `system-state`, or two scoping options, prints one `error: ` line to `stderr` and returns
- * 2: the command line is wrong, so nothing was judged. A file the check needs that cannot be
+ * The `check` command. Prints each finding as `<rule-id> <path>: <message>; fix: <remedy>`, a
+ * finding of `--commits` as `<rule-id> <commit>:<path>: …`, then a summary naming the type and
+ * scope, and returns 1; with no finding it prints one `ok` line and returns 0. A `project` that
+ * names no project, a scoping option when the judged repository is not `system-state`, two
+ * scoping options, or a `--commits` that is no range or names no commit, prints one `error: `
+ * line to `stderr` and returns 2: the command line is wrong, so nothing was judged. A file the check needs that cannot be
  * read prints one `error: ` line naming it and returns 1: nothing can be judged until it can.
  */
 export function createCheckCommand({
@@ -55,7 +67,9 @@ export function createCheckCommand({
         const refused =
           caught instanceof ProjectUnknown ||
           caught instanceof ProjectScopeRefused ||
-          caught instanceof ScopeOptionsConflict;
+          caught instanceof ScopeOptionsConflict ||
+          caught instanceof CommitRangeRefused ||
+          caught instanceof RevisionUnknown;
         if (!refused) throw caught;
         io.stderr(`error: ${caught.message}\n`);
         return 2;
