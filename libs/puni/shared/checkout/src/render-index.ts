@@ -2,6 +2,7 @@ import { posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
 import { compareBytes } from './byte-order';
 import type { ReadWhenEntry } from './index-sources';
+import { placePage, wikiSections } from './wiki-sections';
 
 /** The generated directory, relative to the repository root. */
 export const indexDirectory = 'wiki/index';
@@ -41,8 +42,44 @@ function listCommandLines(commands: readonly CommandBrief[]): string[] {
 }
 
 /** A `## heading` and its lines, then a blank line; nothing when there are no lines. */
-function renderSection(heading: string, lines: readonly string[]): string[] {
-  return lines.length === 0 ? [] : [`## ${heading}`, '', ...lines, ''];
+function renderSection(heading: string, lines: readonly string[], level = '##'): string[] {
+  return lines.length === 0 ? [] : [`${level} ${heading}`, '', ...lines, ''];
+}
+
+/** `purpose` as a sentence: its first letter upper-case, ending in a full stop. */
+function describe(purpose: string): string {
+  return `${purpose.charAt(0).toUpperCase()}${purpose.slice(1)}.`;
+}
+
+/**
+ * The index file's "Read when": the pages at the wiki root, then one `###` subsection per
+ * {@link wikiSections} entry in its order, saying what its pages are for and listing them; a
+ * section without pages is left out, and the whole is nothing when there are no pages. A page in
+ * no section is refused: the sources never hold one, since reading it is a `section` defect.
+ *
+ * @throws Error when a page lies outside the wiki root and every section.
+ */
+function renderPages(pages: readonly ReadWhenEntry[]): string[] {
+  const places = pages.map((page) => {
+    const place = placePage(page.path);
+    if (place.kind === 'unplaced') {
+      throw new Error(`${page.path} lies in no section; readSources reports it as a defect`);
+    }
+    return { page, directory: place.kind === 'section' ? place.section.directory : undefined };
+  });
+  const inSection = (directory: string | undefined) =>
+    places.filter((place) => place.directory === directory).map(({ page }) => page);
+  const subsections = wikiSections.flatMap(({ directory, heading, purpose }) => {
+    const lines = listReadWhen(indexFile, inSection(directory));
+    return renderSection(
+      heading,
+      lines.length === 0 ? [] : [describe(purpose), '', ...lines],
+      '###',
+    );
+  });
+  const root = listReadWhen(indexFile, inSection(undefined));
+  if (root.length === 0 && subsections.length === 0) return [];
+  return ['## Read when', '', ...(root.length === 0 ? [] : [...root, '']), ...subsections];
 }
 
 /** Every scope a project is tagged with or a role a command sits below, sorted bytewise. */
@@ -58,7 +95,7 @@ function listScopes(entries: readonly ReadWhenEntry[], commands: readonly Comman
 
 /**
  * The full contents of `wiki/index/`, keyed by path relative to the repository root.
- * {@link indexFile} holds the pages, the role commands (the top of the tree) and one line per
+ * {@link indexFile} holds the pages, grouped by section (see `renderPages`), the role commands (the top of the tree) and one line per
  * partition; `wiki/index/<scope>.md`, one per scope a project is tagged with or a role a command
  * sits below, holds that scope's projects and the commands below its role. Lines are sorted
  * bytewise; a section with no lines is left out; the text has LF endings and carries no dates or
@@ -99,7 +136,7 @@ export function renderIndex(
     '',
     '# Wiki index',
     '',
-    ...renderSection('Read when', listReadWhen(indexFile, pages)),
+    ...renderPages(pages),
     ...renderSection('Commands', listCommandLines(roleCommands)),
     ...renderSection(
       'Partitions',

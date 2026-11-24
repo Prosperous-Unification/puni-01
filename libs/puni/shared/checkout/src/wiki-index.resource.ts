@@ -9,6 +9,7 @@ import { leavesRoot } from './paths';
 import { nameProject, type ProjectFile, readProjectFiles } from './project-files';
 import { judgeReadWhen } from './read-when';
 import { indexDirectory } from './render-index';
+import { placePage, wikiSections } from './wiki-sections';
 
 type Reading = { readonly entry: ReadWhenEntry } | { readonly defect: SourceDefect };
 
@@ -111,9 +112,16 @@ function readProject(files: CheckoutFiles, file: ProjectFile): Reading[] {
 
 /**
  * The `title` and `read-when` of an authored page, from front matter that opens the file between
- * two `---` lines and holds one `key: value` per line.
+ * two `---` lines and holds one `key: value` per line. A page outside the wiki root and its
+ * {@link wikiSections} is a `section` defect, whatever its front matter.
  */
 function readPage(path: string, text: string): Reading {
+  const place = placePage(path);
+  if (place.kind === 'unplaced') {
+    const sections = wikiSections.map(({ directory }) => `wiki/${directory}/`).join(', ');
+    const message = `lies in wiki/${place.directory}/, which is not wiki/ or a section (${sections})`;
+    return { defect: { topic: 'section', path, message } };
+  }
   const frontMatter = parseFrontMatter(text);
   if ('problem' in frontMatter) {
     return defectOf(

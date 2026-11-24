@@ -12,6 +12,16 @@ import type { Rule } from '../finding';
 /** The command that writes the index directly, without the Nx sync generator. */
 const writeIndex = 'bun run puni burokrat wiki index';
 
+/** The ids of the rules reporting index source defects, one per defect topic. */
+const sourceRuleIds = Object.keys(sourceDefectRemedies).map((topic) => `index.${topic}`);
+
+/** `ids` joined as a list ending in `conjunction`: `a, b or c`. */
+function joinIds(ids: readonly string[], conjunction: string): string {
+  return ids.length < 2
+    ? ids.join('')
+    : `${ids.slice(0, -1).join(', ')} ${conjunction} ${ids.at(-1) ?? ''}`;
+}
+
 /**
  * `wiki/index/` is exactly what `puni burokrat wiki index` would write. While its inputs have
  * defects it cannot be generated, which is itself a breach here. The remedy runs that command,
@@ -27,8 +37,8 @@ export const matchGeneratedIndex: Rule = {
       return [
         {
           path: 'wiki/index',
-          message: `cannot be generated: ${count} index.read-when, index.read-first or index.scope findings`,
-          remedy: `fix the index.read-when, index.read-first and index.scope findings, then run \`${writeIndex}\``,
+          message: `cannot be generated: ${count} ${joinIds(sourceRuleIds, 'or')} findings`,
+          remedy: `fix the ${joinIds(sourceRuleIds, 'and')} findings, then run \`${writeIndex}\``,
         },
       ];
     }
@@ -95,4 +105,14 @@ export const requireScope: Rule = {
   id: 'index.scope',
   remedy: sourceDefectRemedies.scope,
   judge: judgeSources('scope'),
+};
+
+/**
+ * Every authored page lies directly in `wiki/` or in one of the sections `wikiSections` names, so
+ * the index can list it under its section and a reader knows what kind of page it is.
+ */
+export const requireSection: Rule = {
+  id: 'index.section',
+  remedy: sourceDefectRemedies.section,
+  judge: judgeSources('section'),
 };
