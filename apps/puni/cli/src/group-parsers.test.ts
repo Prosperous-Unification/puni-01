@@ -31,6 +31,8 @@ describe('burokratParser', () => {
         project: undefined,
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -41,6 +43,8 @@ describe('burokratParser', () => {
         project: 'puni-dash',
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -51,6 +55,20 @@ describe('burokratParser', () => {
         project: undefined,
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
+      },
+    ],
+    [
+      'check --commits main..HEAD',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+        commits: 'main..HEAD',
+        merged: false,
       },
     ],
     ['repo init --name shop', { kind: 'repo init', name: 'shop', owner: undefined }],

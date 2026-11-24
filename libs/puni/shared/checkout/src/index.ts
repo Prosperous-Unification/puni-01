@@ -3,6 +3,7 @@ export type {
   CheckoutEntry,
   CheckoutFiles,
   CheckoutFilesResource,
+  CommitCheckout,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
@@ -14,8 +15,10 @@ export {
   CheckoutRootRefused,
   checkoutDefects,
   CheckoutUnlistable,
+  CommitsUnlistable,
   FileUnreadable,
   ProjectUnknown,
+  RevisionUnknown,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
@@ -30,7 +33,7 @@ export {
   type Project,
   repositoryScope,
 } from './ownership';
-export { leavesRoot } from './paths';
+export { commitMessagePath, leavesRoot } from './paths';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
 export { nameProject, readProjectFiles } from './project-files';
 export { readRulesSection } from './rules-section';

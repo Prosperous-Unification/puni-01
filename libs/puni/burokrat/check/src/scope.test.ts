@@ -371,14 +371,22 @@ describe('check --staged', () => {
     const run = host.runCheck({ staged: true }, root);
     expect(run.code).toBe(1);
     expect(run.stdout).toBe(
-      'secrets.plaintext libs/two/src/env.ts: line 1 holds what looks like a GitHub token; fix: remove the credential from the file, rotate it, and read it from the environment or a secret store\nfail: system-state, staged files, 1 rule, 1 finding.\n',
+      'secrets.plaintext libs/two/src/env.ts: line 1 holds what looks like a GitHub token; fix: remove the credential from the file, rotate it, and read it from the environment or a secret store\nfail: system-state, staged files, 2 rules, 1 finding.\n',
     );
     expect(host.runCheck({}, root).code).toBe(0);
   });
 
-  test('a clean index passes with one rule', () => {
+  test('judges a staged address too', () => {
+    writeRepositoryFile(root, 'libs/two/hosts.txt', `host ${forbiddenAddress}\n`);
+    runGit(root, ['add', 'libs/two/hosts.txt']);
     expect(host.runCheck({ staged: true }, root).stdout).toBe(
-      'ok: system-state, staged files, 1 rule, no findings.\n',
+      "secrets.addresses libs/two/hosts.txt: line 1 holds an IPv4 address; fix: move the address to the operator's SSH configuration or the records repository and name the host by its SSH alias; a test uses 192.0.2.0/24\nfail: system-state, staged files, 2 rules, 1 finding.\n",
+    );
+  });
+
+  test('a clean index passes with the two secret rules', () => {
+    expect(host.runCheck({ staged: true }, root).stdout).toBe(
+      'ok: system-state, staged files, 2 rules, no findings.\n',
     );
   });
 });

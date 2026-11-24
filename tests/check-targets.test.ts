@@ -228,13 +228,82 @@ function runFormatStep(step: string, exitCode: number) {
 }
 
 /** Formatting is Bun's own `bun fmt`; Prettier is not a dependency. */
-test('prettier is not a dependency, and the pre-commit hook formats with bun fmt', () => {
+test('prettier is not a dependency', () => {
   const manifest = readJson('package.json');
   expect(field(manifest, 'devDependencies', 'prettier')).toBeUndefined();
   expect(field(manifest, 'dependencies', 'prettier')).toBeUndefined();
-  expect(readFileSync(join(root, 'lefthook.yml'), 'utf8')).toContain(
-    'bun fmt --check {staged_files}',
-  );
+});
+
+/**
+ * The pre-commit hook runs only the one check whose breach cannot be undone once pushed: the
+ * staged secrets check. CI judges everything else, the commits of a pull request included.
+ */
+test('the pre-commit hook runs only the staged secrets check', () => {
+  const hooks = Bun.YAML.parse(readFileSync(join(root, 'lefthook.yml'), 'utf8'));
+  expect(hooks).toEqual({
+    'pre-commit': {
+      commands: {
+        secrets: { run: 'bun apps/puni/cli/src/entrypoint.ts burokrat check --staged' },
+      },
+    },
+  });
+});
+
+/** The `&&`-joined step of the `gate:affected` script that judges the pull request's commits. */
+function readCommitsStep(): string {
+  const script = field(readJson('package.json'), 'scripts', 'gate:affected');
+  if (typeof script !== 'string') throw new Error('package.json has no script gate:affected');
+  const step = script.split(' && ').find((part) => part.includes('--commits'));
+  if (step === undefined) throw new Error('gate:affected judges no commits');
+  return step;
+}
+
+describe('gate:affected judges every commit of the pull request for secrets', () => {
+  test('over NX_BASE..HEAD', () => {
+    expect(readCommitsStep()).toBe(
+      'bun run puni burokrat check --commits "${NX_BASE:?set NX_BASE to the base of the range, as NX_BASE=origin/main}..HEAD"',
+    );
+  });
+
+  test('without NX_BASE it stops, naming NX_BASE, before running anything', () => {
+    const bin = scratchDirectories.createDirectory('puni-commits-step-');
+    writeFileSync(join(bin, 'bun'), '#!/bin/sh\necho ran\n', { mode: 0o755 });
+    const child = Bun.spawnSync(['sh', '-c', readCommitsStep()], {
+      env: { PATH: `${bin}:/usr/bin:/bin` },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(child.exitCode).not.toBe(0);
+    expect(child.stdout.toString()).toBe('');
+    expect(child.stderr.toString()).toContain('NX_BASE: set NX_BASE to the base of the range');
+  });
+});
+
+describe('the CI workflow judges every push for secrets', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+
+  test('on pushes to every branch and tag', () => {
+    expect(workflow).toContain("  push:\n    branches: ['**']\n    tags: ['**']\n");
+  });
+
+  test('in a job of its own, before and apart from the gate, skipping only a deleted ref', () => {
+    expect(workflow).toContain(
+      "  pushed-commits:\n    if: github.event_name == 'push' && !github.event.deleted\n",
+    );
+    expect(workflow.indexOf('  pushed-commits:')).toBeLessThan(workflow.indexOf('  gate:'));
+  });
+
+  test('over the pushed range, from main for a new ref, as merged history on main and tags', () => {
+    for (const line of [
+      'if [ "$base" = 0000000000000000000000000000000000000000 ]; then base=origin/main; fi',
+      'git cat-file -e "$base^{commit}"',
+      'case "$GITHUB_REF" in refs/heads/main | refs/tags/*) merged=--merged ;; esac',
+      'bun run puni burokrat check --commits "$base..$PUSHED_RANGE_HEAD" $merged',
+      'bun run puni burokrat check --commits "$MERGE_GROUP_BASE..HEAD"',
+    ]) {
+      expect([line, workflow.includes(line)]).toEqual([line, true]);
+    }
+  });
 });
 
 describe('the gate format step', () => {
