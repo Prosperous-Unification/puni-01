@@ -1,10 +1,10 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, expect, test } from 'bun:test';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import type { Git, GitCommit, ProcessOutcome, ProcessRunner } from '@puni/shared-ports';
 import { memoryHost } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
 
 /** A git and a repository whose `main` holds the commits {@link expected} lists after `base`. */
 interface Subject {
@@ -12,11 +12,7 @@ interface Subject {
   readonly root: string;
 }
 
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
+const scratchDirectories = removeScratchDirectoriesAfterAll();
 
 /** A path git quotes in a diff header. */
 const quotedPath = 'dir/naïve "file".txt';
@@ -53,8 +49,7 @@ const expectedRoot: readonly Listed[] = [
 
 /** A temporary repository and a git runner in it, each commit a second after the last. */
 function makeRepository(prefix: string) {
-  const root = mkdtempSync(join(tmpdir(), prefix));
-  temporaries.push(root);
+  const root = scratchDirectories.createDirectory(prefix);
   let second = 0;
   const git = (...args: string[]): string => {
     second += 1;

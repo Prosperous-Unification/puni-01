@@ -266,20 +266,16 @@ describe('gate:affected judges every commit of the pull request for secrets', ()
   });
 
   test('without NX_BASE it stops, naming NX_BASE, before running anything', () => {
-    const bin = mkdtempSync(join(tmpdir(), 'puni-commits-step-'));
-    try {
-      writeFileSync(join(bin, 'bun'), '#!/bin/sh\necho ran\n', { mode: 0o755 });
-      const child = Bun.spawnSync(['sh', '-c', readCommitsStep()], {
-        env: { PATH: `${bin}:/usr/bin:/bin` },
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      expect(child.exitCode).not.toBe(0);
-      expect(child.stdout.toString()).toBe('');
-      expect(child.stderr.toString()).toContain('NX_BASE: set NX_BASE to the base of the range');
-    } finally {
-      rmSync(bin, { recursive: true, force: true });
-    }
+    const bin = scratchDirectories.createDirectory('puni-commits-step-');
+    writeFileSync(join(bin, 'bun'), '#!/bin/sh\necho ran\n', { mode: 0o755 });
+    const child = Bun.spawnSync(['sh', '-c', readCommitsStep()], {
+      env: { PATH: `${bin}:/usr/bin:/bin` },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(child.exitCode).not.toBe(0);
+    expect(child.stdout.toString()).toBe('');
+    expect(child.stderr.toString()).toContain('NX_BASE: set NX_BASE to the base of the range');
   });
 });
 

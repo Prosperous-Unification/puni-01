@@ -1,11 +1,12 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { removeFixture, writeRepositoryFile } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, writeRepositoryFile } from '@puni/shared-testing';
 import { type CheckHost, openCheckHost } from './check.test-host';
 import { makeRepository } from './repository-pair.test-host';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
 
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 let root = '';
 let host: CheckHost;
 
@@ -18,14 +19,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository();
+  root = await makeRepository(scratchDirectories);
   commit('base');
-});
-
-afterEach(() => {
-  // An empty root is a setup that failed before the fixture existed: nothing to remove.
-  if (root !== '') removeFixture(root);
-  root = '';
 });
 
 /** Runs git in the fixture as a fixed author, returning what it printed, trimmed. */
