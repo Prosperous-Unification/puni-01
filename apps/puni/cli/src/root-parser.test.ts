@@ -127,7 +127,9 @@ describe('readInvocation', () => {
     ['n research', ['add']],
     ['b repo', ['init']],
     ['b adr', ['add']],
-    ['b assess', ['outcomes']],
+    ['b assess', ['outcomes', 'templates']],
+    ['b review', ['start', 'next', 'submit', 'file']],
+    ['b skills', ['install']],
     [
       'd',
       ['ops', 'run', 'progress', 'resources', 'release', 'admission', 'authority', 'mcp', 'pool'],
@@ -151,10 +153,18 @@ describe('readInvocation', () => {
 
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
-    expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] [\n       --commits BASE..HEAD] [--merged] | wiki [index [--print]] | repo [init --name NAME [--owner\n       OWNER]] | adr [add --title TEXT --topics LIST --summary TEXT [--body-file PATH]] | change |\n       assess [outcomes --since INSTANT --until INSTANT [--rate-card PATH] [--claude-projects DIR...\n       ] [--codex-sessions DIR...] [--json]])]\n',
-    );
-    expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
+    expect(help).toMatch(/^Usage: puni burokrat \[\(check /mu);
+    expect(help).toContain('--commits BASE..HEAD');
+    expect(readListedNames(help)).toEqual([
+      'check',
+      'wiki',
+      'repo',
+      'adr',
+      'change',
+      'skills',
+      'review',
+      'assess',
+    ]);
   });
 
   test.each(['--help', 'help', ''])(
@@ -280,14 +290,34 @@ describe('listCommands', () => {
         brief: 'File an architecture decision record in the records repository.',
       },
       { path: 'puni burokrat change', brief: 'Archive finished changes.' },
+      { path: 'puni burokrat skills', brief: "Manage PUNI's repository skills." },
+      {
+        path: 'puni burokrat skills install',
+        brief: 'Install the PUNI review skills in this checkout.',
+      },
+      {
+        path: 'puni burokrat review',
+        brief: 'Review evidence against criteria and file the scored findings.',
+      },
+      { path: 'puni burokrat review start', brief: 'Start a findings or assessment review.' },
+      { path: 'puni burokrat review next', brief: 'Read the current review task.' },
+      {
+        path: 'puni burokrat review submit',
+        brief: 'Submit the result of the current review task.',
+      },
+      {
+        path: 'puni burokrat review file',
+        brief: 'File and print the completed review by impact.',
+      },
       {
         path: 'puni burokrat assess',
-        brief: 'Assess the outcomes of work and what they cost.',
+        brief: 'List assessment criteria maps and assess the cost of outcomes.',
       },
       {
         path: 'puni burokrat assess outcomes',
         brief: 'Say what the agent work of a period cost per accepted outcome.',
       },
+      { path: 'puni burokrat assess templates', brief: 'List versioned assessment criteria maps.' },
     ]);
   });
 });

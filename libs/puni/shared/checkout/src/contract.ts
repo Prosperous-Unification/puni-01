@@ -84,6 +84,12 @@ export interface CheckoutFiles {
    * directly inside a kind directory. Any other path is refused with `CheckoutPathRefused`.
    */
   write(path: string, text: string): void;
+  /**
+   * Publishes a new file in the checkout's write area, creating its directories. Returns
+   * `exists` when the destination is already occupied, and refuses a non-directory ancestor
+   * (including symlinks) or a path outside the write area with `CheckoutPathRefused`.
+   */
+  createFile(path: string, text: string): 'created' | 'exists';
   /** Removes the file at `path` in the checkout's write area. */
   remove(path: string): void;
   /**

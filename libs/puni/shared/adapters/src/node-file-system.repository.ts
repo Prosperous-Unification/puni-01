@@ -1,8 +1,10 @@
 import {
   closeSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readSync,
@@ -14,6 +16,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { DirectoryEntry, FileSystem, PathKind } from '@puni/shared-ports';
 
 interface Described {
@@ -72,6 +75,18 @@ function* readLines(path: string): Generator<string> {
   }
 }
 
+/** Publishes a complete file from a private temporary directory without replacing the target. */
+function writeNew(path: string, text: string): void {
+  const staging = mkdtempSync(join(dirname(path), '.puni-write-'));
+  const temporary = join(staging, 'text');
+  try {
+    writeFileSync(temporary, text, { mode: 0o600 });
+    linkSync(temporary, path);
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 /** The {@link FileSystem} of this machine, through `node:fs` and `node:os`. */
 export function createNodeFileSystem(): FileSystem {
   return {
@@ -97,6 +112,7 @@ export function createNodeFileSystem(): FileSystem {
     write(path, text) {
       writeFileSync(path, text);
     },
+    writeNew,
     remove(path) {
       rmSync(path, { recursive: true });
     },

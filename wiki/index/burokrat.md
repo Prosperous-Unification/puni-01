@@ -6,7 +6,9 @@
 
 - adding a command that archives a finished change: [puni-burokrat-change](../../libs/puni/burokrat/change/src/group.ts)
 - adding or changing a repository rule, or how a check is scoped, judged and printed: [puni-burokrat-check](../../libs/puni/burokrat/check/src/rule-set.rule.ts)
+- changing how PUNI installs its agent skills: [puni-burokrat-skills](../../libs/puni/burokrat/skills/src/install-skills.feature.ts)
 - changing how assess outcomes reads harness logs, prices usage or attributes it to accepted outcomes: [puni-burokrat-assess](../../libs/puni/burokrat/assess/src/outcome-assessment.feature.ts)
+- changing how fresh reviews discover, compare, score or file findings: [puni-burokrat-review](../../libs/puni/burokrat/review/src/review.feature.ts)
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
 - changing the adr add command: its options and the sections a new decision record starts with: [puni-burokrat-adr](../../libs/puni/burokrat/adr/src/adr-add.command.ts)
 - changing what repo init creates for a new governed repository pair: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/repository-pair.feature.ts)
@@ -15,11 +17,19 @@
 
 - `puni burokrat adr`: File architecture decision records.
 - `puni burokrat adr add`: File an architecture decision record in the records repository.
-- `puni burokrat assess`: Assess the outcomes of work and what they cost.
+- `puni burokrat assess`: List assessment criteria maps and assess the cost of outcomes.
 - `puni burokrat assess outcomes`: Say what the agent work of a period cost per accepted outcome.
+- `puni burokrat assess templates`: List versioned assessment criteria maps.
 - `puni burokrat change`: Archive finished changes.
 - `puni burokrat check`: Judge the repository against its rules.
 - `puni burokrat repo`: Set up repositories for puni to govern.
 - `puni burokrat repo init`: Create a governed repository here and its records repository beside it.
+- `puni burokrat review`: Review evidence against criteria and file the scored findings.
+- `puni burokrat review file`: File and print the completed review by impact.
+- `puni burokrat review next`: Read the current review task.
+- `puni burokrat review start`: Start a findings or assessment review.
+- `puni burokrat review submit`: Submit the result of the current review task.
+- `puni burokrat skills`: Manage PUNI's repository skills.
+- `puni burokrat skills install`: Install the PUNI review skills in this checkout.
 - `puni burokrat wiki`: Generate the wiki index.
 - `puni burokrat wiki index`: Write the generated wiki index.

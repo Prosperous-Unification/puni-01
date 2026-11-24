@@ -4,6 +4,8 @@ import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CheckoutUnlistable, formatRegistry } from '@puni/shared-checkout';
 import {
+  formatReviewBody,
+  isReviewRecordKind,
   optionalRecordKeys,
   recordDirectories,
   recordKinds,
@@ -28,6 +30,7 @@ import {
   judgeRecordFrontMatter,
   judgeRecordNames,
   judgeRecordsLayout,
+  judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
 import {
@@ -67,6 +70,11 @@ function judge(rule: Rule): Judged[] {
 }
 
 const record = 'bur/adr/2031-04-07-a-decision.md';
+const malformedReview = 'bur/findings/2031-04-07-review.md';
+
+function writeMalformedReview(): void {
+  writeRecord(root, malformedReview, describeRecord(malformedReview));
+}
 
 function writeAdr(extra: Readonly<Record<string, string>> = {}, drop?: string): void {
   const fields = describeRecord(record, extra);
@@ -86,7 +94,19 @@ describe('the fixture records repository passes every records rule', () => {
   test('a record in every kind directory passes', () => {
     for (const kind of recordKinds) {
       const path = `${recordDirectories[kind]}/2031-04-07-one-${kind}.md`;
-      writeRecord(root, path, describeRecord(path));
+      const body = isReviewRecordKind(kind)
+        ? formatReviewBody({
+            subject: 'Review an example',
+            instruction: 'Use the supplied criteria.',
+            criteria: [{ id: 'reliability', goal: 'Reproduce the outcome.' }],
+            ...(kind === 'assessment-review' ? { template: { id: 'design', version: '1' } } : {}),
+            runs: [0],
+            maxRuns: 1,
+            stop: 'run-limit',
+            findings: [],
+          })
+        : undefined;
+      writeRecord(root, path, describeRecord(path), body);
     }
     expect(recordsRules.flatMap(({ rule }) => judge(rule))).toEqual([]);
   });
@@ -96,6 +116,18 @@ describe('the fixture records repository passes every records rule', () => {
     expect(judge(judgeRecordFrontMatter).map((finding) => finding.path)).toEqual([
       'nav/research/2031-04-07-notes.md',
     ]);
+  });
+});
+
+describe('structured review records', () => {
+  test('a malformed review body has a records.review finding', () => {
+    writeMalformedReview();
+    const findings = recordsRules.flatMap(({ rule }) => judge(rule));
+    expect(findings).toContainEqual({
+      rule: 'records.review',
+      path: malformedReview,
+      message: 'must have a # Review section',
+    });
   });
 });
 
@@ -129,6 +161,7 @@ describe('files git ignores', () => {
     ['records.layout', judgeRecordsLayout],
     ['records.name', judgeRecordNames],
     ['records.front-matter', judgeRecordFrontMatter],
+    ['records.review', judgeReviewRecords],
     ['records.supersession', judgeSupersession],
   ] as const)(
     'git failing makes %s throw the repository.git defect, not pass',
@@ -165,7 +198,7 @@ describe('records.layout', () => {
     [
       'bur/plans/x.md',
       'bur/plans',
-      'is not a kind directory; bur/ holds only the directories adr, assessments, archive',
+      'is not a kind directory; bur/ holds only the directories adr, assessments, findings, assessment-reviews, archive',
     ],
     [
       'bur/adr/old/x.md',
@@ -515,6 +548,7 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
       writeRepositoryFile(root, record, 'no front matter\n');
     },
   ],
+  [judgeReviewRecords, writeMalformedReview],
   [
     judgeSupersession,
     () => {

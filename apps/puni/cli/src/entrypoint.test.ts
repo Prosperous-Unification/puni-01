@@ -108,7 +108,7 @@ describe('entrypoint', () => {
     test('check --repo system-records passes two records, one superseding the other', () => {
       expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
         code: 0,
-        stdout: 'ok: system-records, 10 rules, no findings.\n',
+        stdout: 'ok: system-records, 11 rules, no findings.\n',
         stderr: '',
       });
     });
@@ -118,7 +118,7 @@ describe('entrypoint', () => {
       const run = runPuni(['burokrat', 'check', '--repo', 'system-records'], state);
       expect(run.code).toBe(1);
       expect(run.stdout).toMatch(
-        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 10 rules, 1 finding\.\n$/u,
+        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 11 rules, 1 finding\.\n$/u,
       );
     });
 

@@ -3,6 +3,7 @@ import { explainDefect } from '@puni/shared-checkout';
 import type { RecordFiling, RecordsCatalog, RecordsRequirements } from './contract';
 import {
   BodyFileMissing,
+  RecordBodyRefused,
   RecordExists,
   RecordTitleUnsluggable,
   RecordValueRefused,
@@ -12,6 +13,7 @@ import {
 function isRefusal(caught: unknown): caught is Error {
   return (
     caught instanceof RecordValueRefused ||
+    caught instanceof RecordBodyRefused ||
     caught instanceof RecordTitleUnsluggable ||
     caught instanceof RecordExists ||
     caught instanceof BodyFileMissing
@@ -22,8 +24,8 @@ function isRefusal(caught: unknown): caught is Error {
  * The {@link RecordFiling}, the one filing path of every `<group> add` command. From the
  * repository holding the nearest `puni.json` it finds the system-state and records checkouts
  * through the registry, reads the system-state `HEAD` commit, and files the record there through
- * the records catalog, which dates it. A value the records schema refuses, a title with no letter
- * or digit, an existing record or a missing body file is `refused`; a registry or checkout that
+ * the records catalog, which dates it. A value or body the records schema refuses, a title with no
+ * letter or digit, an existing record or a missing body file is `refused`; a registry or checkout that
  * cannot be found, a system-state repository with no commit, or a body file that cannot be read
  * is `defective`, a defect's reason ending in `; fix: <remedy>`. Anything else propagates.
  */
