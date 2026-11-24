@@ -1,6 +1,11 @@
-import { countWords, indexFile, readRulesSection } from '@puni/shared-checkout';
+import {
+  countWords,
+  indexFile,
+  readRulesSection,
+  rulesUpgradeCommand,
+} from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
-import { agentsRulesDigests, digestRulesSection, rulesDigestAt } from '../agents-rules';
+import { agentsRulesDigests, digestRulesSection } from '../agents-rules';
 import type { Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {
@@ -55,43 +60,50 @@ export const agentsNamesIndex: Rule = {
 };
 
 /**
- * `AGENTS.md` holds a `## Rules` section whose {@link digestRulesSection} is the digest of
- * `digests` in force at the repository's pin, by {@link rulesDigestAt}: any edit to the rules but
- * rewrapping is a finding. The rule is as old as the first digest, and each later one is a
- * revision. A missing file is `agents.exists`'s.
+ * The `agents.rules` rules of `digests`, one per epoch it keys: `AGENTS.md` holds a `## Rules`
+ * section whose {@link digestRulesSection} is that epoch's digest, from that epoch until the next
+ * one keyed, so a changed rules text is a later rule like any other. Any edit to the rules but
+ * rewrapping is a finding; a missing file is `agents.exists`'s.
  */
-export function pinAgentsRules(digests: Readonly<Record<number, string>>): Rule {
-  const [since = 1, ...revisions] = Object.keys(digests)
+export function pinAgentsRules(digests: Readonly<Record<number, string>>): Rule[] {
+  const epochs = Object.keys(digests)
     .map(Number)
     .sort((left, right) => left - right);
-  return {
-    id: 'agents.rules',
-    since,
-    revisions,
-    remedy:
-      'restore the rules section (git show origin/main:AGENTS.md); if the owner changed the rules, add the digest printed here to agentsRulesDigests in the Burokrat check library under the next epoch',
-    judge(reading) {
-      const text = readOptional(reading, 'AGENTS.md');
-      if (text === undefined) return [];
-      const section = readRulesSection(text);
-      if (section === undefined) return [{ path: 'AGENTS.md', message: 'has no ## Rules heading' }];
-      const pin = reading.registry.rules;
-      const pinned = rulesDigestAt(digests, pin);
-      const actual = digestRulesSection(section);
-      return actual === pinned
-        ? []
-        : [
-            {
-              path: 'AGENTS.md',
-              message: `rules section digests to ${actual}, not ${pinned ?? 'none'}, the rules in force at epoch ${String(pin)}`,
-            },
-          ];
-    },
-  };
+  return epochs.map((since, index): Rule => {
+    const until = epochs[index + 1];
+    const digest = digests[since] ?? '';
+    const restore = 'restore the rules section (git show origin/main:AGENTS.md)';
+    return {
+      id: 'agents.rules',
+      since,
+      ...(until === undefined ? {} : { until }),
+      remedy:
+        until === undefined
+          ? `${restore}; if the owner changed the rules, add the digest printed here to agentsRulesDigests in the Burokrat check library under the next epoch`
+          : `${restore}, then run ${rulesUpgradeCommand} to take the rules of epoch ${String(until)}`,
+      judge(reading) {
+        const text = readOptional(reading, 'AGENTS.md');
+        if (text === undefined) return [];
+        const section = readRulesSection(text);
+        if (section === undefined) {
+          return [{ path: 'AGENTS.md', message: 'has no ## Rules heading' }];
+        }
+        const actual = digestRulesSection(section);
+        return actual === digest
+          ? []
+          : [
+              {
+                path: 'AGENTS.md',
+                message: `rules section digests to ${actual}, not ${digest}, the rules in force at epoch ${String(reading.registry.rules)}`,
+              },
+            ];
+      },
+    };
+  });
 }
 
-/** {@link pinAgentsRules} to {@link agentsRulesDigests}, the owner's rules. */
-export const agentsKeepRules = pinAgentsRules(agentsRulesDigests);
+/** {@link pinAgentsRules} of {@link agentsRulesDigests}, the owner's rules. */
+export const agentsKeepRules: readonly Rule[] = pinAgentsRules(agentsRulesDigests);
 
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {

@@ -6,24 +6,30 @@ import {
   isRepositoryLevel,
   type LatestRules,
   replaceRulesSection,
+  type RepositoryRegistry,
   type RepositoryType,
   repositoryScope,
-  RulesPinAhead,
+  requirePinReached,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
+import { digestRulesSection, rulesDigestAt } from './agents-rules';
 import type { CheckRequest, CheckRequirements, NewerRules, RepositoryCheck } from './contract';
 import {
   appliesAt,
   applyRule,
+  type CheckRules,
   formatFinding,
   latestEpoch,
   type LeveledRule,
+  listEveryRule,
   type ReferenceReach,
   type Rule,
   type RuleReading,
 } from './finding';
 import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
-import { crossProjectRules, type ruleSets, stagedRules } from './rule-set.rule';
+
+/** What the check features need: the module's requirements and the rules it judges by. */
+type CheckServices = CheckRequirements & { readonly checkRules: CheckRules };
 
 /** What one run judges, chosen by the request's options. */
 type CheckMode =
@@ -63,15 +69,6 @@ function selectMode(request: CheckRequest, type: RepositoryType): CheckMode {
   return mode;
 }
 
-/** Every rule `checkRuleSets` and the scoped runs hold. */
-function listEveryRule(checkRuleSets: typeof ruleSets): Rule[] {
-  return [
-    ...Object.values(checkRuleSets).flatMap((rules) => rules.map(({ rule }) => rule)),
-    ...crossProjectRules,
-    ...stagedRules,
-  ];
-}
-
 /** `findings` sorted by their printed form. */
 function sortFindings(findings: readonly Finding[]): Finding[] {
   return findings
@@ -80,10 +77,41 @@ function sortFindings(findings: readonly Finding[]): Finding[] {
     .map(({ finding }) => finding);
 }
 
-/** The ids of `rules` that a repository pinned at `pin` is not yet judged by, sorted, once each. */
+/** The ids of `rules` that start applying after the pin `pin`, sorted, once each. */
 function listNewer(rules: readonly Rule[], pin: number): string[] {
-  const ids = rules.filter((rule) => !appliesAt(rule, pin)).map(({ id }) => id);
+  const ids = rules.filter((rule) => rule.since > pin).map(({ id }) => id);
   return [...new Set(ids)].sort(compareBytes);
+}
+
+/**
+ * The reading of the whole repository `files` holds, registered by `registry`: every file, every
+ * reference, the composed CLI's commands and the index and records resources.
+ */
+function readWhole(
+  { commandCatalog, checkoutWikiIndex, recordsCatalog }: CheckServices,
+  files: CheckoutFiles,
+  registry: RepositoryRegistry,
+): RuleReading {
+  return {
+    files,
+    registry,
+    commands: commandCatalog.list(),
+    scope: repositoryScope,
+    references: { kind: 'all' },
+    wikiIndex: checkoutWikiIndex,
+    records: recordsCatalog,
+  };
+}
+
+/** The findings of `run`, or the one finding of the checkout defect it throws. */
+function judgeOrDefect(run: () => Finding[]): Finding[] {
+  try {
+    return run();
+  } catch (caught) {
+    const defect = findCheckoutDefect(caught);
+    if (defect === undefined) throw caught;
+    return [defect];
+  }
 }
 
 /** The rules a project scope runs: repository- and project-level at the root, else project-level. */
@@ -95,27 +123,22 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
 /**
  * The {@link RepositoryCheck}. The repository holding the nearest `puni.json` is found as the
  * type that file declares; `repo` names the type to judge instead, resolved through the registry
- * to the checkout beside it. The judged type selects its rule set from `checkRuleSets`, which the
- * module supplies as {@link ruleSets}. Without an option the whole repository is judged by every
+ * to the checkout beside it. The judged type selects its rule set from `checkRules`, which the
+ * module supplies from the rule set. Without an option the whole repository is judged by every
  * rule. With `project`, only what that project of the `system-state` repository owns, by the
- * rules of its level, references reaching only paths the same project owns. With `crossProjectLinks`, every file, by
- * {@link crossProjectRules}, references reaching only paths another project owns. So every
+ * rules of its level, references reaching only paths the same project owns. With
+ * `crossProjectLinks`, every file, by its cross-project rules, references reaching only paths
+ * another project owns. So every
  * project check, the cross-project check and the `whole`-level rules together find what the
- * whole check finds. With `staged`, the staged files as the index holds them, by
- * {@link stagedRules}. Every run applies only the rules its `puni.json` pin reaches, and names
- * the ones it leaves for a later epoch. Findings are sorted by their printed form.
+ * whole check finds. With `staged`, the staged files as the index holds them, by its staged
+ * rules. Every run applies only the rules that apply at its `puni.json` pin, by
+ * {@link appliesAt}, and names those that start after it. Findings are sorted by their printed
+ * form.
  */
-export function createRepositoryCheck({
-  checkoutRegistry,
-  checkoutFiles,
-  checkoutProjectScope,
-  checkoutWikiIndex,
-  recordsCatalog,
-  commandCatalog,
-  programSource,
-  checkRuleSets,
-}: CheckRequirements & { readonly checkRuleSets: typeof ruleSets }): RepositoryCheck {
-  const latest = latestEpoch(listEveryRule(checkRuleSets));
+export function createRepositoryCheck(services: CheckServices): RepositoryCheck {
+  const { checkoutRegistry, checkoutFiles, checkoutProjectScope, programSource, checkRules } =
+    services;
+  const latest = latestEpoch(listEveryRule(checkRules));
   const plan = (mode: CheckMode, rules: readonly LeveledRule[], files: CheckoutFiles): RunPlan => {
     switch (mode.kind) {
       case 'whole':
@@ -138,14 +161,14 @@ export function createRepositoryCheck({
         return {
           scope: repositoryScope,
           references: { kind: 'cross-project', projects: checkoutProjectScope.list(files) },
-          rules: crossProjectRules,
+          rules: checkRules.crossProject,
           label: 'cross-project links, ',
         };
       case 'staged':
         return {
           scope: repositoryScope,
           references: { kind: 'all' },
-          rules: stagedRules,
+          rules: checkRules.staged,
           label: 'staged files, ',
         };
     }
@@ -153,91 +176,67 @@ export function createRepositoryCheck({
   return {
     check(request, cwd) {
       let summary = 'no repository';
-      let findings: Finding[];
       let newer: NewerRules | undefined;
-      try {
+      const findings = judgeOrDefect(() => {
         const found = checkoutRegistry.locate(cwd);
         const type = request.repo ?? found.type;
         const mode = selectMode(request, type);
         summary = type;
         const { root, registry } = checkoutRegistry.resolve(found, type);
+        requirePinReached(registry, latest, programSource.version);
         const pin = registry.rules;
-        if (pin > latest) {
-          throw new RulesPinAhead({ details: { pin, latest, version: programSource.version } });
-        }
         const files =
           mode.kind === 'staged' ? checkoutFiles.openStaged(root) : checkoutFiles.open(root, type);
-        const { scope, references, rules: all, label } = plan(mode, checkRuleSets[type], files);
+        const { scope, references, rules: all, label } = plan(mode, checkRules.sets[type], files);
         const rules = all.filter((rule) => appliesAt(rule, pin));
         const ids = listNewer(all, pin);
         if (ids.length > 0) newer = { pin, ids };
         summary = `${type}, ${label}${String(rules.length)} ${rules.length === 1 ? 'rule' : 'rules'}`;
-        const reading: RuleReading = {
-          files,
-          registry,
-          commands: commandCatalog.list(),
-          scope,
-          references,
-          wikiIndex: checkoutWikiIndex,
-          records: recordsCatalog,
-        };
-        findings = rules.flatMap((rule) => applyRule(rule, reading));
-      } catch (caught) {
-        const defect = findCheckoutDefect(caught);
-        if (defect === undefined) throw caught;
-        findings = [defect];
-      }
+        const reading: RuleReading = { ...readWhole(services, files, registry), scope, references };
+        return rules.flatMap((rule) => applyRule(rule, reading));
+      });
       return { summary, findings: sortFindings(findings), newer };
     },
   };
 }
 
 /**
- * The {@link LatestRules} of `checkRuleSets`, which the module supplies as {@link ruleSets}: its
- * epoch is the latest of every rule there and in the scoped runs, and it judges the whole
- * system-state repository by every rule of that epoch, over a view of the checkout whose
- * `AGENTS.md` rules section, when it has one, is the given text, and a registry pinned there.
+ * The {@link LatestRules} of `checkRules`, which the module supplies as the `checkRules` of the rule set: its
+ * epoch is the latest of every rule there. It judges each whole repository of the project by
+ * the rules of its type that apply at that epoch, with the registry pinned there and, for the
+ * system-state repository, a view of the checkout whose `AGENTS.md` rules section, when it has
+ * one, is the given text. Whether a section holds an epoch's rules is judged by the digest
+ * in force at that epoch.
  */
-export function createLatestRules({
-  checkoutRegistry,
-  checkoutFiles,
-  checkoutWikiIndex,
-  recordsCatalog,
-  commandCatalog,
-  checkRuleSets,
-}: CheckRequirements & { readonly checkRuleSets: typeof ruleSets }): LatestRules {
-  const epoch = latestEpoch(listEveryRule(checkRuleSets));
+export function createLatestRules(services: CheckServices): LatestRules {
+  const { checkoutRegistry, checkoutFiles, checkRules } = services;
+  const epoch = latestEpoch(listEveryRule(checkRules));
+  const judgeType = (cwd: string, type: RepositoryType, rules: string): Finding[] =>
+    judgeOrDefect(() => {
+      const found = checkoutRegistry.locate(cwd);
+      const { root, registry } = checkoutRegistry.resolve(found, type);
+      const files = checkoutFiles.open(root, type);
+      const readText = (path: string): string => {
+        const text = files.readText(path);
+        if (type !== 'system-state' || path !== 'AGENTS.md') return text;
+        return replaceRulesSection(text, rules) ?? text;
+      };
+      const reading = readWhole(services, { ...files, readText }, { ...registry, rules: epoch });
+      return checkRules.sets[type]
+        .map(({ rule }) => rule)
+        .filter((rule) => appliesAt(rule, epoch))
+        .flatMap((rule) => applyRule(rule, reading));
+    });
   return {
     epoch,
     judge(cwd, rules) {
-      let findings: Finding[];
-      try {
-        const found = checkoutRegistry.locate(cwd);
-        const { root, registry } = checkoutRegistry.resolve(found, 'system-state');
-        const files = checkoutFiles.open(root, 'system-state');
-        const readText = (path: string): string => {
-          const text = files.readText(path);
-          return path === 'AGENTS.md' ? (replaceRulesSection(text, rules) ?? text) : text;
-        };
-        const reading: RuleReading = {
-          files: { ...files, readText },
-          registry: { ...registry, rules: epoch },
-          commands: commandCatalog.list(),
-          scope: repositoryScope,
-          references: { kind: 'all' },
-          wikiIndex: checkoutWikiIndex,
-          records: recordsCatalog,
-        };
-        findings = checkRuleSets['system-state']
-          .map(({ rule }) => rule)
-          .filter((rule) => appliesAt(rule, epoch))
-          .flatMap((rule) => applyRule(rule, reading));
-      } catch (caught) {
-        const defect = findCheckoutDefect(caught);
-        if (defect === undefined) throw caught;
-        findings = [defect];
-      }
-      return sortFindings(findings);
+      return {
+        'system-state': sortFindings(judgeType(cwd, 'system-state', rules)),
+        'system-records': sortFindings(judgeType(cwd, 'system-records', rules)),
+      };
+    },
+    holdsRulesOf(section, at) {
+      return digestRulesSection(section) === rulesDigestAt(checkRules.agentsRulesDigests, at);
     },
   };
 }

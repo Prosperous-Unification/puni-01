@@ -5,6 +5,7 @@ import {
   findOwner,
   type Project,
   type RepositoryRegistry,
+  type RepositoryType,
   type WikiIndexResource,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
@@ -47,25 +48,23 @@ export interface Breach {
 }
 
 /**
- * A rule: a stable id, the rules epoch that introduced it, what to do when it breaks, and a
+ * A rule: a stable id, the rules epochs it applies at, what to do when it breaks, and a
  * judgement that is empty when it holds.
+ *
+ * The epochs keep one contract: a repository that passes keeps passing until it upgrades its
+ * pin. So a rule applies to a repository pinned at `pin` when `since <= pin` and, if it has an
+ * `until`, `pin < until`. A new rule takes the next epoch as its `since`. A rule made to refuse
+ * what it accepted ships as two objects: the old one given `until: N`, and the new one (the same
+ * id is allowed) with `since: N`. A rule whose subject puni no longer produces may be retired, by
+ * an `until` with no successor or by deleting it, and is listed in `retiredRules`.
  */
 export interface Rule {
   /** A stable `subject.rule` id. */
   readonly id: string;
-  /**
-   * The rules epoch that introduced the rule: `check` applies it only to a repository whose
-   * `puni.json` pins `rules` at this epoch or later. A new rule, or a change that makes an
-   * existing rule refuse what it accepted, gets the next epoch: a stricter change ships as a new
-   * rule id or a bumped `since`, so no repository's verdict changes until it upgrades.
-   */
+  /** The first rules epoch the rule applies at. */
   readonly since: number;
-  /**
-   * The later epochs at which the judgement changed without a new id, each judged by what is in
-   * force at the repository's pin, as `agents.rules` judges the rules text; they count toward
-   * {@link latestEpoch} as `since` does.
-   */
-  readonly revisions?: readonly number[];
+  /** The first rules epoch the rule no longer applies at; absent while it still applies. */
+  readonly until?: number;
   /** What to do about a breach, in the imperative, naming the command when one exists. */
   readonly remedy: string;
   judge(reading: RuleReading): readonly Breach[];
@@ -85,18 +84,39 @@ export interface LeveledRule {
 }
 
 /**
- * The latest rules epoch of `rules`: the largest `since` or revision of any of them, 1 when there
+ * The rules `check` judges by: each repository type's rule set, the rules of the scoped runs
+ * `--cross-project-links` and `--staged`, and the digest of the `AGENTS.md` rules section from
+ * each epoch at which it changed, from which the sets' `agents.rules` rules are made.
+ */
+export interface CheckRules {
+  readonly sets: Readonly<Record<RepositoryType, readonly LeveledRule[]>>;
+  readonly crossProject: readonly Rule[];
+  readonly staged: readonly Rule[];
+  readonly agentsRulesDigests: Readonly<Record<number, string>>;
+}
+
+/** Every rule of `rules`: every rule set and the scoped runs. */
+export function listEveryRule(rules: CheckRules): Rule[] {
+  return [
+    ...Object.values(rules.sets).flatMap((set) => set.map(({ rule }) => rule)),
+    ...rules.crossProject,
+    ...rules.staged,
+  ];
+}
+
+/**
+ * The latest rules epoch of `rules`: the largest `since` or `until` of any of them, 1 when there
  * is none.
  */
 export function latestEpoch(rules: Iterable<Rule>): number {
   let latest = 1;
-  for (const rule of rules) latest = Math.max(latest, rule.since, ...(rule.revisions ?? []));
+  for (const rule of rules) latest = Math.max(latest, rule.since, rule.until ?? 1);
   return latest;
 }
 
 /** Whether `rule` applies to a repository pinned at the rules epoch `pin`. */
 export function appliesAt(rule: Rule, pin: number): boolean {
-  return rule.since <= pin;
+  return rule.since <= pin && (rule.until === undefined || pin < rule.until);
 }
 
 /** The findings `rule` makes of `reading`: each breach under the rule's id and remedy. */

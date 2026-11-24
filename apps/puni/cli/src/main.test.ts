@@ -193,7 +193,11 @@ describe('runProcess', () => {
         navigatorResearchAddCommand: () => ({ run: () => 0 }),
         burokratRepoInitCommand: () => ({ run: () => 0 }),
         burokratRepoUpgradeCommand: () => ({ run: () => 0 }),
-        latestRules: () => ({ epoch: 1, judge: () => [] }),
+        latestRules: () => ({
+          epoch: 1,
+          judge: () => ({ 'system-state': [], 'system-records': [] }),
+          holdsRulesOf: () => true,
+        }),
         burokratAdrAddCommand: () => ({ run: () => 0 }),
         burokratAssessOutcomesCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),

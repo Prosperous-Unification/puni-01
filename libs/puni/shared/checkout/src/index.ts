@@ -35,7 +35,7 @@ export { leavesRoot } from './paths';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
 export { nameProject, readProjectFiles } from './project-files';
 export { readRulesSection, replaceRulesSection } from './rules-section';
-export type { LatestRules } from './latest-rules';
+export { type LatestRules, requirePinReached, rulesUpgradeCommand } from './latest-rules';
 export { seedFiles } from './seed-files';
 export {
   formatRegistry,

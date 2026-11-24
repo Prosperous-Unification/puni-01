@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatRegistry } from '@puni/shared-checkout';
 import { fixtureRemotes, removeFixture } from '@puni/shared-testing';
@@ -7,34 +7,71 @@ import { digestRulesSection, rulesDigestAt } from './agents-rules';
 import {
   type CheckHost,
   dropRemedies,
-  fixtureRuleSets,
+  fixtureCheckRules,
   fixtureVersion,
   openCheckHost,
 } from './check.test-host';
-import { latestEpoch, type Rule } from './finding';
-import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
-import { codeRules } from './rule-set.rule';
+import type { CheckRequest } from './contract';
+import {
+  appliesAt,
+  type CheckRules,
+  latestEpoch,
+  type LeveledRule,
+  listEveryRule,
+  type Rule,
+} from './finding';
+import { fixtureAgentsRules, makeRepositoryPair } from './repository-pair.test-host';
+import { checkRules, latestRulesEpoch, retiredRules } from './rule-set.rule';
 import { pinAgentsRules } from './rules/entry.rule';
 
-/** A rule of the next epoch: `later.md` may not exist. */
-const laterRule: Rule = {
-  id: 'demo.later',
-  since: 2,
-  remedy: 'remove later.md',
-  judge: ({ files }) => (files.exists('later.md') ? [{ path: 'later.md', message: 'exists' }] : []),
+/** A rule that finds `path` wherever it exists, under `id`, from `since` (until `until`). */
+function finds(id: string, path: string, since: number, until?: number): Rule {
+  return {
+    id,
+    since,
+    ...(until === undefined ? {} : { until }),
+    remedy: `remove ${path}`,
+    judge: ({ files }) => (files.exists(path) ? [{ path, message: 'exists' }] : []),
+  };
+}
+
+/** The rules section the fixture's `AGENTS.md` must hold from epoch 2. */
+const secondRules = '## Rules\n\n1. **The second rules.** Stricter than the first.\n';
+
+const base = fixtureCheckRules({
+  1: digestRulesSection(fixtureAgentsRules),
+  2: digestRulesSection(secondRules),
+});
+const project = (rule: Rule): LeveledRule => ({ level: 'project', rule });
+
+/**
+ * The fixture rules with a later rule in every list, an epoch-2 rules text, and one rule that
+ * stops applying at epoch 2.
+ */
+const laterRules: CheckRules = {
+  ...base,
+  sets: {
+    'system-state': [
+      ...base.sets['system-state'],
+      project(finds('demo.later', 'later.md', 2)),
+      project(finds('demo.also', 'later.md', 2)),
+      { level: 'repository', rule: finds('demo.retired', 'retired.md', 1, 2) },
+    ],
+    'system-records': [
+      ...base.sets['system-records'].map(({ level, rule }) => ({ level, rule })),
+      { level: 'repository', rule: finds('demo.records', 'AGENTS.md', 2) },
+    ],
+  },
+  crossProject: [...base.crossProject, finds('demo.cross', 'later.md', 2)],
+  staged: [...base.staged, finds('demo.staged', 'later.md', 2)],
 };
 
-/** {@link fixtureRuleSets} with {@link laterRule} added to the system-state rules. */
-const laterRuleSets: typeof fixtureRuleSets = {
-  ...fixtureRuleSets,
-  'system-state': [...fixtureRuleSets['system-state'], { level: 'project', rule: laterRule }],
-};
-
-let root = '';
+let state = '';
+let records = '';
 let host: CheckHost;
 
 beforeAll(() => {
-  host = openCheckHost(undefined, undefined, laterRuleSets);
+  host = openCheckHost(undefined, undefined, laterRules);
 });
 
 afterAll(async () => {
@@ -42,110 +79,152 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository();
-  writeFileSync(join(root, 'later.md'), 'breaks the later rule\n');
+  ({ state, records } = await makeRepositoryPair());
+  writeFileSync(join(state, 'later.md'), 'breaks the later rules\n');
 });
 
 afterEach(() => {
-  removeFixture(root);
+  removeFixture(state);
 });
 
+/** Pins the fixture at `rules`; from epoch 2 its `AGENTS.md` holds {@link secondRules}. */
 function pin(rules: number): void {
-  writeFileSync(join(root, 'puni.json'), formatRegistry('system-state', fixtureRemotes, rules));
+  writeFileSync(join(state, 'puni.json'), formatRegistry('system-state', fixtureRemotes, rules));
+  if (rules < 2) return;
+  const agents = join(state, 'AGENTS.md');
+  writeFileSync(agents, readFileSync(agents, 'utf8').replace(fixtureAgentsRules, secondRules));
 }
 
-const pinned = codeRules.length;
+const newer = (ids: string) =>
+  `newer: puni.json pins rules epoch 1, so ${ids} not applied; run puni burokrat repo upgrade\n`;
+const later = (id: string) => `${id} later.md: exists; fix: remove later.md`;
+
+const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
+  [
+    'whole',
+    {},
+    `ok: system-state, 28 rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 29 rules, 2 findings.\n`,
+  ],
+  [
+    '--project one',
+    { project: 'one' },
+    `ok: system-state, project one, 11 rules, no findings.\n${newer('demo.also, demo.later are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, project one, 13 rules, 2 findings.\n`,
+  ],
+  [
+    '--cross-project-links',
+    { crossProjectLinks: true },
+    `ok: system-state, cross-project links, 3 rules, no findings.\n${newer('demo.cross is')}`,
+    `${later('demo.cross')}\nfail: system-state, cross-project links, 4 rules, 1 finding.\n`,
+  ],
+  [
+    '--staged',
+    { staged: true },
+    `ok: system-state, staged files, 1 rule, no findings.\n${newer('demo.staged is')}`,
+    `${later('demo.staged')}\nfail: system-state, staged files, 2 rules, 1 finding.\n`,
+  ],
+  [
+    '--repo system-records',
+    { repo: 'system-records' },
+    `ok: system-records, 10 rules, no findings.\n${newer('demo.records is')}`,
+    'demo.records AGENTS.md: exists; fix: remove AGENTS.md\nfail: system-records, 11 rules, 1 finding.\n',
+  ],
+];
 
 describe('check at a rules pin', () => {
-  test('a rule after the pin is not applied, and one newer line names it and the upgrade', () => {
-    expect(host.runCheck({}, root)).toEqual({
-      code: 0,
-      stdout: `ok: system-state, ${String(pinned)} rules, no findings.\nnewer: puni.json pins rules epoch 1, so demo.later is not applied; run puni burokrat repo upgrade\n`,
-      stderr: '',
-    });
+  test.each(modes)('%s at pin 1 applies no later rule and names them', (_mode, request, out) => {
+    expect(host.runCheck(request, state)).toEqual({ code: 0, stdout: out, stderr: '' });
   });
 
-  test('the newer line follows the fail summary too, and a project run names it as well', () => {
-    writeFileSync(join(root, 'README.md'), `${'word '.repeat(151)}\n`);
-    const whole = host.runCheck({}, root);
-    expect(whole.code).toBe(1);
-    expect(whole.stdout).toEndWith(
-      `\nfail: system-state, ${String(pinned)} rules, 1 finding.\nnewer: puni.json pins rules epoch 1, so demo.later is not applied; run puni burokrat repo upgrade\n`,
-    );
-    expect(host.runCheck({ project: 'one' }, root).stdout).toContain('\nnewer: ');
-  });
-
-  test('a run that holds no later rule prints no newer line', () => {
-    expect(host.runCheck({ staged: true }, root).stdout).toBe(
-      'ok: system-state, staged files, 1 rule, no findings.\n',
-    );
-  });
-
-  test('at the later pin the rule is applied and nothing is newer', () => {
+  test.each(modes)('%s at pin 2 applies them, with nothing newer', (_mode, request, _ok, out) => {
     pin(2);
-    expect(host.runCheck({}, root)).toEqual({
-      code: 1,
-      stdout: `demo.later later.md: exists; fix: remove later.md\nfail: system-state, ${String(pinned + 1)} rules, 1 finding.\n`,
-      stderr: '',
-    });
+    expect(host.runCheck(request, state)).toEqual({ code: 1, stdout: out, stderr: '' });
   });
 
-  test('a pin past the latest epoch is refused naming both epochs and the version, exit 2', () => {
-    pin(3);
-    expect(host.runCheck({}, root)).toEqual({
-      code: 2,
-      stdout: '',
-      stderr: `error: puni.json pins rules epoch 3, but puni ${fixtureVersion} knows rules only up to epoch 2; upgrade puni\n`,
-    });
-    expect(host.runCheck({ repo: 'system-records' }, root).code).toBe(2);
+  test('a retired rule applies before its until and is neither applied nor newer after', () => {
+    writeFileSync(join(state, 'retired.md'), 'x\n');
+    expect(host.runCheck({}, state).stdout).toStartWith(
+      'demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, 28 rules, 1 finding.\n',
+    );
+    pin(2);
+    expect(host.runCheck({}, state).stdout).not.toContain('demo.retired');
   });
+
+  test('at pin 2 the epoch-1 rules text is an agents.rules finding naming the upgrade', () => {
+    pin(2);
+    const agents = join(state, 'AGENTS.md');
+    writeFileSync(agents, readFileSync(agents, 'utf8').replace(secondRules, fixtureAgentsRules));
+    expect(host.runCheck({}, state).stdout).toContain(
+      `agents.rules AGENTS.md: rules section digests to ${digestRulesSection(fixtureAgentsRules)}, not ${digestRulesSection(secondRules)}, the rules in force at epoch 2; fix: restore`,
+    );
+  });
+
+  test.each([{}, { repo: 'system-records' } as const])(
+    'a pin past the latest epoch is refused naming both epochs and the version, exit 2: %j',
+    (request) => {
+      pin(3);
+      expect(host.runCheck(request, state)).toEqual({
+        code: 2,
+        stdout: '',
+        stderr: `error: puni.json pins rules epoch 3, but puni ${fixtureVersion} knows rules only up to epoch 2; upgrade puni\n`,
+      });
+    },
+  );
 });
 
 describe('the latest rules', () => {
-  test('their epoch is the latest since of the injected rule sets', () => {
+  test('their epoch is the latest since or until of every injected list', () => {
     expect(host.container.resolve('latestRules').epoch).toBe(2);
-    expect(latestEpoch(codeRules.map(({ rule }) => rule))).toBe(1);
+    expect(latestEpoch([finds('a.b', 'x', 1, 4)])).toBe(4);
   });
 
-  test('judge the whole repository at the latest epoch, the pin notwithstanding', () => {
-    const latest = host.container.resolve('latestRules');
-    expect(latest.judge(root, fixtureAgentsRules)).toEqual([
-      { rule: 'demo.later', path: 'later.md', message: 'exists', remedy: 'remove later.md' },
-    ]);
-  });
-
-  test('judge AGENTS.md as if its rules section were the given text', () => {
-    const latest = host.container.resolve('latestRules');
-    const other = '## Rules\n\n1. Something else.\n';
-    expect(dropRemedies(latest.judge(root, other))).toEqual([
-      {
-        rule: 'agents.rules',
-        path: 'AGENTS.md',
-        message: `rules section digests to ${digestRulesSection(other)}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 2`,
-      },
+  test('judge every repository at the latest epoch as if the rules section were the given text', () => {
+    const judged = host.container.resolve('latestRules').judge(state, secondRules);
+    expect(dropRemedies(judged['system-state'])).toEqual([
+      { rule: 'demo.also', path: 'later.md', message: 'exists' },
       { rule: 'demo.later', path: 'later.md', message: 'exists' },
     ]);
-  });
-
-  test('a defect of the inputs is one finding', () => {
-    writeFileSync(join(root, 'puni.json'), '{');
+    expect(dropRemedies(judged['system-records'])).toEqual([
+      { rule: 'demo.records', path: 'AGENTS.md', message: 'exists' },
+    ]);
     expect(
       host.container
         .resolve('latestRules')
-        .judge(root, fixtureAgentsRules)
-        .map(({ rule }) => rule),
-    ).toEqual(['repository.config']);
+        .judge(state, fixtureAgentsRules)
+        ['system-state'].map(({ rule }) => rule),
+    ).toEqual(['agents.rules', 'demo.also', 'demo.later']);
+  });
+
+  test('a records checkout that is not beside the state one is its one finding', () => {
+    rmSync(records, { recursive: true });
+    const judged = host.container.resolve('latestRules').judge(state, secondRules);
+    expect(judged['system-records'].map(({ rule, path }) => `${rule} ${path}`)).toEqual([
+      'repository.checkout .',
+    ]);
+    expect(judged['system-state']).toHaveLength(2);
+  });
+
+  test('a section holds the rules of an epoch when its digest is the one in force there', () => {
+    const latest = host.container.resolve('latestRules');
+    expect([
+      latest.holdsRulesOf(secondRules, 2),
+      latest.holdsRulesOf(fixtureAgentsRules, 2),
+      latest.holdsRulesOf(fixtureAgentsRules, 1),
+    ]).toEqual([true, false, true]);
   });
 });
 
 describe('agents.rules by epoch', () => {
-  const second = '## Rules\n\n1. The second rules.\n';
-  const digests = { 1: digestRulesSection(fixtureAgentsRules), 3: digestRulesSection(second) };
-  const rule = pinAgentsRules(digests);
+  const digests = { 1: digestRulesSection(fixtureAgentsRules), 3: digestRulesSection(secondRules) };
+  const [first, third] = pinAgentsRules(digests);
 
-  test('is as old as its first digest, and each later one is a revision', () => {
-    expect([rule.since, rule.revisions]).toEqual([1, [3]]);
-    expect(latestEpoch([rule])).toBe(3);
+  test('is one rule per digest, each applying until the next', () => {
+    expect([first?.since, first?.until, third?.since, third?.until]).toEqual([1, 3, 3, undefined]);
+    expect(first?.remedy).toEndWith(
+      ', then run puni burokrat repo upgrade to take the rules of epoch 3',
+    );
+    expect(latestEpoch(pinAgentsRules(digests))).toBe(3);
   });
 
   test('the digest in force is that of the largest epoch at or below the pin', () => {
@@ -157,16 +236,35 @@ describe('agents.rules by epoch', () => {
       digests[3],
     ]);
   });
+});
 
-  test.each([
-    [1, fixtureAgentsRules, []],
-    [2, fixtureAgentsRules, []],
-    [3, second, []],
-    [3, fixtureAgentsRules, ['agents.rules']],
-    [1, second, ['agents.rules']],
-  ] as const)('at pin %p the given section holds unless listed: %#', (epoch, section, rules) => {
-    pin(epoch);
-    writeFileSync(join(root, 'AGENTS.md'), `# demo\n\n${section}`);
-    expect(host.judge(rule, root).map((finding) => finding.rule)).toEqual([...rules]);
+describe('the production rules', () => {
+  test('each id applied at a pin is applied at the next, unless retiredRules retires it there', () => {
+    const lists: readonly (readonly Rule[])[] = [
+      ...Object.values(checkRules.sets).map((set) => set.map(({ rule }) => rule)),
+      checkRules.crossProject,
+      checkRules.staged,
+    ];
+    for (const rules of lists) {
+      for (let at = 1; at < latestRulesEpoch; at += 1) {
+        const ids = (epoch: number) =>
+          new Set(rules.filter((rule) => appliesAt(rule, epoch)).map(({ id }) => id));
+        const next = ids(at + 1);
+        const lost = [...ids(at)].filter((id) => !next.has(id) && retiredRules[id] !== at + 1);
+        expect([at, lost]).toEqual([at, []]);
+      }
+    }
+  });
+
+  test('every retirement is a rule whose until is its epoch', () => {
+    for (const [id, epoch] of Object.entries(retiredRules)) {
+      expect(listEveryRule(checkRules).some((rule) => rule.id === id && rule.until === epoch)).toBe(
+        true,
+      );
+    }
+  });
+
+  test('the latest epoch is that of every rule', () => {
+    expect(latestRulesEpoch).toBe(latestEpoch(listEveryRule(checkRules)));
   });
 });

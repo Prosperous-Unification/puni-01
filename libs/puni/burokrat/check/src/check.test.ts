@@ -21,8 +21,8 @@ import {
   type Judged,
   openCheckHost,
 } from './check.test-host';
-import type { Rule } from './finding';
-import { codeRules, crossProjectRules, ruleSets, stagedRules } from './rule-set.rule';
+import { listEveryRule, type Rule } from './finding';
+import { checkRules, codeRules } from './rule-set.rule';
 import {
   agentsExists,
   agentsNamesIndex,
@@ -757,11 +757,7 @@ describe('each rule finds its breach', () => {
   });
 
   test('every rule of every rule set names its id and a remedy', () => {
-    const everyRule = [
-      ...Object.values(ruleSets).flatMap((rules) => rules.map(({ rule }) => rule)),
-      ...crossProjectRules,
-      ...stagedRules,
-    ];
+    const everyRule = listEveryRule(checkRules);
     for (const rule of everyRule) {
       expect([rule.id, /^[a-z]+\.[a-z-]+$/u.test(rule.id)]).toEqual([rule.id, true]);
       expect([rule.id, rule.remedy.length > 0]).toEqual([rule.id, true]);

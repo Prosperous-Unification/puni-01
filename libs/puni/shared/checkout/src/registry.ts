@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
 import { RegistryInvalid } from './failures';
 import { describeValue, isRecord, parseJson, requireOnlyKeys } from './json';
+import { formatJson } from './json-format';
 
 /** The `puni.json` key naming the type of the repository that holds the file. */
 export const thisRepoTypeKey = 'this-repo-type';
@@ -110,6 +111,18 @@ function readEntry(value: unknown, where: string, refuse: Refuse): RepositoryEnt
  * @throws RegistryInvalid naming the file and the problem, with the index of the offending entry.
  */
 export function parseRegistry(text: string, file: string): RepositoryRegistry {
+  return readRegistryDocument(text, file).registry;
+}
+
+/**
+ * The registry `text` declares, and the JSON object it was read from.
+ *
+ * @throws RegistryInvalid as {@link parseRegistry} does.
+ */
+function readRegistryDocument(
+  text: string,
+  file: string,
+): { readonly document: Readonly<Record<string, unknown>>; readonly registry: RepositoryRegistry } {
   const refuse = (problem: string, cause?: unknown): never => {
     const details = { rule: 'repository.config', path: 'puni.json', file, problem } as const;
     throw cause === undefined
@@ -120,14 +133,16 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
   if ('problem' in read) return refuse(read.problem, read.cause);
   const parsed = read.value;
   if (!isRecord(parsed)) return refuse('is not a JSON object');
-  const registryKeys = [thisRepoTypeKey, rulesKey, allReposKey];
   requireOnlyKeys(
     Object.fromEntries(
       Object.entries(parsed).filter(([key]) => !key.startsWith(extensionKeyPrefix)),
     ),
-    registryKeys,
+    [thisRepoTypeKey, rulesKey, allReposKey],
     '',
-    refuse,
+    (problem) =>
+      refuse(
+        `${problem} and keys starting ${extensionKeyPrefix} (or upgrade puni, if a newer puni wrote them)`,
+      ),
   );
   const list = parsed[allReposKey];
   if (!Array.isArray(list) || list.length === 0) {
@@ -154,15 +169,25 @@ export function parseRegistry(text: string, file: string): RepositoryRegistry {
     );
   }
   const rules = parsed[rulesKey];
-  if (typeof rules !== 'number' || !Number.isInteger(rules) || rules < 1) {
-    return refuse(`${rulesKey} is ${describeValue(rules)}; expected a positive integer`);
+  if (typeof rules !== 'number' || !Number.isSafeInteger(rules) || rules < 1) {
+    const keep =
+      rules === undefined ? ` ("${rulesKey}": 1 keeps the verdict the repository had)` : '';
+    return refuse(
+      `${rulesKey} is ${describeValue(rules)}; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)}${keep}`,
+    );
   }
   const listed = (type: RepositoryType): RepositoryEntry =>
     byType.get(type) ?? refuse(`${allReposKey} lacks the types ${type}`);
   return {
-    thisType,
-    rules,
-    repos: { 'system-state': listed('system-state'), 'system-records': listed('system-records') },
+    document: parsed,
+    registry: {
+      thisType,
+      rules,
+      repos: {
+        'system-state': listed('system-state'),
+        'system-records': listed('system-records'),
+      },
+    },
   };
 }
 
@@ -187,14 +212,11 @@ export function formatRegistry(
 
 /**
  * The `puni.json` text `text`, which {@link parseRegistry} accepts, with its rules epoch set to
- * `rules`: every other key and value kept in its order, printed as JSON indented by two spaces
- * with a final newline.
+ * `rules`: every other key and value kept in its order, printed by {@link formatJson}.
  *
  * @throws RegistryInvalid naming `file` when `text` is not a valid registry.
  */
 export function repinRegistry(text: string, file: string, rules: number): string {
-  parseRegistry(text, file);
-  const read = parseJson(text);
-  const parsed = 'value' in read && isRecord(read.value) ? read.value : {};
-  return `${JSON.stringify({ ...parsed, [rulesKey]: rules }, null, 2)}\n`;
+  const { document } = readRegistryDocument(text, file);
+  return formatJson({ ...document, [rulesKey]: rules });
 }

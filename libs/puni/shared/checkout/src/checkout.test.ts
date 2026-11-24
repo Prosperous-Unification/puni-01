@@ -131,6 +131,25 @@ describe('checkoutFiles over a memory file system', () => {
     ).toBeInstanceOf(CheckoutPathRefused);
   });
 
+  test.each(['puni.json', 'AGENTS.md'])(
+    'a system-state checkout writes %s but never removes it',
+    (path) => {
+      const { host, container } = openHost({ ...tree, [`/r/${path}`]: 'kept' });
+      const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+      expect(
+        caught(() => {
+          files.remove(path);
+        }),
+      ).toMatchObject({
+        message: `${path}: is not inside wiki/index/, the only place a system-state checkout removes`,
+      });
+      expect(host.nodes.get(`/r/${path}`)).toBe('kept');
+      files.write('wiki/index/index.md', 'generated');
+      files.remove('wiki/index/index.md');
+      expect(host.nodes.get('/r/wiki/index/index.md')).toBeUndefined();
+    },
+  );
+
   test('a write outside wiki/index/, puni.json and AGENTS.md is refused, writing nothing', () => {
     const { host, container } = openHost(tree);
     const files = container.resolve('checkoutFiles').open('/r', 'system-state');

@@ -35,7 +35,11 @@ function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } })
       .withServices({
         commandCatalog: () => ({ list: () => commands }),
         programSource: () => ({ directory: `${source}/apps/puni/cli/src`, version: '9.8.7' }),
-        latestRules: () => ({ epoch: 3, judge: () => [] }),
+        latestRules: () => ({
+          epoch: 3,
+          judge: () => ({ 'system-state': [], 'system-records': [] }),
+          holdsRulesOf: (section: string, epoch: number) => section === rules && epoch === 3,
+        }),
       })
       .buildContainer(),
   );
@@ -190,6 +194,20 @@ describe('burokrat repo init', () => {
       code: 1,
       stdout: '',
       stderr: `error: ${source}/AGENTS.md has no ## Rules section to copy; fix: run puni from a checkout whose AGENTS.md holds its rules\n`,
+    });
+    expect(created()).toEqual([]);
+  });
+
+  test('a source holding the rules of an older epoch is refused: exit 2, nothing written', () => {
+    const { created, run } = open({
+      ...sourceTree,
+      [`${source}/AGENTS.md`]: '# demo\n\n## Rules\n\n1. Older.\n',
+      [here]: { directory: true },
+    });
+    expect(run()).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: `error: the checkout puni runs from holds the rules of an older epoch than 3 in ${source}/AGENTS.md; run puni from a checkout that holds the rules of epoch 3\n`,
     });
     expect(created()).toEqual([]);
   });

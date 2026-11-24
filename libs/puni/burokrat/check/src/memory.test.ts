@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRegistry } from '@puni/shared-checkout';
 import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
-import { type CheckHost, fixtureRuleSets, fixtureVersion, openCheckHost } from './check.test-host';
+import {
+  type CheckHost,
+  fixtureCheckRules,
+  fixtureVersion,
+  openCheckHost,
+} from './check.test-host';
 import { createRepositoryCheck } from './repository-check.feature';
 import { claudeLinksAgents, readmeWords } from './rules/entry.rule';
 
@@ -54,7 +59,7 @@ describe('the repository check turns defect kinds into findings', () => {
       recordsCatalog: container.resolve('recordsCatalog'),
       commandCatalog: { list: () => [] },
       programSource: { directory: '/nowhere', version: fixtureVersion },
-      checkRuleSets: fixtureRuleSets,
+      checkRules: fixtureCheckRules(),
     });
   }
 

@@ -7,7 +7,7 @@ import {
   renderIndex,
 } from '@puni/shared-checkout';
 import type { RepoInitRequest, RepositoryPairSetup, RepoRequirements } from './contract';
-import { RemoteNameRefused, SourceRulesMissing } from './failures';
+import { RemoteNameRefused, SourceRulesMissing, SourceRulesStale } from './failures';
 import { readSourceCheckout } from './source-checkout';
 import { fillTemplate, newGitignore, templates } from './templates';
 
@@ -51,7 +51,8 @@ function nameRemotes(name: string, owner: string) {
  * repositories and pinning the latest rules epoch, `AGENTS.md`, the `CLAUDE.md` link, `README.md`, `.gitignore` and the generated
  * `wiki/index/` of a repository with no projects and no pages; the records side `AGENTS.md`, the
  * `CLAUDE.md` link and `.gitignore`. Nothing runs git or reaches the network. A refused name or
- * owner, or a directory that is not where a new repository may go, is `refused`; a source
+ * owner, a directory that is not where a new repository may go, or a source checkout holding the
+ * rules of an older epoch than the latest, is `refused`; a source
  * checkout that cannot be found or read, or whose `AGENTS.md` has no rules section, is
  * `defective`. Anything else propagates.
  */
@@ -63,7 +64,12 @@ export function createRepositoryPairSetup({
   latestRules,
 }: RepoRequirements): RepositoryPairSetup {
   const create = (cwd: string, request: RepoInitRequest) => {
-    const source = readSourceCheckout({ checkoutRegistry, checkoutFiles, programSource });
+    const source = readSourceCheckout({
+      checkoutRegistry,
+      checkoutFiles,
+      programSource,
+      latestRules,
+    });
     const remotes = nameRemotes(request.name, request.owner ?? source.owner);
     const recordsRoot = join(dirname(cwd), `${request.name}-records`);
     const state = checkoutFiles.create(cwd, 'system-state', 'empty-directory');
@@ -95,7 +101,11 @@ export function createRepositoryPairSetup({
       try {
         return create(cwd, request);
       } catch (caught) {
-        if (caught instanceof RemoteNameRefused || caught instanceof CheckoutRootRefused) {
+        if (
+          caught instanceof RemoteNameRefused ||
+          caught instanceof CheckoutRootRefused ||
+          caught instanceof SourceRulesStale
+        ) {
           return { kind: 'refused', reason: caught.message };
         }
         if (caught instanceof SourceRulesMissing) {

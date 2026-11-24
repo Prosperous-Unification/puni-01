@@ -2,6 +2,7 @@ import type {
   CheckoutFilesResource,
   LatestRules,
   RepositoryRegistryResource,
+  RepositoryType,
 } from '@puni/shared-checkout';
 import type { Command, CommandCatalog, ProgramSource } from '@puni/shared-command';
 import type { Finding } from '@puni/shared-failures';
@@ -50,8 +51,9 @@ export interface RepoUpgradeRequest {
 
 /**
  * What `repo upgrade` did: raised the pin `from` one epoch `to` the latest, found the pin
- * already `current`, found the repository `failing` the latest rules and changed nothing, or a
- * `refused` pin or `defective` repository, each with its one-line reason.
+ * already `current`, found a repository of the project `failing` the latest rules (the findings
+ * of each) and changed nothing, or a `refused` pin or source checkout, or a `defective`
+ * repository, each with its one-line reason.
  */
 export type RepoUpgradeOutcome =
   | { readonly kind: 'upgraded'; readonly from: number; readonly to: number }
@@ -60,7 +62,7 @@ export type RepoUpgradeOutcome =
       readonly kind: 'failing';
       readonly from: number;
       readonly to: number;
-      readonly findings: readonly Finding[];
+      readonly findings: Readonly<Record<RepositoryType, readonly Finding[]>>;
     }
   | { readonly kind: 'refused'; readonly reason: string }
   | { readonly kind: 'defective'; readonly reason: string };

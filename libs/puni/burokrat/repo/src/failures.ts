@@ -25,3 +25,13 @@ export const RulesSectionMissing = defineException({
   tag: 'puni/burokrat-repo/RulesSectionMissing',
   message: ({ file }: { file: string }) => `${file} has no ## Rules section to rewrite`,
 });
+
+/**
+ * The checkout `puni` runs from holds a rules section other than that of the epoch being written:
+ * the rules of an older epoch, which a new or upgraded repository must not take.
+ */
+export const SourceRulesStale = defineException({
+  tag: 'puni/burokrat-repo/SourceRulesStale',
+  message: ({ file, epoch }: { file: string; epoch: number }) =>
+    `the checkout puni runs from holds the rules of an older epoch than ${String(epoch)} in ${file}; run puni from a checkout that holds the rules of epoch ${String(epoch)}`,
+});

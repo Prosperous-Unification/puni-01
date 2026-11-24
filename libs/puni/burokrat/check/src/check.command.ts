@@ -5,6 +5,7 @@ import {
   ProjectUnknown,
   repositoryTypes,
   RulesPinAhead,
+  rulesUpgradeCommand,
 } from '@puni/shared-checkout';
 import type { CheckRequest, NewerRules, RepositoryCheck } from './contract';
 import { ProjectScopeRefused, ScopeOptionsConflict } from './failures';
@@ -36,7 +37,7 @@ export const checkParser = object({
 
 /** The line naming the rules a repository's pin leaves unapplied, and how to apply them. */
 function formatNewer({ pin, ids }: NewerRules): string {
-  return `newer: puni.json pins rules epoch ${String(pin)}, so ${ids.join(', ')} ${ids.length === 1 ? 'is' : 'are'} not applied; run puni burokrat repo upgrade\n`;
+  return `newer: puni.json pins rules epoch ${String(pin)}, so ${ids.join(', ')} ${ids.length === 1 ? 'is' : 'are'} not applied; run ${rulesUpgradeCommand}\n`;
 }
 
 /**

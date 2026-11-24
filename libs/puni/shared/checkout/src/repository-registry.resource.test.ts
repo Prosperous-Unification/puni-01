@@ -102,16 +102,23 @@ describe('readRegistry', () => {
   const defects: readonly (readonly [string, unknown, string])[] = [
     ['not JSON', '{this-repo-type', 'is not valid JSON: '],
     ['not an object', '[]', 'is not a JSON object'],
-    [
-      'an unknown top-level key',
-      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], repos: {} },
-      'has unknown keys repos; it holds only this-repo-type, rules, all-repos',
-    ],
-    ...[undefined, 0, -1, 1.5, '1', null].map((rules): readonly [string, unknown, string] => [
-      `rules ${rules === undefined ? 'missing' : JSON.stringify(rules)}`,
-      { 'this-repo-type': 'system-state', rules, 'all-repos': [state, records] },
-      `rules is ${rules === undefined ? 'missing' : JSON.stringify(rules)}; expected a positive integer`,
+    ...(['repos', 'xtra'] as const).map((key): readonly [string, unknown, string] => [
+      `an unknown top-level key ${key}`,
+      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], [key]: {} },
+      `has unknown keys ${key}; it holds only this-repo-type, rules, all-repos and keys starting x- (or upgrade puni, if a newer puni wrote them)`,
     ]),
+    [
+      'rules missing',
+      { 'this-repo-type': 'system-state', 'all-repos': [state, records] },
+      `rules is missing; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)} ("rules": 1 keeps the verdict the repository had)`,
+    ],
+    ...[0, -1, 1.5, '1', null, Number.MAX_SAFE_INTEGER + 1].map(
+      (rules): readonly [string, unknown, string] => [
+        `rules ${JSON.stringify(rules)}`,
+        { 'this-repo-type': 'system-state', rules, 'all-repos': [state, records] },
+        `rules is ${JSON.stringify(rules)}; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)}`,
+      ],
+    ),
     [
       'all-repos missing',
       { 'this-repo-type': 'system-state' },

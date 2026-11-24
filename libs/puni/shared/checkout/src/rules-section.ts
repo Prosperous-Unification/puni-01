@@ -9,13 +9,15 @@ export function readRulesSection(text: string): string | undefined {
 
 /**
  * The Markdown `text` with its `## Rules` section, as {@link readRulesSection} finds it, replaced
- * by `section`, or `undefined` when no line is that heading.
+ * by `section`, or `undefined` when no line is that heading. The section ends in exactly one
+ * blank line when a heading follows it, and in exactly one newline when it ends the file.
  */
 export function replaceRulesSection(text: string, section: string): string | undefined {
   const span = findRulesSection(text);
-  return span === undefined
-    ? undefined
-    : `${text.slice(0, span.start)}${section}${text.slice(span.end)}`;
+  if (span === undefined) return undefined;
+  const after = text.slice(span.end);
+  const body = section.replace(/\s+$/u, '');
+  return `${text.slice(0, span.start)}${body}${after === '' ? '\n' : `\n\n${after}`}`;
 }
 
 function findRulesSection(text: string): { start: number; end: number } | undefined {

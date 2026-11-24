@@ -5,6 +5,7 @@ import {
   readInvocation as readProgramInvocation,
   UsageRefused,
 } from '@puni/shared-command';
+import { rulesUpgradeCommand } from '@puni/shared-checkout';
 import { type Group, puniProgram } from './root-parser';
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
@@ -200,6 +201,12 @@ describe('readInvocation', () => {
   test('a wrapped refusal is joined into one line', () => {
     const token = `x${'y'.repeat(120)}`;
     expect(readRefusal([token]).message).toBe(`Unexpected option or subcommand: \`${token}\`.`);
+  });
+});
+
+describe('the rules upgrade command', () => {
+  test('the command check and the agents.rules remedy name is in the command tree', () => {
+    expect(listCommands(puniProgram).map(({ path }) => path)).toContain(rulesUpgradeCommand);
   });
 });
 
