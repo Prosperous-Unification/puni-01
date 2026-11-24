@@ -41,7 +41,7 @@ export function bindingNames(compiler: Compiler, name: ts.BindingName): string[]
  * `expression` without the parentheses, `as` and `satisfies` around it, and the argument of an
  * `Object.freeze(…)` call.
  */
-function unwrap(compiler: Compiler, expression: ts.Expression): ts.Expression {
+function unwrap(compiler: Compiler, file: ts.SourceFile, expression: ts.Expression): ts.Expression {
   let inner = expression;
   for (;;) {
     if (
@@ -56,7 +56,7 @@ function unwrap(compiler: Compiler, expression: ts.Expression): ts.Expression {
     if (
       argument !== undefined &&
       compiler.isCallExpression(inner) &&
-      inner.expression.getText() === 'Object.freeze'
+      inner.expression.getText(file) === 'Object.freeze'
     ) {
       inner = argument;
       continue;
@@ -183,7 +183,11 @@ export interface TopLevel {
 }
 
 /** The name `exports.<name> = …` or `module.exports.<name> = …` assigns, if `statement` is one. */
-function commonJsExport(compiler: Compiler, statement: ts.Statement): string | undefined {
+function commonJsExport(
+  compiler: Compiler,
+  file: ts.SourceFile,
+  statement: ts.Statement,
+): string | undefined {
   if (!compiler.isExpressionStatement(statement)) return undefined;
   const assignment = statement.expression;
   if (
@@ -193,7 +197,7 @@ function commonJsExport(compiler: Compiler, statement: ts.Statement): string | u
   ) {
     return undefined;
   }
-  const owner = assignment.left.expression.getText();
+  const owner = assignment.left.expression.getText(file);
   return owner === 'exports' || owner === 'module.exports' ? assignment.left.name.text : undefined;
 }
 
@@ -233,14 +237,14 @@ export function listTopLevel(
         const members =
           initializer === undefined
             ? unknownMembers
-            : membersOf(compiler, unwrap(compiler, initializer));
+            : membersOf(compiler, unwrap(compiler, file, initializer));
         for (const name of bindingNames(compiler, declaration.name)) {
           listed.push({ name, node: declaration, members, exported });
         }
       }
       continue;
     }
-    const assigned = commonJsExport(compiler, statement);
+    const assigned = commonJsExport(compiler, file, statement);
     if (assigned !== undefined) {
       listed.push({ name: assigned, node: statement, members: unknownMembers, exported: true });
       continue;

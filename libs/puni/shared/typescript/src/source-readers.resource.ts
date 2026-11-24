@@ -2,11 +2,17 @@ import type { DocLink, SourceReader } from '@puni/shared-checkout';
 import type ts from 'typescript';
 import type { TypescriptCompiler } from './contract';
 import { type Compiler, declare, listReexports, listTopLevel } from './declarations';
-import { findDocComments, listLinkTags } from './doc-comments';
+import { type FoundComment, findDocComments, listLinkTags } from './doc-comments';
 import { isJudgedTarget, readGlobalNames, resolvesLink } from './link-scopes';
 
 /** The rules epoch from which the TypeScript and JavaScript readers are read. */
 export const typescriptReadersSince = 3;
+
+/**
+ * How many parsed texts a reader keeps, so the readings of one text share one parse: more than
+ * a repository's source files, and few enough to hold in memory.
+ */
+const parsedTexts = 4096;
 
 /** The extensions the compiler parses alike, and the script kind it parses them as. */
 const languages = [
@@ -20,9 +26,9 @@ const languages = [
 function readLinks(
   compiler: Compiler,
   file: ts.SourceFile,
+  comments: readonly FoundComment[],
   globals: () => ReadonlySet<string>,
 ): DocLink[] {
-  const comments = findDocComments(compiler, file);
   const topLevel = listTopLevel(
     compiler,
     file,
@@ -62,23 +68,38 @@ export function createTypescriptSourceReaders({
     return globals;
   };
   return languages.map(({ extensions, kind }) => {
+    const parsed = new Map<string, ts.SourceFile>();
+    const commented = new WeakMap<ts.SourceFile, FoundComment[]>();
     const parse = (text: string): { compiler: Compiler; file: ts.SourceFile } => {
       const compiler = typescriptCompiler.load();
-      const file = compiler.createSourceFile(
-        `source${extensions[0]}`,
-        text,
-        compiler.ScriptTarget.Latest,
-        true,
-        compiler.ScriptKind[kind],
-      );
+      let file = parsed.get(text);
+      if (file === undefined) {
+        if (parsed.size >= parsedTexts) parsed.clear();
+        file = compiler.createSourceFile(
+          `source${extensions[0]}`,
+          text,
+          compiler.ScriptTarget.Latest,
+          false,
+          compiler.ScriptKind[kind],
+        );
+        parsed.set(text, file);
+      }
       return { compiler, file };
+    };
+    const comments = (compiler: Compiler, file: ts.SourceFile): FoundComment[] => {
+      let found = commented.get(file);
+      if (found === undefined) {
+        found = findDocComments(compiler, file);
+        commented.set(file, found);
+      }
+      return found;
     };
     return {
       extensions,
       since: typescriptReadersSince,
       declarations(text) {
         const { compiler, file } = parse(text);
-        const docTexts = findDocComments(compiler, file).map((comment) => comment.text);
+        const docTexts = comments(compiler, file).map((comment) => comment.text);
         return declare(compiler, file, docTexts);
       },
       reexports(text) {
@@ -87,14 +108,14 @@ export function createTypescriptSourceReaders({
       },
       docComments(text) {
         const { compiler, file } = parse(text);
-        return findDocComments(compiler, file).map(({ line, text: comment }) => ({
+        return comments(compiler, file).map(({ line, text: comment }) => ({
           line,
           text: comment,
         }));
       },
       links(text) {
         const { compiler, file } = parse(text);
-        return readLinks(compiler, file, readGlobals);
+        return readLinks(compiler, file, comments(compiler, file), readGlobals);
       },
     };
   });
