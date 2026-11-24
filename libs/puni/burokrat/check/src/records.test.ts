@@ -142,7 +142,7 @@ describe('records.layout', () => {
     for (const [name, type] of Object.entries(recordsTopLevel)) {
       if (type === 'directory') mkdirSync(join(root, name), { recursive: true });
       else if (name !== 'CLAUDE.md')
-        writeRepositoryFile(root, name, formatRegistry('system-records', fixtureRemotes));
+        writeRepositoryFile(root, name, formatRegistry('system-records', fixtureRemotes, 1));
     }
     expect(judge(judgeRecordsLayout)).toEqual([]);
   });
@@ -417,7 +417,7 @@ describe('the check command on a records repository', () => {
   });
 
   test('a records repository holding its own puni.json is judged as system-records with no option', () => {
-    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes));
+    writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes, 1));
     expect(runIn(join(root, 'nav/plans'), {})).toEqual({
       code: 0,
       printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,

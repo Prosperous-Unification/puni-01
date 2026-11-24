@@ -26,7 +26,7 @@ const nodes = {
 
 function pair(inventoryText?: string): MemoryTree {
   return {
-    [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+    [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
     '/w/demo-records/AGENTS.md': '# records\n',
     ...(inventoryText === undefined ? {} : { [inventory]: inventoryText }),
   };
@@ -195,7 +195,7 @@ describe('the node inventory', () => {
 
   test('a missing records checkout is one error line saying where to clone it, exit 1', () => {
     const run = open({
-      [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+      [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
     }).ssh('alpha');
     expect(run).toEqual({
       code: 1,

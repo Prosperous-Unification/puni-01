@@ -9,7 +9,9 @@ Nx owns the task graph: affected projects, caching, ESLint under `lint`, and the
 keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool knows:
 `puni burokrat check` applies the rules of
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
-per project, which across projects and which only on the whole repository. The `gate` and
+per project, which across projects and which only on the whole repository. It applies only the
+rules the `rules` pin of [puni.json](../puni.json) reaches, by their `since`, and names the newer
+ones; `puni burokrat repo upgrade` raises the pin once the repository passes them. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
 `puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull

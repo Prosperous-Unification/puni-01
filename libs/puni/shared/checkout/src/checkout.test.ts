@@ -39,7 +39,7 @@ function caught(run: () => unknown): unknown {
   throw new Error('nothing was thrown');
 }
 
-const registry = formatRegistry('system-state', fixtureRemotes);
+const registry = formatRegistry('system-state', fixtureRemotes, 1);
 
 describe('checkoutRegistry over a memory file system', () => {
   test('an invalid puni.json is RegistryInvalid carrying its rule, path and cause', () => {
@@ -115,7 +115,23 @@ describe('checkoutFiles over a memory file system', () => {
     expect(caught(() => files.readText(path))).toBeInstanceOf(CheckoutPathRefused);
   });
 
-  test('a write outside wiki/index/ is refused and nothing is written', () => {
+  test('a system-state checkout writes puni.json and AGENTS.md, which its rules pin governs', () => {
+    const { host, container } = openHost(tree);
+    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
+    files.write('puni.json', 'pinned');
+    files.write('./AGENTS.md', 'rules');
+    expect([host.nodes.get('/r/puni.json'), host.nodes.get('/r/AGENTS.md')]).toEqual([
+      'pinned',
+      'rules',
+    ]);
+    expect(
+      caught(() => {
+        files.write('docs/AGENTS.md', 'x');
+      }),
+    ).toBeInstanceOf(CheckoutPathRefused);
+  });
+
+  test('a write outside wiki/index/, puni.json and AGENTS.md is refused, writing nothing', () => {
     const { host, container } = openHost(tree);
     const files = container.resolve('checkoutFiles').open('/r', 'system-state');
     expect(
@@ -169,7 +185,7 @@ describe('checkoutFiles over a memory file system', () => {
       }),
     ).toMatchObject({
       message:
-        'nav/plans/2031-04-05-a.md: is not inside wiki/index/, the only place a system-state checkout writes',
+        'nav/plans/2031-04-05-a.md: is not inside wiki/index/ or puni.json or AGENTS.md, the only place a system-state checkout writes',
     });
   });
 

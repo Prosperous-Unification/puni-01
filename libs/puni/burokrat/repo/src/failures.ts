@@ -19,3 +19,9 @@ export const TemplatePlaceholderUnfilled = defineException({
   message: ({ placeholder }: { placeholder: string }) =>
     `the template placeholder {{${placeholder}}} has no value`,
 });
+
+/** A system-state `AGENTS.md` with no `## Rules` section for `repo upgrade` to rewrite. */
+export const RulesSectionMissing = defineException({
+  tag: 'puni/burokrat-repo/RulesSectionMissing',
+  message: ({ file }: { file: string }) => `${file} has no ## Rules section to rewrite`,
+});

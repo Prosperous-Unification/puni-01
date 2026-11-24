@@ -78,6 +78,23 @@ describe('readRegistry', () => {
     const registry: unknown = readRegistry(pair.state);
     expect(registry).toEqual({
       thisType: 'system-state',
+      rules: 1,
+      repos: { 'system-state': state, 'system-records': records },
+    });
+  });
+
+  test('top-level keys starting x- are tolerated and ignored', () => {
+    writeConfig({
+      'x-note': { anything: true },
+      'this-repo-type': 'system-state',
+      rules: 4,
+      'all-repos': [state, records],
+      'x-': 1,
+    });
+    const registry: unknown = readRegistry(pair.state);
+    expect(registry).toEqual({
+      thisType: 'system-state',
+      rules: 4,
       repos: { 'system-state': state, 'system-records': records },
     });
   });
@@ -87,9 +104,14 @@ describe('readRegistry', () => {
     ['not an object', '[]', 'is not a JSON object'],
     [
       'an unknown top-level key',
-      { 'this-repo-type': 'system-state', 'all-repos': [state, records], repos: {} },
-      'has unknown keys repos; it holds only this-repo-type, all-repos',
+      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], repos: {} },
+      'has unknown keys repos; it holds only this-repo-type, rules, all-repos',
     ],
+    ...[undefined, 0, -1, 1.5, '1', null].map((rules): readonly [string, unknown, string] => [
+      `rules ${rules === undefined ? 'missing' : JSON.stringify(rules)}`,
+      { 'this-repo-type': 'system-state', rules, 'all-repos': [state, records] },
+      `rules is ${rules === undefined ? 'missing' : JSON.stringify(rules)}; expected a positive integer`,
+    ]),
     [
       'all-repos missing',
       { 'this-repo-type': 'system-state' },
@@ -219,7 +241,7 @@ describe('findRepository', () => {
     writeRepositoryFile(
       pair.records,
       'puni.json',
-      formatRegistry('system-records', fixtureRemotes),
+      formatRegistry('system-records', fixtureRemotes, 1),
     );
     expect(findRepository(pair.records).type).toBe('system-records');
   });

@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:burokrat", "type:group"],
   "metadata": {
-    "readWhen": "changing what repo init creates for a new governed repository pair",
-    "readFirst": "src/repository-pair.feature.ts"
+    "readWhen": "changing what repo init creates for a new governed repository pair, or how repo upgrade raises a rules pin",
+    "readFirst": "src/contract.ts"
   },
   "sourceRoot": "libs/puni/burokrat/repo/src",
   "targets": {

@@ -1,6 +1,7 @@
-import type { Command, CommandCatalog } from '@puni/shared-command';
+import type { Command, CommandCatalog, ProgramSource } from '@puni/shared-command';
 import type {
   CheckoutFilesResource,
+  LatestRules,
   ProjectScopeResource,
   RepositoryRegistryResource,
   RepositoryType,
@@ -20,10 +21,20 @@ export interface CheckRequest {
   readonly staged?: boolean | undefined;
 }
 
-/** What one check found: a summary naming what was judged, and every finding sorted. */
+/** The rules a check left unapplied: the repository's pin, and the ids of the later rules. */
+export interface NewerRules {
+  readonly pin: number;
+  readonly ids: readonly string[];
+}
+
+/**
+ * What one check found: a summary naming what was judged, every finding sorted, and the rules of
+ * the run that the repository's pin does not reach yet, when there are any.
+ */
 export interface CheckVerdict {
   readonly summary: string;
   readonly findings: readonly Finding[];
+  readonly newer?: NewerRules | undefined;
 }
 
 /** The capability "judge a repository". */
@@ -34,6 +45,7 @@ export interface RepositoryCheck {
    * checkout is the one `repository.git` finding at `.`.
    *
    * @throws FileUnreadable when a file the check needs exists but cannot be read.
+   * @throws RulesPinAhead when `puni.json` pins a rules epoch later than the latest of the rules.
    * @throws ProjectUnknown when `project` names no project.
    * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository
    *   other than `system-state`.
@@ -51,9 +63,12 @@ export interface CheckRequirements {
   readonly checkoutWikiIndex: WikiIndexResource;
   readonly recordsCatalog: RecordsCatalog;
   readonly commandCatalog: CommandCatalog;
+  readonly programSource: ProgramSource;
 }
 
 /** What the check module exports. */
 export interface CheckExports {
   readonly burokratCheckCommand: Command<CheckRequest>;
+  /** The judgement `puni burokrat repo upgrade` raises a repository's pin by. */
+  readonly latestRules: LatestRules;
 }

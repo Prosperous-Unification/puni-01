@@ -356,7 +356,7 @@ describe('check --project', () => {
   });
 
   test('git failing is the one repository.git finding, not a pass', () => {
-    writeFileSync(join(root, 'puni.json'), formatRegistry('system-state', fixtureRemotes));
+    writeFileSync(join(root, 'puni.json'), formatRegistry('system-state', fixtureRemotes, 1));
     rmSync(join(root, '.git'), { recursive: true });
     const run = runIn('two');
     expect(run.code).toBe(1);

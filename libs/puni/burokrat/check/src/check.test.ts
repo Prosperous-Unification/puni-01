@@ -609,7 +609,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
         {
           rule: 'agents.rules',
           path: 'AGENTS.md',
-          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not the pinned ${digestRulesSection(fixtureAgentsRules)}`,
+          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 1`,
         },
       ] as const,
   ),
@@ -963,7 +963,7 @@ describe('the check command', () => {
     const run = runIn(root);
     expect(run.code).toBe(1);
     expect(run.printed).toBe(
-      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
+      `repository.config puni.json: ${join(root, 'puni.json')} all-repos is []; expected a non-empty array; fix: correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once\nfail: no repository, 1 finding.\n`,
     );
   });
 });

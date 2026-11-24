@@ -9,7 +9,7 @@
 - changing how assess outcomes reads harness logs, prices usage or attributes it to accepted outcomes: [puni-burokrat-assess](../../libs/puni/burokrat/assess/src/outcome-assessment.feature.ts)
 - changing how the generated wiki index is written: [puni-burokrat-wiki](../../libs/puni/burokrat/wiki/src/wiki-index.feature.ts)
 - changing the adr add command: its options and the sections a new decision record starts with: [puni-burokrat-adr](../../libs/puni/burokrat/adr/src/adr-add.command.ts)
-- changing what repo init creates for a new governed repository pair: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/repository-pair.feature.ts)
+- changing what repo init creates for a new governed repository pair, or how repo upgrade raises a rules pin: [puni-burokrat-repo](../../libs/puni/burokrat/repo/src/contract.ts)
 
 ## Commands
 
@@ -19,7 +19,8 @@
 - `puni burokrat assess outcomes`: Say what the agent work of a period cost per accepted outcome.
 - `puni burokrat change`: Archive finished changes.
 - `puni burokrat check`: Judge the repository against its rules.
-- `puni burokrat repo`: Set up repositories for puni to govern.
+- `puni burokrat repo`: Set up the repositories puni governs, and raise their rules pin.
 - `puni burokrat repo init`: Create a governed repository here and its records repository beside it.
+- `puni burokrat repo upgrade`: Raise this repository's rules pin to the latest epoch, if it passes them.
 - `puni burokrat wiki`: Generate the wiki index.
 - `puni burokrat wiki index`: Write the generated wiki index.

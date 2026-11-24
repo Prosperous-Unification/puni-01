@@ -21,7 +21,7 @@ export const fixtureCommands: readonly CommandBrief[] = [
  */
 export function makeRepository(): string {
   const root = join(mkdtempSync(join(tmpdir(), 'puni-wiki-')), 'demo');
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',

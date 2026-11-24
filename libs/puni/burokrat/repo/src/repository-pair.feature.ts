@@ -1,14 +1,14 @@
-import { dirname, join, posix } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   CheckoutRootRefused,
   explainDefect,
   formatRegistry,
   githubUrlPattern,
-  readRulesSection,
   renderIndex,
 } from '@puni/shared-checkout';
 import type { RepoInitRequest, RepositoryPairSetup, RepoRequirements } from './contract';
 import { RemoteNameRefused, SourceRulesMissing } from './failures';
+import { readSourceCheckout } from './source-checkout';
 import { fillTemplate, newGitignore, templates } from './templates';
 
 /** A GitHub repository name as `repo init` takes it: GitHub's characters, not starting with `.`. */
@@ -48,7 +48,7 @@ function nameRemotes(name: string, owner: string) {
  * for byte from its `AGENTS.md`, and the default owner, that of its own system-state remote.
  * `cwd` must be an empty directory but for `.git`, and `../<name>-records` must not exist; both
  * are judged before anything is written. The state side gets `puni.json` registering both
- * repositories, `AGENTS.md`, the `CLAUDE.md` link, `README.md`, `.gitignore` and the generated
+ * repositories and pinning the latest rules epoch, `AGENTS.md`, the `CLAUDE.md` link, `README.md`, `.gitignore` and the generated
  * `wiki/index/` of a repository with no projects and no pages; the records side `AGENTS.md`, the
  * `CLAUDE.md` link and `.gitignore`. Nothing runs git or reaches the network. A refused name or
  * owner, or a directory that is not where a new repository may go, is `refused`; a source
@@ -60,20 +60,10 @@ export function createRepositoryPairSetup({
   checkoutFiles,
   commandCatalog,
   programSource,
+  latestRules,
 }: RepoRequirements): RepositoryPairSetup {
-  const readSource = () => {
-    const found = checkoutRegistry.locate(programSource.directory);
-    const source = checkoutRegistry.resolve(found, 'system-state');
-    const file = join(source.root, 'AGENTS.md');
-    const rules = readRulesSection(
-      checkoutFiles.open(source.root, source.type).readText('AGENTS.md'),
-    );
-    if (rules === undefined) throw new SourceRulesMissing({ details: { file } });
-    const owner = posix.basename(posix.dirname(source.registry.repos['system-state'].remote.url));
-    return { rules, owner };
-  };
   const create = (cwd: string, request: RepoInitRequest) => {
-    const source = readSource();
+    const source = readSourceCheckout({ checkoutRegistry, checkoutFiles, programSource });
     const remotes = nameRemotes(request.name, request.owner ?? source.owner);
     const recordsRoot = join(dirname(cwd), `${request.name}-records`);
     const state = checkoutFiles.create(cwd, 'system-state', 'empty-directory');
@@ -82,7 +72,7 @@ export function createRepositoryPairSetup({
     const values = { name: request.name, recordsUrl: remotes.records };
     state.write(
       'puni.json',
-      `${formatRegistry('system-state', { 'system-state': remotes.state, 'system-records': remotes.records })}\n`,
+      `${formatRegistry('system-state', { 'system-state': remotes.state, 'system-records': remotes.records }, latestRules.epoch)}\n`,
     );
     state.write('AGENTS.md', `${fillTemplate(templates.stateAgents, values)}\n${source.rules}`);
     state.link('CLAUDE.md', 'AGENTS.md');

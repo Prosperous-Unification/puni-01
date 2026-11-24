@@ -16,7 +16,7 @@ const track = closeAfterEach();
 const source = '/opt/demo';
 const rules = '## Rules\n\n1. **Keep it.** Exactly as it is.\n';
 const sourceTree: MemoryTree = {
-  [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${source}/AGENTS.md`]: `# demo\n\n## Working here\n\n- Anything.\n\n${rules}`,
 };
 const here = '/w/shop';
@@ -34,7 +34,8 @@ function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } })
       .withServices(host.services)
       .withServices({
         commandCatalog: () => ({ list: () => commands }),
-        programSource: () => ({ directory: `${source}/apps/puni/cli/src` }),
+        programSource: () => ({ directory: `${source}/apps/puni/cli/src`, version: '9.8.7' }),
+        latestRules: () => ({ epoch: 3, judge: () => [] }),
       })
       .buildContainer(),
   );
@@ -105,10 +106,14 @@ describe('burokrat repo init', () => {
       return node;
     };
     expect(text(`${here}/puni.json`)).toBe(
-      `${formatRegistry('system-state', {
-        'system-state': 'https://github.com/acme/shop',
-        'system-records': 'https://github.com/acme/shop-records',
-      })}\n`,
+      `${formatRegistry(
+        'system-state',
+        {
+          'system-state': 'https://github.com/acme/shop',
+          'system-records': 'https://github.com/acme/shop-records',
+        },
+        3,
+      )}\n`,
     );
     const agents = text(`${here}/AGENTS.md`);
     expect(readRulesSection(agents)).toBe(rules);

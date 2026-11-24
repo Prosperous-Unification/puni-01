@@ -149,7 +149,7 @@ const lines = (...entries: readonly string[]) => `${entries.join('\n')}\n`;
  * 500,000 on main and 100,000 on a branch no outcome merged.
  */
 const tree: MemoryTree = {
-  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${state}/card.json`]: JSON.stringify(card),
   [`${claudeProjects}/-w-demo/s1.jsonl`]: lines(
     claudeLink('s1'),

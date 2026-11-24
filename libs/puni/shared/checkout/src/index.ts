@@ -16,6 +16,7 @@ export {
   CheckoutUnlistable,
   FileUnreadable,
   ProjectUnknown,
+  RulesPinAhead,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
@@ -33,12 +34,14 @@ export {
 export { leavesRoot } from './paths';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
 export { nameProject, readProjectFiles } from './project-files';
-export { readRulesSection } from './rules-section';
+export { readRulesSection, replaceRulesSection } from './rules-section';
+export type { LatestRules } from './latest-rules';
 export { seedFiles } from './seed-files';
 export {
   formatRegistry,
   githubUrlPattern,
   nameRepository,
+  repinRegistry,
   type Repository,
   type RepositoryRegistry,
   type RepositoryType,

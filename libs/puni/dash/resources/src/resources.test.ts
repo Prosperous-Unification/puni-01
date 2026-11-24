@@ -92,7 +92,7 @@ describe('dash resources over a temporary system-state repository', () => {
   beforeEach(() => {
     parent = mkdtempSync(join(tmpdir(), 'puni-resources-'));
     state = join(parent, 'demo');
-    writeRepositoryFile(state, 'puni.json', formatRegistry('system-state', fixtureRemotes));
+    writeRepositoryFile(state, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
     writeRepositoryFile(state, '.gitignore', '.worktrees/\n');
     runGit(parent, ['init', '-q', '-b', 'main', state]);
     runGit(state, ['add', '-A']);

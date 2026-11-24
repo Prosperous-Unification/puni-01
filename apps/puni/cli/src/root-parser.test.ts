@@ -119,7 +119,7 @@ describe('readInvocation', () => {
     ['d ops', ['ssh', 'k3s']],
     ['n plan', ['add']],
     ['n research', ['add']],
-    ['b repo', ['init']],
+    ['b repo', ['init', 'upgrade']],
     ['b adr', ['add']],
     ['b assess', ['outcomes']],
     [
@@ -146,7 +146,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo [init --name NAME [--owner OWNER]] | adr [add --title TEXT\n       --topics LIST --summary TEXT [--body-file PATH]] | change | assess [outcomes --since INSTANT\n       --until INSTANT [--rate-card PATH] [--claude-projects DIR...] [--codex-sessions DIR...] [\n       --json]])]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] |\n       wiki [index [--print]] | repo [(init --name NAME [--owner OWNER] | upgrade)] | adr [add\n       --title TEXT --topics LIST --summary TEXT [--body-file PATH]] | change | assess [outcomes\n       --since INSTANT --until INSTANT [--rate-card PATH] [--claude-projects DIR...] [\n       --codex-sessions DIR...] [--json]])]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });
@@ -263,10 +263,17 @@ describe('listCommands', () => {
       { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
       { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
       { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
-      { path: 'puni burokrat repo', brief: 'Set up repositories for puni to govern.' },
+      {
+        path: 'puni burokrat repo',
+        brief: 'Set up the repositories puni governs, and raise their rules pin.',
+      },
       {
         path: 'puni burokrat repo init',
         brief: 'Create a governed repository here and its records repository beside it.',
+      },
+      {
+        path: 'puni burokrat repo upgrade',
+        brief: "Raise this repository's rules pin to the latest epoch, if it passes them.",
       },
       { path: 'puni burokrat adr', brief: 'File architecture decision records.' },
       {

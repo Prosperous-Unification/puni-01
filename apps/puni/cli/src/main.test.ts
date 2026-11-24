@@ -192,6 +192,8 @@ describe('runProcess', () => {
         navigatorPlanAddCommand: () => ({ run: () => 0 }),
         navigatorResearchAddCommand: () => ({ run: () => 0 }),
         burokratRepoInitCommand: () => ({ run: () => 0 }),
+        burokratRepoUpgradeCommand: () => ({ run: () => 0 }),
+        latestRules: () => ({ epoch: 1, judge: () => [] }),
         burokratAdrAddCommand: () => ({ run: () => 0 }),
         burokratAssessOutcomesCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),

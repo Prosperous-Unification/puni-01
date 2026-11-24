@@ -22,6 +22,16 @@ export const RegistryInvalid = defineException({
   }) => `${file} ${problem}`,
 });
 
+/**
+ * A `puni.json` pinning a rules epoch later than the latest this `puni` knows: a refusal, since
+ * the rules that epoch holds are not here to judge by.
+ */
+export const RulesPinAhead = defineException({
+  tag: 'puni/shared-checkout/RulesPinAhead',
+  message: ({ pin, latest, version }: { pin: number; latest: number; version: string }) =>
+    `puni.json pins rules epoch ${String(pin)}, but puni ${version} knows rules only up to epoch ${String(latest)}; upgrade puni`,
+});
+
 /** A registered repository that is not checked out beside the one holding `puni.json`. */
 export const CheckoutMissing = defineException({
   tag: 'puni/shared-checkout/CheckoutMissing',
@@ -93,7 +103,7 @@ export const checkoutDefects = [
   remedyDefect(
     RegistryInvalid,
     () =>
-      'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
+      'correct puni.json as the message says: this-repo-type, the rules epoch, and all-repos listing every type once',
   ),
   remedyDefect(CheckoutMissing, ({ url, root }) => `clone it: git clone ${url} ${root}`),
   remedyDefect(
