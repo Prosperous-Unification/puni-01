@@ -13,7 +13,8 @@ per project, which across projects and which only on the whole repository. The `
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
 `puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts: `checks` (sync,
-formatting, Burokrat, typecheck, build), `lint` and `test`.
+formatting, Burokrat, typecheck, build), `lint` (`bun lint` first where the Bun has it, then
+ESLint) and `test`.
 [ci.yml](../.github/workflows/ci.yml) runs each as its own job; its `gate` job, the check main
 requires, passes when all three do.
 

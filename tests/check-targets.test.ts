@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 
@@ -379,6 +379,67 @@ describe('the CI workflow judges every push for secrets', () => {
     ]) {
       expect([line, workflow.includes(line)]).toEqual([line, true]);
     }
+  });
+});
+
+/**
+ * Runs the `gate:lint:fast` script through `sh` with `bun` a stub: one whose `bun lint --help`
+ * describes the linter when `hasLint`, and whose `bun lint` run records its arguments and exits
+ * `exitCode`.
+ */
+function runFastLint(hasLint: boolean, exitCode: number) {
+  const bin = scratchDirectories.createDirectory('puni-fast-lint-');
+  const calls = join(bin, 'calls');
+  const help = hasLint
+    ? "echo '  Find and fix problems in JavaScript and TypeScript.'; exit 0"
+    : 'exit 1';
+  writeFileSync(
+    join(bin, 'bun'),
+    `#!/bin/sh\nif [ "$2" = --help ]; then ${help}; fi\necho "$@" >> ${calls}\nexit ${String(exitCode)}\n`,
+    { mode: 0o755 },
+  );
+  const script = field(readJson('package.json'), 'scripts', 'gate:lint:fast');
+  if (typeof script !== 'string') throw new Error('package.json has no script gate:lint:fast');
+  const child = Bun.spawnSync(['sh', '-c', script], {
+    env: { PATH: `${bin}:/usr/bin:/bin` },
+    stderr: 'pipe',
+  });
+  const ran = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+  return { exitCode: child.exitCode, stderr: child.stderr.toString(), ran };
+}
+
+/**
+ * Before ESLint, the lint part runs Bun's own `bun lint` over the same `eslint.config.js`: it
+ * finds most breaches in about a second. ESLint still judges every rule, so a Bun without
+ * `bun lint`, or a rule `bun lint` cannot run, leaves the verdict to ESLint alone.
+ */
+describe('the fast lint step', () => {
+  test.each(['gate:lint', 'gate:lint:affected'])('%s runs it before ESLint', (name) => {
+    expect(field(readJson('package.json'), 'scripts', name)).toStartWith(
+      'bun run gate:lint:fast && nx ',
+    );
+  });
+
+  test('the root package.json has no lint script, which bun lint would run in its place', () => {
+    expect(field(readJson('package.json'), 'scripts', 'lint')).toBeUndefined();
+  });
+
+  test("a Bun with bun lint runs it type-aware, its exit code the step's", () => {
+    for (const exitCode of [0, 1]) {
+      expect(runFastLint(true, exitCode)).toEqual({
+        exitCode,
+        stderr: '',
+        ran: 'lint --type-aware --allow-unsupported\n',
+      });
+    }
+  });
+
+  test('a Bun without bun lint says so and passes, leaving ESLint to judge', () => {
+    expect(runFastLint(false, 1)).toEqual({
+      exitCode: 0,
+      stderr: 'gate:lint:fast: this Bun has no bun lint, so ESLint judges alone\n',
+      ran: '',
+    });
   });
 });
 
