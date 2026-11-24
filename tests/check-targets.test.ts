@@ -94,6 +94,7 @@ describe('puni-bur-check targets', () => {
     expect(Object.keys(field(readJson('project.json'), 'targets') ?? {})).toEqual([
       'test',
       'lint',
+      'lint-all',
       'typecheck',
       'puni-bur-check',
       'puni-bur-links',
@@ -411,13 +412,22 @@ function runFastLint(hasLint: boolean, exitCode: number) {
 /**
  * Before ESLint, the lint part runs Bun's own `bun lint` over the same `eslint.config.js`: it
  * finds most breaches in about a second. ESLint still judges every rule, so a Bun without
- * `bun lint`, or a rule `bun lint` cannot run, leaves the verdict to ESLint alone.
+ * `bun lint`, or a rule `bun lint` cannot run, leaves the verdict to ESLint alone. ESLint runs
+ * once over the whole repository, under Nx so that its module-boundary rule has the project
+ * graph: one process builds the shared type information once, where a run per project builds it
+ * per project. Each project's own `lint` target stays, to re-run one project alone.
  */
 describe('the fast lint step', () => {
-  test.each(['gate:lint', 'gate:lint:affected'])('%s runs it before ESLint', (name) => {
-    expect(field(readJson('package.json'), 'scripts', name)).toStartWith(
-      'bun run gate:lint:fast && nx ',
-    );
+  test('the lint part runs it, then one ESLint over the whole repository, on any change', () => {
+    const scripts = field(readJson('package.json'), 'scripts');
+    expect(field(scripts, 'gate:lint')).toBe('bun run gate:lint:fast && nx run workspace:lint-all');
+    expect(field(scripts, 'gate:lint:affected')).toBe('bun run gate:lint');
+    expect(field(readJson('project.json'), 'targets', 'lint-all')).toEqual({
+      cache: true,
+      executor: 'nx:run-commands',
+      inputs: ['{workspaceRoot}/**/*'],
+      options: { command: 'bunx eslint .' },
+    });
   });
 
   test('the root package.json has no lint script, which bun lint would run in its place', () => {
