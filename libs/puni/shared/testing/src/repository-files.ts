@@ -26,7 +26,7 @@ export interface FixtureMetadata {
 
 /**
  * Writes a library `project.json` named `name` with `metadata`, the tag `scope:<scope>` and the
- * targets every project carries, a `tsconfig.json` including `src`, and an `index.ts` in `src` for
+ * targets every project carries, a `tsconfig.json` including `src`, and a `src/index.ts` for
  * `readFirst` to name.
  */
 export function writeProject(

@@ -13,7 +13,7 @@ const researchAdd: RecordAddLeaf<'research add'> = {
 export const researchAddParser = recordAddParser(researchAdd);
 
 /**
- * The `research add` command: files the record in `nav/research` of the records repository as
+ * The `research add` command: files the record in `nav/research/` of the records repository as
  * `createRecordAddCommand` of `@puni/shared-records` says, every outcome and exit code included.
  */
 export const createResearchAddCommand = createRecordAddCommand(researchAdd);

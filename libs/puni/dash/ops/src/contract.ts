@@ -25,7 +25,7 @@ export interface OpsNode {
   readonly roles: readonly string[];
 }
 
-/** The node inventory: `nodes.json` in `dash/ops` of the records repository. */
+/** The node inventory, `dash/ops/nodes.json` of the records repository. */
 export interface NodeInventoryResource {
   /**
    * The node named `name` in the inventory of the records checkout `files`.

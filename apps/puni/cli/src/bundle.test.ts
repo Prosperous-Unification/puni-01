@@ -69,7 +69,7 @@ describe('the built puni.js', () => {
     ]);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 31 rules, no findings.\n',
+      stdout: 'ok: system-state, 32 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({

@@ -11,6 +11,7 @@ export type {
   CheckoutFilesResource,
   CommitCheckout,
   DocComment,
+  DocLink,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,

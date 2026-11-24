@@ -17,7 +17,8 @@ function rememberByText<T>(read: (text: string) => T): (text: string) => T {
 
 /**
  * The {@link SourceRegistry} of `readers` for one run: each reader picked by the extension of a
- * path's last segment, case and all, and each of its readings of a text made once.
+ * path's last segment, lower-cased, while its `since` reaches the epoch asked for, and each of
+ * its readings of a text made once.
  *
  * @throws SourceReadersOverlap when two readers claim one extension.
  */
@@ -26,17 +27,26 @@ export function openSourceRegistry(readers: readonly SourceReader[]): SourceRegi
   for (const reader of readers) {
     const remembered: SourceReader = {
       extensions: reader.extensions,
+      since: reader.since,
       declarations: rememberByText((text) => reader.declarations(text)),
+      reexports: rememberByText((text) => reader.reexports(text)),
       docComments: rememberByText((text) => reader.docComments(text)),
-      scope: rememberByText((text) => reader.scope(text)),
+      links: rememberByText((text) => reader.links(text)),
     };
-    for (const extension of reader.extensions) {
+    for (const extension of reader.extensions.map((written) => written.toLowerCase())) {
       if (byExtension.has(extension)) throw new SourceReadersOverlap({ details: { extension } });
       byExtension.set(extension, remembered);
     }
   }
   return {
-    extensions: [...byExtension.keys()].sort(compareBytes),
-    readerOf: (path) => byExtension.get(posix.extname(path)),
+    extensions: (epoch) =>
+      [...byExtension]
+        .filter(([, reader]) => reader.since <= epoch)
+        .map(([extension]) => extension)
+        .sort(compareBytes),
+    readerOf(path, epoch) {
+      const reader = byExtension.get(posix.extname(path).toLowerCase());
+      return reader !== undefined && reader.since <= epoch ? reader : undefined;
+    },
   };
 }

@@ -376,6 +376,21 @@ describe('the production rules', () => {
     }
   });
 
+  test('no id applies twice at one pin within a list, but as an until and since pair', () => {
+    const lists: readonly (readonly Rule[])[] = [
+      ...Object.values(checkRules.sets).map((set) => set.map(({ rule }) => rule)),
+      checkRules.crossProject,
+      ...Object.values(checkRules.secrets),
+    ];
+    for (const rules of lists) {
+      for (let at = 1; at <= latestRulesEpoch; at += 1) {
+        const ids = rules.filter((rule) => appliesAt(rule, at)).map(({ id }) => id);
+        const twice = ids.filter((id, index) => ids.indexOf(id) !== index);
+        expect([at, twice]).toEqual([at, []]);
+      }
+    }
+  });
+
   test('every retirement is a rule whose until is its epoch', () => {
     for (const [id, epoch] of Object.entries(retiredRules)) {
       expect(listEveryRule(checkRules).some((rule) => rule.id === id && rule.until === epoch)).toBe(

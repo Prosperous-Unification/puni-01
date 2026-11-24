@@ -11,14 +11,15 @@ helper does is its JSDoc in `libs/puni/shared/testing/src/index.ts`; a shared or
 own tests are the model.
 
 - **A library test**, beside the library's code: the module and the shared modules it requires
-  in withInstalledModules, over `memoryHost(tree, options).services`, each container opened
-  through [`closeAfterEach`](../../libs/puni/shared/testing/src/containers.ts#closeAfterEach). Resolve the exported key and run it; a command runs against an `Io`
+  in `withInstalledModules`, over
+  [`memoryHost`](../../libs/puni/shared/testing/src/memory-host.ts#memoryHost)`(tree, options).services`, each container opened
+  through [`closeAfterEach`](../../libs/puni/shared/testing/src/containers.ts#closeAfterEach). Resolve the exported key and run it; a command runs against an [`Io`](../../libs/puni/shared/command/src/command.ts#Io)
   that collects its output. [`MemoryHostOptions`](../../libs/puni/shared/testing/src/memory-host.ts#MemoryHostOptions) injects defects and fixed values. Cover every
   outcome the JSDoc names. `libs/puni/dash/ops/src/ops.test.ts` is one.
 - **A parser test**, in `apps/puni/cli/src/group-parsers.test.ts`: the lines a leaf accepts, and
   those it refuses.
 - **A graph test**, in `apps/puni/cli/src`: `composition.test.ts` resolves every exported key,
-  swapping host services with the container's createIndependentContainer; `root-parser.test.ts` and
+  swapping host services with `createIndependentContainer`; `root-parser.test.ts` and
   `main.test.ts` pin the command tree and its dispatch.
 - **A spawned run**, as in `apps/puni/cli/src/ops-entrypoint.test.ts`, for the real streams and
   exit code of the entrypoint. Spawn with `CLAUDECODE` and `AGENT` set to `0`, because Bun changes

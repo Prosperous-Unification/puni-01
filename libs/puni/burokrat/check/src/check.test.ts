@@ -53,7 +53,12 @@ import {
   requireSection,
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
-import { judgeDocSymbols, limitPageWords, limitTypedPageWords } from './rules/wiki.rule';
+import {
+  judgeDocSymbols,
+  judgeTypedDocSymbols,
+  limitPageWords,
+  limitTypedPageWords,
+} from './rules/wiki.rule';
 import {
   judgeDocCommands,
   judgeDocPaths,
@@ -630,8 +635,20 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
-    'a page naming a symbol no source file holds',
+    'a page naming a symbol no source file holds, up to epoch 3',
     judgeDocSymbols,
+    () => {
+      writeRepositoryFile(root, 'wiki/ops/one.md', 'Call `renderPages(pages)`.\n');
+    },
+    {
+      rule: 'docs.symbols',
+      path: 'wiki/ops/one.md',
+      message: 'names renderPages, which no source file holds',
+    },
+  ],
+  [
+    'a page naming a symbol no source file holds',
+    judgeTypedDocSymbols,
     () => {
       writeRepositoryFile(root, 'libs/two/src/index.ts', 'export const renderIndex = 1;\n');
       writeRepositoryFile(
@@ -800,13 +817,13 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       writeRepositoryFile(
         root,
         'libs/x/src/a.ts',
-        '/**\n * Runs `bin/deploy.sh`.\n */\nexport const a = 1;\n',
+        '/**\n * Runs\n * `apps/gone.sh`, not `bin/deploy.sh`.\n */\nexport const a = 1;\n',
       );
     },
     {
       rule: 'docs.paths',
       path: 'libs/x/src/a.ts',
-      message: 'doc comment at line 1 names the missing path bin/deploy.sh',
+      message: 'line 3 names the missing path apps/gone.sh',
     },
   ],
   [
@@ -826,35 +843,37 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
-    'a link with a fragment into a file no source reader reads',
+    'a link into a file re-exporting a package whole',
     judgeTypedDocReferences,
     () => {
-      writeRepositoryFile(root, 'config/a.json', '{ "key": 1 }\n');
-      appendFileSync(join(root, 'README.md'), 'Set [key](config/a.json#key).\n');
+      writeRepositoryFile(root, 'libs/x/src/b.ts', "export * from 'pkg';\n");
+      appendFileSync(join(root, 'README.md'), 'Use [`gone`](libs/x/src/b.ts#gone).\n');
     },
     {
       rule: 'docs.references',
       path: 'README.md',
       message:
-        'links to config/a.json#key, but no source reader reads a .json file, so the fragment names nothing',
-      remedy:
-        'drop the #key, or link a file whose symbols a source reader reads (.cjs, .cts, .js, .jsx, .mjs, .mts, .ts, .tsx)',
+        'links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
     },
   ],
   [
     'a symbol in backticks outside a link',
     judgeTypedDocSpans,
     () => {
-      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+      writeRepositoryFile(
+        root,
+        'libs/x/src/a.ts',
+        'export const parse = 1;\nexport function renderIndex() {}\nconst hidden = 1;\n',
+      );
       appendFileSync(
         join(root, 'README.md'),
-        'Call `renderIndex()`, [`parse`](libs/x/src/a.ts#parse), `metadata.readWhen` and `CLAUDE.md`.\n',
+        'Call `renderIndex()`, [`parse`](libs/x/src/a.ts#parse), `hidden`, `goneName` and `CLAUDE.md`.\n',
       );
     },
     {
       rule: 'docs.spans',
       path: 'README.md',
-      message: 'names the symbol renderIndex without linking it',
+      message: 'names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
     },
   ],
   [
@@ -870,7 +889,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.comment-links',
       path: 'libs/x/src/a.ts',
-      message: 'doc comment at line 3 links {@link gone}, but gone is not in scope',
+      message: 'line 3 links gone, which names nothing visible there',
     },
   ],
   [
@@ -936,7 +955,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.commands',
       path: 'libs/x/src/a.ts',
-      message: 'doc comment at line 1 names no command demo burokrat audit',
+      message: 'line 1 names no command demo burokrat audit',
     },
   ],
   [
@@ -1190,12 +1209,13 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     'a symbol in backticks outside a link, at epoch 3',
     judgeDocSpans,
     () => {
+      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export function renderIndex() {}\n');
       writeRepositoryFile(root, 'wiki/ops/one.md', 'Call `renderIndex()`.\n');
     },
     {
       rule: 'docs.spans',
       path: 'wiki/ops/one.md',
-      message: 'names the symbol renderIndex without linking it',
+      message: 'names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
     },
   ],
   [
@@ -1317,16 +1337,21 @@ describe('each rule finds its breach', () => {
 describe('documents by declared type, from rules epoch 4', () => {
   /** Breaks every documentation rule in `path`: a date, a missing path, a script, a symbol, a reference. */
   function writeBreaking(path: string, type: string): void {
-    writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+    writeRepositoryFile(
+      root,
+      'libs/x/src/a.ts',
+      'export const parse = 1;\nexport function renderIndex() {}\n',
+    );
     const link = `${'../'.repeat(path.split('/').length - 1)}libs/x/src/a.ts#gone`;
     writeRepositoryFile(
       root,
       path,
-      `---\npuni-doc-type: ${type}\n---\n\nReleased 2031-04-05: run \`bin/deploy.sh\`, \`bun run nope\`, \`renderIndex()\`, [\`gone\`](${link}).\n`,
+      `---\npuni-doc-type: ${type}\n---\n\nReleased 2031-04-05: run \`bin/deploy.sh\`, \`bun run nope\`, \`renderIndex()\`, \`goneSymbol\`, [\`gone\`](${link}).\n`,
     );
   }
 
   const typedRules = [
+    judgeTypedDocSymbols,
     forbidTypedDates,
     judgeTypedDocPaths,
     judgeTypedDocCommands,
@@ -1342,7 +1367,7 @@ describe('documents by declared type, from rules epoch 4', () => {
 
   test('a wiki page is judged by every one, whatever its Markdown extension', () => {
     writeBreaking('wiki/how-to/guide.mdx', 'wiki-page');
-    expect(typedRules.map((rule) => judge(rule).length)).toEqual([1, 1, 1, 1, 1]);
+    expect(typedRules.map((rule) => judge(rule).length)).toEqual([1, 1, 1, 1, 1, 1]);
   });
 
   test('before epoch 4 the path chose: a product document dated is a finding, an .mdx page is none', () => {

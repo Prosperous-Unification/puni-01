@@ -213,39 +213,66 @@ export interface SourceRange {
 
 /**
  * A symbol a source file declares, by the name a typed reference gives it: a top-level name, or
- * a member of an exported type or object as `<Name>.<member>`.
+ * a member of an exported type, object or namespace as `<Name>.<member>`.
  */
 export interface SourceDeclaration {
   readonly name: string;
+  /** Whether the file exports it, under this name or another, so other files may name it. */
+  readonly exported: boolean;
   /** Where the declaration stands in the text, its doc comment excluded. */
   readonly range: SourceRange;
 }
 
-/** One doc comment of a source file: its text without the comment markers, and its first line. */
+/**
+ * One doc comment of a source file: its text without the comment markers, and the line its
+ * first line of text stands on, so line `n` of the text stands on line `line + n`.
+ */
 export interface DocComment {
-  /** The 1-based line the comment opens on. */
+  /** The 1-based line of the first line of `text`. */
   readonly line: number;
   readonly text: string;
 }
 
 /**
+ * One inline link of a doc comment, in the language's own link syntax: its target as written,
+ * the line it stands on, and whether the target names something visible where the comment
+ * stands. A link in code inside the comment is no link.
+ */
+export interface DocLink {
+  readonly target: string;
+  /** The 1-based line of the link. */
+  readonly line: number;
+  readonly resolves: boolean;
+}
+
+/**
  * A plugin that reads the source files of one language: what a file declares, its doc comments
- * and the names visible in it, from the file's text alone. The host composes the readers a
- * repository is read with as the `sourceReaders` list, and a {@link SourceRegistry} picks one by
- * a file's extension.
+ * and their links, from the file's text alone. The host composes the readers a repository is
+ * read with as the `sourceReaders` list, and a {@link SourceRegistry} picks one by a file's
+ * extension.
  */
 export interface SourceReader {
-  /** The file extensions this reader reads, each with its dot, as `.md` is written. */
+  /** The file extensions this reader reads, each lower-case with its dot, as `.md` is written. */
   readonly extensions: readonly string[];
   /**
-   * The symbols `text` declares: its top-level declarations, every name it exports, re-exports
-   * included, and the members of what it exports as `<Name>.<member>`.
+   * The rules epoch from which a rule may read this reader's files: a reader added later
+   * changes no verdict of a repository pinned before it.
+   */
+  readonly since: number;
+  /**
+   * The symbols `text` declares: its top-level declarations, every name it exports, named
+   * re-exports included, and the members of what it exports as `<Name>.<member>`.
    */
   declarations(text: string): readonly SourceDeclaration[];
+  /**
+   * The modules `text` re-exports whole, as it names them, relative to its own file: their
+   * names are its declarations too, which `declarations` cannot list from one text.
+   */
+  reexports(text: string): readonly string[];
   /** The doc comments of `text`, in order. */
   docComments(text: string): readonly DocComment[];
-  /** The names visible throughout `text`: its top-level declarations and what it imports. */
-  scope(text: string): ReadonlySet<string>;
+  /** The inline links of the doc comments of `text`, in order (see {@link DocLink}). */
+  links(text: string): readonly DocLink[];
 }
 
 /**
@@ -253,10 +280,13 @@ export interface SourceReader {
  * rule asks for it.
  */
 export interface SourceRegistry {
-  /** The extensions some reader reads, sorted. */
-  readonly extensions: readonly string[];
-  /** The reader of the file at `path`, by its extension; `undefined` when none reads it. */
-  readerOf(path: string): SourceReader | undefined;
+  /** The extensions some reader reads from the rules epoch `epoch`, sorted. */
+  extensions(epoch: number): readonly string[];
+  /**
+   * The reader of the file at `path`, by its extension in any case, that a rule may read from
+   * the rules epoch `epoch` (see {@link SourceReader.since}); `undefined` when there is none.
+   */
+  readerOf(path: string, epoch: number): SourceReader | undefined;
 }
 
 /** What the checkout module exports. */

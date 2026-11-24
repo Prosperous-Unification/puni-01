@@ -33,7 +33,7 @@ request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) 
   credential or an address, in a file, a file name (`(paths)`) or its message
   (`(commit message)`), though a later commit may have removed it. A pushed commit is public, so
   rotate a credential first, then do what the remedy says: rewrite an unmerged branch, or, with
-  `--merged` (main and tags), open a pull request removing it. Locally it needs NX_BASE:
+  `--merged` (main and tags), open a pull request removing it. Locally it needs `NX_BASE`:
   `NX_BASE=origin/main bun run gate:affected`.
 - **lint, typecheck, test or build**: Nx names the failed task. Re-run it alone to see its output:
   `bunx nx run <project>:<target> --output-style=static`. Lint messages say which rule of

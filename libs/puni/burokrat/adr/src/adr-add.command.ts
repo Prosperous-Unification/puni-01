@@ -13,7 +13,7 @@ const adrAdd: RecordAddLeaf<'adr add'> = {
 export const adrAddParser = recordAddParser(adrAdd);
 
 /**
- * The `adr add` command: files the record in `bur/adr` of the records repository as
+ * The `adr add` command: files the record in `bur/adr/` of the records repository as
  * `createRecordAddCommand` of `@puni/shared-records` says, every outcome and exit code included.
  */
 export const createAdrAddCommand = createRecordAddCommand(adrAdd);

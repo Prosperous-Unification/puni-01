@@ -33,7 +33,12 @@ import {
   requireScope,
   requireSection,
 } from './rules/index.rule';
-import { judgeDocSymbols, limitPageWords, limitTypedPageWords } from './rules/wiki.rule';
+import {
+  judgeDocSymbols,
+  judgeTypedDocSymbols,
+  limitPageWords,
+  limitTypedPageWords,
+} from './rules/wiki.rule';
 import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
@@ -113,6 +118,7 @@ export const codeRules: readonly LeveledRule[] = [
     limitPageWords,
     limitTypedPageWords,
     judgeDocSymbols,
+    judgeTypedDocSymbols,
     judgeDocReferences,
     judgeTypedDocReferences,
     judgeDocSpans,
@@ -150,8 +156,8 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
  * repository, judging only the references that leave the linking file's project (a symlink's
- * target among them), and, before epoch 3, the symbols documentation names, which a project
- * check leaves to this run.
+ * target among them), and the symbols documentation names, which a project check leaves to
+ * this run.
  */
 export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
@@ -159,8 +165,11 @@ export const crossProjectRules: readonly Rule[] = [
   judgeDocPaths,
   judgeTypedDocPaths,
   judgeDocSymbols,
+  judgeTypedDocSymbols,
   judgeDocReferences,
   judgeTypedDocReferences,
+  judgeDocSpans,
+  judgeTypedDocSpans,
   judgeEntryKinds,
 ];
 
@@ -190,10 +199,7 @@ export const checkRules: CheckRules = {
  * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
  * listed.
  */
-export const retiredRules: Readonly<Record<string, number>> = {
-  'docs.symbols': 3,
-  'index.section': 4,
-};
+export const retiredRules: Readonly<Record<string, number>> = { 'index.section': 4 };
 
 /** The latest rules epoch of {@link checkRules}. */
 export const latestRulesEpoch = latestEpoch(listEveryRule(checkRules));

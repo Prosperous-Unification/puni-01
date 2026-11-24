@@ -7,23 +7,24 @@ import {
   repositoryScope,
 } from '@puni/shared-checkout';
 import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
-import {
-  type DocSelection,
-  listCode,
-  listInlineCode,
-  readPathReference,
-  selectsDocumentation,
-} from '../docs';
+import { posix } from 'node:path';
+import { type DocSelection, listCodeLines, readPathReference, selectsDocumentation } from '../docs';
+import { isGeneratedFile } from '../generated-files';
 import { findMissingAnchor } from './links.rule';
 
 /**
- * A text the docs rules read, in the file at `path`: a documentation file whole, with `at`
- * empty, or one doc comment of a source file, `at` naming its line for a breach's message.
+ * A text the docs rules read, in the file at `path`: a documentation file whole, with no `line`,
+ * or one doc comment of a source file, whose text's line `n` stands on line `line + n`.
  */
 export interface DocText {
   readonly path: string;
   readonly text: string;
-  readonly at: string;
+  readonly line?: number;
+}
+
+/** How a breach names where in `doc` a piece of code at line `offset` of it stands. */
+function placeIn(doc: DocText, offset: number): string {
+  return doc.line === undefined ? '' : `line ${String(doc.line + offset)} `;
 }
 
 /** The visible documentation files the scope owns by `selection`, each whole. */
@@ -31,21 +32,33 @@ function listDocumentation({ files, scope }: RuleReading, selection: DocSelectio
   return files
     .listVisible(scope)
     .filter((path) => selectsDocumentation(files, path, selection))
-    .map((path) => ({ path, text: files.readText(path), at: '' }));
+    .map((path) => ({ path, text: files.readText(path) }));
 }
 
 /**
- * Every doc comment of the visible files the scope owns that a source reader of the run reads,
- * as the reader gives it, `at` naming its line.
+ * The visible files the scope owns whose doc comments the run judges: those a source reader
+ * reads at the repository's pin, but for what `.gitattributes` marks generated or vendored
+ * (see `isGeneratedFile`), whose comments no one writes.
  */
-export function listDocComments({ files, scope, sources }: RuleReading): DocText[] {
-  return files.listVisible(scope).flatMap((path) => {
-    const reader = sources.readerOf(path);
+export function listCommentedFiles({ files, scope, sources, registry }: RuleReading): string[] {
+  const attributes = files.exists('.gitattributes') ? files.readText('.gitattributes') : '';
+  return files
+    .listVisible(scope)
+    .filter(
+      (path) =>
+        sources.readerOf(path, registry.rules) !== undefined && !isGeneratedFile(attributes, path),
+    );
+}
+
+/** Every doc comment of the files of {@link listCommentedFiles}, as its reader gives it. */
+export function listDocComments(reading: RuleReading): DocText[] {
+  return listCommentedFiles(reading).flatMap((path) => {
+    const reader = reading.sources.readerOf(path, reading.registry.rules);
     if (reader === undefined) return [];
-    return reader.docComments(files.readText(path)).map(({ line, text }) => ({
+    return reader.docComments(reading.files.readText(path)).map(({ line, text }) => ({
       path,
       text,
-      at: `doc comment at line ${String(line)} `,
+      line,
     }));
   });
 }
@@ -55,26 +68,46 @@ function listEveryDocText(reading: RuleReading, selection: DocSelection): DocTex
   return [...listDocumentation(reading, selection), ...listDocComments(reading)];
 }
 
+/**
+ * The repository path a backticked `token` of `doc` names, or `undefined` when it names none
+ * this repository holds. A token of a documentation file is a path from the root. One of a doc
+ * comment is a path from the commented file's directory when that exists, which it holds, else
+ * from the root when its first segment exists there, else a path of something else: another
+ * repository, a URL path, a git ref.
+ */
+function placeToken(files: RuleReading['files'], doc: DocText, path: string): string | undefined {
+  if (doc.line === undefined) return path;
+  if (files.isShown(posix.join(posix.dirname(doc.path), path))) return undefined;
+  const [first = ''] = path.split('/');
+  return files.isShown(first) ? path : undefined;
+}
+
 /** The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}). */
 function judgePaths(reading: RuleReading, docs: readonly DocText[]): Breach[] {
   const { files, references } = reading;
-  return docs.flatMap(({ path, text, at }) =>
-    listInlineCode(text).flatMap((span): Breach[] => {
+  return docs.flatMap((doc) =>
+    listCodeLines(doc.text, false).flatMap(({ offset, code: span }): Breach[] => {
       const reference = readPathReference(span);
-      if (reference === undefined || !reachesReference(references, path, reference.path)) {
+      const placed = reference === undefined ? undefined : placeToken(files, doc, reference.path);
+      if (
+        reference === undefined ||
+        placed === undefined ||
+        !reachesReference(references, doc.path, placed)
+      ) {
         return [];
       }
-      if (!files.isShown(reference.path)) {
-        return [{ path, message: `${at}names the missing path ${span}` }];
+      const at = placeIn(doc, offset);
+      if (!files.isShown(placed)) {
+        return [{ path: doc.path, message: `${at}names the missing path ${span}` }];
       }
-      const missing = findMissingAnchor(files, reference.path, reference.fragment);
+      const missing = findMissingAnchor(files, placed, reference.fragment);
       return missing === undefined
         ? []
         : [
             {
-              path,
+              path: doc.path,
               message: `${at}names ${span}, but ${missing}`,
-              remedy: `name a heading of ${reference.path}, or drop the fragment`,
+              remedy: `name a heading of ${placed}, or drop the fragment`,
             },
           ];
     }),
@@ -98,9 +131,10 @@ export const judgeMarkdownPaths: Rule = {
 };
 
 /**
- * {@link judgeMarkdownPaths} over the documentation the scope owns and every doc comment of its
- * source files that a source reader reads, a path in a comment named from the repository root.
- * Epoch 3; {@link judgeTypedDocPaths} chooses the documentation by its declared type.
+ * {@link judgeMarkdownPaths} over the documentation the scope owns and the doc comments of the
+ * files of {@link listCommentedFiles}, a token in a comment placed by `placeToken` and a breach
+ * naming the line it stands on. Epoch 3; {@link judgeTypedDocPaths} chooses the documentation
+ * by its declared type.
  */
 export const judgeDocPaths: Rule = {
   id: 'docs.paths',
@@ -231,8 +265,10 @@ function judgeCommands(reading: RuleReading, docs: readonly DocText[]): Breach[]
   const projects = new Set(
     readProjectFiles(reading.files, repositoryScope).flatMap((file) => nameProject(file) ?? []),
   );
-  return docs.flatMap(({ path, text, at }) =>
-    listCode(text).flatMap((code): Breach[] => {
+  return docs.flatMap((doc) =>
+    listCodeLines(doc.text, true).flatMap(({ offset, code }): Breach[] => {
+      const { path } = doc;
+      const at = placeIn(doc, offset);
       const breaches: Breach[] = [...code.matchAll(/\bbun run ([\w:.-]+)/gu)]
         .map((match) => match[1] ?? '')
         .filter((script) => !scripts.has(script))
@@ -283,9 +319,9 @@ export const judgeMarkdownCommands: Rule = {
 };
 
 /**
- * {@link judgeMarkdownCommands} over the documentation the scope owns and every doc comment of
- * its source files that a source reader reads. Epoch 3; {@link judgeTypedDocCommands} chooses
- * the documentation by its declared type.
+ * {@link judgeMarkdownCommands} over the documentation the scope owns and the doc comments of
+ * the files of {@link listCommentedFiles}, a breach naming the line it stands on. Epoch 3;
+ * {@link judgeTypedDocCommands} chooses the documentation by its declared type.
  */
 export const judgeDocCommands: Rule = {
   id: 'docs.commands',

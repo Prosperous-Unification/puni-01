@@ -68,6 +68,7 @@ describe('isMarkdown', () => {
     ['a.md', true],
     ['a.mdx', true],
     ['a.markdown', true],
+    ['A.MD', true],
     ['a.md.tmpl', false],
     ['md', false],
   ] as const)('%s: %p', (path, markdown) => {
