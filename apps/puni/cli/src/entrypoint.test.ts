@@ -46,7 +46,7 @@ describe('entrypoint', () => {
     });
   });
 
-  test.each(['nav stray', '--bogus', 'b --bogus', 'b wiki nope', 'b wiki index --check'])(
+  test.each(['nav stray', '--bogus', 'b --bogus', 'b wiki nope', 'b wiki map --check'])(
     '%s refuses with exit 2 and one error line',
     (line) => {
       const run = runPuni(line.split(' '));
@@ -330,25 +330,29 @@ describe('entrypoint', () => {
         );
       });
 
-      test.each(breaks)('%s: wiki index is one error line, exit 1', (_name, breakGit) => {
-        const run = runPuni(['burokrat', 'wiki', 'index'], state, breakGit());
+      test.each(breaks)('%s: wiki map is one error line, exit 1', (_name, breakGit) => {
+        const run = runPuni(['burokrat', 'wiki', 'map'], state, breakGit());
         expect([run.code, run.stdout]).toEqual([1, '']);
         expect(run.stderr).toMatch(/^error: git [^\n]+\n$/u);
       });
     });
 
-    test('wiki index writes the system-state index through the registry', () => {
-      expect(runPuni(['burokrat', 'wiki', 'index'], join(state, 'apps'))).toEqual({
+    test('wiki map prints the map of the system-state repository through the registry', () => {
+      expect(runPuni(['burokrat', 'wiki', 'map'], join(state, 'apps'))).toEqual({
         code: 0,
-        stdout: [
-          'wrote: wiki/index/app.md',
-          'wrote: wiki/index/burokrat.md',
-          'wrote: wiki/index/dash.md',
-          'wrote: wiki/index/index.md',
-          'wrote: wiki/index/navigator.md',
-          '',
-        ].join('\n'),
+        stdout: '# Wiki map\n\n## Partitions\n\n- changing the app: `puni burokrat wiki map app`\n',
         stderr: '',
+      });
+      expect(runPuni(['b', 'wiki', 'map', 'app'], state)).toEqual({
+        code: 0,
+        stdout:
+          '# Wiki map: app\n\nRead this when changing the app.\n\n## Read when\n\n- changing one: [one](apps/one/src/index.ts)\n',
+        stderr: '',
+      });
+      expect(runPuni(['b', 'wiki', 'map', 'dash'], state)).toEqual({
+        code: 2,
+        stdout: '',
+        stderr: 'error: the map has no partition dash; its partitions: app\n',
       });
     });
   });

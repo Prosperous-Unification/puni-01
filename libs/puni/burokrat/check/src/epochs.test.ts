@@ -20,7 +20,11 @@ import {
   listEveryRule,
   type Rule,
 } from './finding';
-import { fixtureAgentsRules, makeRepositoryPair } from './repository-pair.test-host';
+import {
+  fixtureAgentsRules,
+  formatFixtureRegistry,
+  makeRepositoryPair,
+} from './repository-pair.test-host';
 import { checkRules, latestRulesEpoch, retiredRules } from './rule-set.rule';
 import { pinAgentsRules } from './rules/entry.rule';
 
@@ -113,7 +117,7 @@ function git(root: string, ...args: string[]): string {
 
 /** Pins the fixture at `rules`; from epoch 2 its `AGENTS.md` holds {@link secondRules}. */
 function pin(rules: number): void {
-  writeFileSync(join(state, 'puni.json'), formatRegistry('system-state', fixtureRemotes, rules));
+  writeFileSync(join(state, 'puni.json'), formatFixtureRegistry(rules));
   if (rules < 2) return;
   const agents = join(state, 'AGENTS.md');
   writeFileSync(agents, readFileSync(agents, 'utf8').replace(fixtureAgentsRules, secondRules));
@@ -127,8 +131,8 @@ const modes: readonly (readonly [string, CheckRequest, string, string])[] = [
   [
     'whole',
     {},
-    `ok: system-state, 28 rules, no findings.\n${newer('agents.rules, demo.also, demo.later are')}`,
-    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 29 rules, 2 findings.\n`,
+    `ok: system-state, 25 rules, no findings.\n${newer('agents.index, agents.rules, demo.also, demo.later, index.purpose, index.words are')}`,
+    `${later('demo.also')}\n${later('demo.later')}\nfail: system-state, 28 rules, 2 findings.\n`,
   ],
   [
     '--project one',
@@ -196,7 +200,7 @@ describe('check at a rules pin', () => {
   test('a retired rule applies before its until and is neither applied nor newer after', () => {
     writeFileSync(join(state, 'retired.md'), 'x\n');
     expect(host.runCheck({}, state).stdout).toStartWith(
-      'demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, 28 rules, 1 finding.\n',
+      'demo.retired retired.md: exists; fix: remove retired.md\nfail: system-state, 25 rules, 1 finding.\n',
     );
     pin(2);
     expect(host.runCheck({}, state).stdout).not.toContain('demo.retired');

@@ -7,8 +7,8 @@ export type {
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
+  ProjectSource,
   RepositoryRegistryResource,
-  WikiIndexResource,
 } from './contract';
 export {
   CheckoutPathRefused,
@@ -23,7 +23,16 @@ export {
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
-export { type IndexSources, type SourceDefect, sourceDefectRemedies } from './index-sources';
+export {
+  type MapPage,
+  type MapProject,
+  type MapSources,
+  type ProjectReading,
+  readMapSources,
+  readWhenRemedy,
+  sectionRemedy,
+  type SourceDefect,
+} from './map-sources';
 export { describeValue, isRecord, parseJson, type ParsedJson, requireOnlyKeys } from './json';
 export { checkoutModule } from './module';
 export {
@@ -34,9 +43,11 @@ export {
   type Project,
   repositoryScope,
 } from './ownership';
+export { isPartitionPath, partitionSegmentPattern } from './partition-path';
 export { commitMessagePath, leavesRoot } from './paths';
+export { judgeReadWhen, readWhenWordBudget } from './read-when';
 export { type RecordKind, recordDirectories, recordKinds } from './record-directories';
-export { nameProject, readProjectFiles } from './project-files';
+export { nameProject, type ProjectFile, readProjectFiles } from './project-files';
 export { readRulesSection, replaceRulesSection } from './rules-section';
 export { type LatestRules, requirePinReached, rulesUpgradeCommand } from './latest-rules';
 export { seedFiles } from './seed-files';
@@ -50,6 +61,17 @@ export {
   type RepositoryType,
   repositoryTypes,
 } from './registry';
-export { indexDirectory, indexFile, renderIndex } from './render-index';
+export {
+  formatMapCommand,
+  indexWordBudget,
+  judgePurposes,
+  listPartitions,
+  type MapContent,
+  placeProject,
+  readInvocation,
+  renderMapLevels,
+  renderPartitionMap,
+  renderRootMap,
+} from './render-map';
 export { placePage, type WikiSection, wikiSections } from './wiki-sections';
 export { countWords } from './word-count';

@@ -1,13 +1,13 @@
 import { posix } from 'node:path';
-import { indexDirectory, leavesRoot } from '@puni/shared-checkout';
+import { leavesRoot } from '@puni/shared-checkout';
 
 /**
  * Whether the file at `path` is documentation the docs rules judge: `AGENTS.md`, `README.md`, or
- * Markdown under `wiki/` outside the generated `wiki/index/`.
+ * Markdown under `wiki/`.
  */
 export function isDocumentation(path: string): boolean {
   if (path === 'AGENTS.md' || path === 'README.md') return true;
-  return path.startsWith('wiki/') && path.endsWith('.md') && !path.startsWith(`${indexDirectory}/`);
+  return path.startsWith('wiki/') && path.endsWith('.md');
 }
 
 /** The Markdown of `text` split into the lines of fenced code blocks and the prose between them. */

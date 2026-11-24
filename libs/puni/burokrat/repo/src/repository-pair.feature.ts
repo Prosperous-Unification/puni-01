@@ -4,7 +4,7 @@ import {
   explainDefect,
   formatRegistry,
   githubUrlPattern,
-  renderIndex,
+  readRulesSection,
 } from '@puni/shared-checkout';
 import type { RepoInitRequest, RepositoryPairSetup, RepoRequirements } from './contract';
 import { RemoteNameRefused, SourceRulesMissing, SourceRulesStale } from './failures';
@@ -48,8 +48,8 @@ function nameRemotes(name: string, owner: string) {
  * for byte from its `AGENTS.md`, and the default owner, that of its own system-state remote.
  * `cwd` must be an empty directory but for `.git`, and `../<name>-records` must not exist; both
  * are judged before anything is written. The state side gets `puni.json` registering both
- * repositories and pinning the latest rules epoch, `AGENTS.md`, the `CLAUDE.md` link, `README.md`, `.gitignore` and the generated
- * `wiki/index/` of a repository with no projects and no pages; the records side `AGENTS.md`, the
+ * repositories and pinning the latest rules epoch, `AGENTS.md`, the `CLAUDE.md` link, `README.md`
+ * and `.gitignore`; the records side `AGENTS.md`, the
  * `CLAUDE.md` link and `.gitignore`. Nothing runs git or reaches the network. A refused name or
  * owner, a directory that is not where a new repository may go, or a source checkout holding the
  * rules of an older epoch than the latest, is `refused`; a source
@@ -59,7 +59,6 @@ function nameRemotes(name: string, owner: string) {
 export function createRepositoryPairSetup({
   checkoutRegistry,
   checkoutFiles,
-  commandCatalog,
   programSource,
   latestRules,
 }: RepoRequirements): RepositoryPairSetup {
@@ -84,9 +83,6 @@ export function createRepositoryPairSetup({
     state.link('CLAUDE.md', 'AGENTS.md');
     state.write('README.md', fillTemplate(templates.stateReadme, values));
     state.write('.gitignore', newGitignore);
-    for (const [path, text] of renderIndex([], commandCatalog.list())) {
-      state.write(path, text);
-    }
     records.write('AGENTS.md', fillTemplate(templates.recordsAgents, values));
     records.link('CLAUDE.md', 'AGENTS.md');
     records.write('.gitignore', newGitignore);

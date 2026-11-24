@@ -53,8 +53,8 @@ afterAll(async () => {
   await host.close();
 });
 
-beforeEach(async () => {
-  root = await makeRecordsRepository(scratchDirectories);
+beforeEach(() => {
+  root = makeRecordsRepository(scratchDirectories);
 });
 
 /** The system-state repository beside the records repository under test. */

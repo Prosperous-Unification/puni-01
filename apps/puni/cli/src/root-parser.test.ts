@@ -61,8 +61,8 @@ describe('readInvocation', () => {
   });
 
   test.each([
-    ['b wiki index', { kind: 'wiki index', print: false }],
-    ['b wiki index --print', { kind: 'wiki index', print: true }],
+    ['b wiki map', { kind: 'wiki map', partition: undefined }],
+    ['b wiki map dash', { kind: 'wiki map', partition: 'dash' }],
     [
       'bur check',
       {
@@ -138,10 +138,10 @@ describe('readInvocation', () => {
     expect(readListedNames(readPrinted([...line.split(' '), '--help']))).toEqual(names);
   });
 
-  test('b wiki --help prints the wiki help listing index', () => {
+  test('b wiki --help prints the wiki help listing map', () => {
     const help = readPrinted(['b', 'wiki', '--help']);
-    expect(help).toContain('Generate the wiki index.\nUsage: puni burokrat');
-    expect(readListedNames(help)).toEqual(['index']);
+    expect(help).toContain('Print the wiki map.\nUsage: puni burokrat');
+    expect(readListedNames(help)).toEqual(['map']);
   });
 
   test.each(spellings)('%s --help prints the %s help', (spelling, group) => {
@@ -153,7 +153,7 @@ describe('readInvocation', () => {
   test('b --help shows that a bare burokrat is valid and lists every burokrat group', () => {
     const help = readPrinted(['b', '--help']);
     expect(help).toContain(
-      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] [\n       --commits BASE..HEAD] [--merged] | wiki [index [--print]] | repo [(init --name NAME [--owner\n       OWNER] | upgrade)] | adr [add --title TEXT --topics LIST --summary TEXT [--body-file PATH]] |\n       change | assess [outcomes --since INSTANT --until INSTANT [--rate-card PATH] [\n       --claude-projects DIR...] [--codex-sessions DIR...] [--json]])]\n',
+      'Usage: puni burokrat [(check [--repo TYPE] [--project NAME] [--cross-project-links] [--staged] [\n       --commits BASE..HEAD] [--merged] | wiki [map [PARTITION]] | repo [(init --name NAME [--owner\n       OWNER] | upgrade)] | adr [add --title TEXT --topics LIST --summary TEXT [--body-file PATH]] |\n       change | assess [outcomes --since INSTANT --until INSTANT [--rate-card PATH] [\n       --claude-projects DIR...] [--codex-sessions DIR...] [--json]])]\n',
     );
     expect(readListedNames(help)).toEqual(['check', 'wiki', 'repo', 'adr', 'change', 'assess']);
   });
@@ -192,7 +192,7 @@ describe('readInvocation', () => {
     ['d release plan', 'Unexpected option or subcommand: `plan`.'],
     ['n research stray', 'Unexpected option or subcommand: `stray`.'],
     ['b adr --bogus', 'Unexpected option or subcommand: `--bogus`.'],
-    ['b wiki index --check', 'Unexpected option or subcommand: `--check`.'],
+    ['b wiki map --check', 'Unexpected option or subcommand: `--check`.'],
     ['b check --project', '`--project` requires `NAME`.'],
     ['d ops k3s', 'Expected a `KUBECTL_ARG`, but too few arguments.'],
     ['d ops ssh', 'Expected a `NODE`, but too few arguments.'],
@@ -274,8 +274,11 @@ describe('listCommands', () => {
       { path: 'puni dash pool', brief: 'Store the keys of agent pools.' },
       { path: 'puni burokrat', brief: 'Judge: decide whether it was done right.' },
       { path: 'puni burokrat check', brief: 'Judge the repository against its rules.' },
-      { path: 'puni burokrat wiki', brief: 'Generate the wiki index.' },
-      { path: 'puni burokrat wiki index', brief: 'Write the generated wiki index.' },
+      { path: 'puni burokrat wiki', brief: 'Print the wiki map.' },
+      {
+        path: 'puni burokrat wiki map',
+        brief: 'Print the map from a task to the file to read first.',
+      },
       {
         path: 'puni burokrat repo',
         brief: 'Set up the repositories puni governs, and raise their rules pin.',

@@ -10,7 +10,7 @@ DiBag.createBuilder()
     checkoutRegistry: () => requirements.checkoutRegistry,
     checkoutFiles: () => requirements.checkoutFiles,
     checkoutProjectScope: () => requirements.checkoutProjectScope,
-    checkoutWikiIndex: () => requirements.checkoutWikiIndex,
+    projectSources: () => requirements.projectSources,
     recordsCatalog: () => requirements.recordsCatalog,
     commandCatalog: () => requirements.commandCatalog,
     programSource: () => requirements.programSource,

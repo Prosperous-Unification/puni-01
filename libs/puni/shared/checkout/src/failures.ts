@@ -148,7 +148,7 @@ export const ProjectUnknown = defineException({
 });
 
 /**
- * A path a checkout refuses: absolute, leaving the root, or written outside the generated index.
+ * A path a checkout refuses: absolute, leaving the root, or written where the checkout writes nothing.
  * Only a defect in the code that asked raises it.
  */
 export const CheckoutPathRefused = defineException({

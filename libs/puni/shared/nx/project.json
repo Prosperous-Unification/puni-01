@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-nx",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:shared"],
+  "metadata": {
+    "readWhen": "changing how the map finds Nx projects: their read-when, their file to read first and their partition",
+    "readFirst": "src/nx-projects.resource.ts"
+  },
+  "sourceRoot": "libs/puni/shared/nx/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

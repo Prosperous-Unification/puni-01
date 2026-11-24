@@ -2,6 +2,7 @@ import { posix } from 'node:path';
 import { RegistryInvalid } from './failures';
 import { describeValue, isRecord, parseJson, requireOnlyKeys } from './json';
 import { formatJson } from './json-format';
+import { isPartitionPath } from './partition-path';
 
 /** The `puni.json` key naming the type of the repository that holds the file. */
 export const thisRepoTypeKey = 'this-repo-type';
@@ -14,6 +15,8 @@ export const rulesKey = 'rules';
 
 /** The prefix of a top-level `puni.json` key that the registry tolerates and ignores. */
 export const extensionKeyPrefix = 'x-';
+/** The `puni.json` key giving the purpose of each partition of the map. */
+export const mapKey = 'map';
 
 /**
  * The repository types of a project, each listed once in `all-repos` and all required: its
@@ -45,13 +48,15 @@ export interface RepositoryEntry {
 
 /**
  * What `puni.json` declares: the type of the repository holding it, the rules epoch its
- * repositories are judged at, and every repository.
+ * repositories are judged at, every repository, and the purpose of each partition of the map by
+ * partition path (empty when `map` is absent).
  */
 export interface RepositoryRegistry {
   readonly thisType: RepositoryType;
   /** The rules epoch: `puni burokrat check` applies only the rules introduced at or before it. */
   readonly rules: number;
   readonly repos: Readonly<Record<RepositoryType, RepositoryEntry>>;
+  readonly map: ReadonlyMap<string, string>;
 }
 
 /** A located repository: its root, its type, and the registry it was found through. */
@@ -102,11 +107,31 @@ function readEntry(value: unknown, where: string, refuse: Refuse): RepositoryEnt
   return { type, remote: readRemote(value['remote'], `${where}.remote`, refuse) };
 }
 
+/** The `map` object of `puni.json`: each key a partition path, each value a non-empty string. */
+function readMap(value: unknown, refuse: Refuse): ReadonlyMap<string, string> {
+  if (value === undefined) return new Map();
+  if (!isRecord(value)) return refuse(`${mapKey} is ${describeValue(value)}; expected an object`);
+  return new Map(
+    Object.entries(value).map(([path, purpose]): [string, string] => {
+      if (!isPartitionPath(path)) {
+        refuse(
+          `${mapKey} key ${JSON.stringify(path)} is no partition path; expected lower-case segments joined by /`,
+        );
+      }
+      if (typeof purpose !== 'string' || purpose === '') {
+        refuse(`${mapKey}.${path} is ${describeValue(purpose)}; expected a non-empty string`);
+      }
+      return [path, purpose];
+    }),
+  );
+}
+
 /**
  * Parses the text of `puni.json` at `file`, the one typed reader of the project's repository
  * registry: exactly `this-repo-type` (a type listed in `all-repos`), `rules` (a positive integer)
  * and `all-repos` (a non-empty list of `{ type, remote: { type, url } }`, each of
- * {@link repositoryTypes} exactly once), and any top-level keys starting `x-`, which are ignored.
+ * {@link repositoryTypes} exactly once); optionally `map` (an object from partition path to
+ * purpose); and any top-level keys starting `x-`, which are ignored.
  *
  * @throws RegistryInvalid naming the file and the problem, with the index of the offending entry.
  */
@@ -137,7 +162,7 @@ function readRegistryDocument(
     Object.fromEntries(
       Object.entries(parsed).filter(([key]) => !key.startsWith(extensionKeyPrefix)),
     ),
-    [thisRepoTypeKey, rulesKey, allReposKey],
+    [thisRepoTypeKey, rulesKey, allReposKey, mapKey],
     '',
     (problem) =>
       refuse(
@@ -187,18 +212,21 @@ function readRegistryDocument(
         'system-state': listed('system-state'),
         'system-records': listed('system-records'),
       },
+      map: readMap(parsed[mapKey], refuse),
     },
   };
 }
 
 /**
- * The text of a `puni.json` declaring `thisType`, the rules epoch `rules` and every repository
- * type at its remote in `remotes`: what {@link parseRegistry} reads back as the same registry.
+ * The text of a `puni.json` declaring `thisType`, the rules epoch `rules`, every repository type
+ * at its remote in `remotes`, and the partition purposes of `map`, left out when it is empty: what
+ * {@link parseRegistry} reads back as the same registry.
  */
 export function formatRegistry(
   thisType: RepositoryType,
   remotes: Readonly<Record<RepositoryType, string>>,
   rules: number,
+  map: ReadonlyMap<string, string> = new Map(),
 ): string {
   return JSON.stringify({
     [thisRepoTypeKey]: thisType,
@@ -207,6 +235,7 @@ export function formatRegistry(
       type,
       remote: { type: 'github', url: remotes[type] },
     })),
+    ...(map.size === 0 ? {} : { [mapKey]: Object.fromEntries(map) }),
   });
 }
 

@@ -1,124 +1,151 @@
 import {
   countWords,
-  indexDirectory,
-  renderIndex,
-  repositoryScope,
+  formatMapCommand,
+  indexWordBudget,
+  judgePurposes,
+  judgeReadWhen,
+  type MapSources,
+  readInvocation,
+  readMapSources,
+  readWhenRemedy,
+  renderMapLevels,
+  sectionRemedy,
   type SourceDefect,
-  sourceDefectRemedies,
 } from '@puni/shared-checkout';
-import { indexWordBudget } from '../budgets';
-import type { Rule } from '../finding';
+import type { Breach, Rule, RuleReading } from '../finding';
 
-/** The command that writes the index directly, without the Nx sync generator. */
-const writeIndex = 'bun run puni burokrat wiki index';
-
-/** The ids of the rules reporting index source defects, one per defect topic. */
-const sourceRuleIds = Object.keys(sourceDefectRemedies).map((topic) => `index.${topic}`);
-
-/** `ids` joined as a list ending in `conjunction`: `a, b or c`. */
-function joinIds(ids: readonly string[], conjunction: string): string {
-  return ids.length < 2
-    ? ids.join('')
-    : `${ids.slice(0, -1).join(', ')} ${conjunction} ${ids.at(-1) ?? ''}`;
+function readSources({ files, projectSources }: RuleReading): MapSources {
+  return readMapSources(files, projectSources);
 }
 
 /**
- * `wiki/index/` is exactly what `puni burokrat wiki index` would write. While its inputs have
- * defects it cannot be generated, which is itself a breach here. The remedy runs that command,
- * not `bun run fix`, so it holds even when the sync generator is not registered.
+ * Every level `puni burokrat wiki map` prints, the root and each partition, stays within
+ * {@link indexWordBudget}, each judged alone. A partition prints its whole subtree only when that
+ * fits, so a level over budget is the root, or a partition whose own projects and child
+ * partitions do not fit. While the sources have defects or a partition lacks its purpose the map
+ * cannot be printed; those are the other `index` rules' findings.
  */
-export const matchGeneratedIndex: Rule = {
-  id: 'index.current',
-  since: 1,
-  remedy: `run \`${writeIndex}\``,
-  judge({ files, commands, wikiIndex }) {
-    const sources = wikiIndex.readSources(files);
-    if (sources.defects.length > 0) {
-      const count = String(sources.defects.length);
-      return [
-        {
-          path: 'wiki/index',
-          message: `cannot be generated: ${count} ${joinIds(sourceRuleIds, 'or')} findings`,
-          remedy: `fix the ${joinIds(sourceRuleIds, 'and')} findings, then run \`${writeIndex}\``,
-        },
-      ];
-    }
-    const drift = wikiIndex.compare(files, renderIndex(sources.entries, commands));
-    return [
-      ...drift.missing.map((path) => ({ path, message: 'is missing' })),
-      ...drift.stale.map((path) => ({ path, message: 'is stale' })),
-      ...drift.unexpected.map((path) => ({ path, message: 'is not generated' })),
-    ];
+export const limitIndexWords: Rule = {
+  id: 'index.words',
+  since: 2,
+  remedy: `shorten what the level lists until it prints at most ${String(indexWordBudget)} words`,
+  judge(reading) {
+    const sources = readSources(reading);
+    const purposes = reading.registry.map;
+    if (sources.defects.length > 0) return [];
+    if (judgePurposes(sources.projects, purposes).missing.length > 0) return [];
+    const invocation = readInvocation(reading.files);
+    const levels = renderMapLevels({ ...sources, purposes, invocation });
+    return levels.flatMap(({ partition, text }): Breach[] => {
+      const words = countWords(text);
+      if (words <= indexWordBudget) return [];
+      const counted = `prints ${String(words)} words; at most ${String(indexWordBudget)}`;
+      const command = formatMapCommand(invocation, partition);
+      return partition === undefined
+        ? [
+            {
+              path: 'wiki',
+              message: `the root map (\`${command}\`) ${counted}`,
+              remedy:
+                'shorten the read-when of the wiki pages and the purposes of the top-level partitions in the map of puni.json, or merge pages',
+            },
+          ]
+        : [
+            {
+              path: 'puni.json',
+              message: `the map of partition ${partition} (\`${command}\`) ${counted}`,
+              remedy: `place some of its projects in a partition below ${partition} (metadata.index in an Nx project.json) and give that partition a purpose in the map of puni.json, or shorten their read-when`,
+            },
+          ];
+    });
   },
 };
 
 /**
- * Every committed file of `wiki/index/` stays within {@link indexWordBudget}, each judged alone;
- * a missing one is `index.current`'s.
+ * The `map` of `puni.json` gives a purpose to exactly the partitions the map shows, each a phrase
+ * completing "Read this when …". While the sources have defects a project may be missing from
+ * them, so a purpose no project uses is judged only once there are none.
  */
-export const limitIndexWords: Rule = {
-  id: 'index.words',
-  since: 1,
-  remedy: `shorten the readWhen of projects, the read-when of pages and the command briefs until each file of ${indexDirectory}/ holds at most ${String(indexWordBudget)} words, then run \`${writeIndex}\``,
-  judge: ({ files }) =>
-    files
-      .listVisible(repositoryScope)
-      .filter((path) => path.startsWith(`${indexDirectory}/`))
-      .flatMap((path) => {
-        const words = countWords(files.readText(path));
-        if (words <= indexWordBudget) return [];
-        return [
-          { path, message: `has ${String(words)} words; at most ${String(indexWordBudget)}` },
-        ];
-      }),
+export const requirePurposes: Rule = {
+  id: 'index.purpose',
+  since: 2,
+  remedy:
+    'give each partition the map shows a purpose in the map of puni.json, a phrase completing "Read this when …", and remove each purpose of a partition no project is placed in',
+  judge(reading) {
+    const sources = readSources(reading);
+    const purposes = reading.registry.map;
+    const path = 'puni.json';
+    const { missing, unused } = judgePurposes(sources.projects, purposes);
+    const breaches: Breach[] = missing.map((partition) => ({
+      path,
+      message: `map has no purpose for partition ${partition}, which the map shows`,
+      remedy: `add "${partition}": "<the task an agent comes to ${partition} for>" to the map of puni.json`,
+    }));
+    if (sources.defects.length === 0) {
+      for (const partition of unused) {
+        breaches.push({
+          path,
+          message: `map gives a purpose for partition ${partition}, where no project is placed`,
+          remedy: `remove "${partition}" from the map of puni.json, or place a project there`,
+        });
+      }
+    }
+    for (const [partition, purpose] of purposes) {
+      const problem = judgeReadWhen(purpose);
+      if (problem !== undefined) {
+        breaches.push({
+          path,
+          message: `map.${partition} ${problem}`,
+          remedy: `make the purpose of ${partition} a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words`,
+        });
+      }
+    }
+    return breaches;
+  },
 };
 
-/** The index source defects of `topic`, as findings. */
+/** The map source defects of `topic`, as findings, each with its source's remedy. */
 function judgeSources(topic: SourceDefect['topic']): Rule['judge'] {
-  return ({ files, wikiIndex }) =>
-    wikiIndex
-      .readSources(files)
+  return (reading) =>
+    readSources(reading)
       .defects.filter((defect) => defect.topic === topic)
-      .map(({ path, message }) => ({ path, message }));
+      .map(({ path, message, remedy }) => ({ path, message, remedy }));
 }
 
 /**
- * Every project has a valid `metadata.readWhen` and every page a valid `title` and `read-when`.
+ * Every project has a valid "Read when" phrase and every page a valid `title` and `read-when`.
  * The root project judges every source: its check reads every `project.json`.
  */
 export const requireReadWhen: Rule = {
   id: 'index.read-when',
   since: 1,
-  remedy: sourceDefectRemedies['read-when'],
+  remedy: readWhenRemedy,
   judge: judgeSources('read-when'),
 };
 
-/**
- * Every project's `metadata.readFirst` is a relative path inside the project naming an existing
- * regular file: the file its index line links to.
- */
+/** Every project names a file to read first: a regular file inside the project. */
 export const requireReadFirst: Rule = {
   id: 'index.read-first',
   since: 1,
-  remedy: sourceDefectRemedies['read-first'],
+  remedy: 'name a regular file inside the project as the file to read first',
   judge: judgeSources('read-first'),
 };
 
-/** Every project has exactly one `scope:<name>` tag, naming the index partition that lists it. */
+/** Every project has a place in the map: the partition its project source gives it. */
 export const requireScope: Rule = {
   id: 'index.scope',
   since: 1,
-  remedy: sourceDefectRemedies.scope,
+  remedy: 'give the project one partition of the map, as its project source says',
   judge: judgeSources('scope'),
 };
 
 /**
  * Every authored page lies directly in `wiki/` or in one of the sections `wikiSections` names, so
- * the index can list it under its section and a reader knows what kind of page it is.
+ * the map can list it under its section and a reader knows what kind of page it is.
  */
 export const requireSection: Rule = {
   id: 'index.section',
   since: 1,
-  remedy: sourceDefectRemedies.section,
+  remedy: sectionRemedy,
   judge: judgeSources('section'),
 };

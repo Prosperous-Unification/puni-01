@@ -2,7 +2,6 @@ import { DiBag } from 'di-bag';
 import { createCheckoutFiles } from './checkout-files.resource';
 import { createProjectScope } from './project-scope.resource';
 import { createRepositoryRegistry } from './repository-registry.resource';
-import { createWikiIndex } from './wiki-index.resource';
 
 /** The checkout resources; the host supplies `fileSystem` and `git`. */
 export const checkoutModule = DiBag.createBuilder()
@@ -10,14 +9,8 @@ export const checkoutModule = DiBag.createBuilder()
     checkoutRegistry: createRepositoryRegistry,
     checkoutFiles: createCheckoutFiles,
     checkoutProjectScope: createProjectScope,
-    checkoutWikiIndex: createWikiIndex,
   })
   .buildModule({
-    exportedServiceKeys: [
-      'checkoutRegistry',
-      'checkoutFiles',
-      'checkoutProjectScope',
-      'checkoutWikiIndex',
-    ],
+    exportedServiceKeys: ['checkoutRegistry', 'checkoutFiles', 'checkoutProjectScope'],
     moduleLabel: 'puni-shared-checkout',
   });

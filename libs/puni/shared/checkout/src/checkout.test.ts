@@ -124,44 +124,24 @@ describe('checkoutFiles over a memory file system', () => {
       'pinned',
       'rules',
     ]);
-    expect(
-      caught(() => {
-        files.write('docs/AGENTS.md', 'x');
-      }),
-    ).toBeInstanceOf(CheckoutPathRefused);
   });
 
-  test.each(['puni.json', 'AGENTS.md'])(
-    'a system-state checkout writes %s but never removes it',
+  test.each(['README.md', 'docs/AGENTS.md', 'wiki/index/index.md', 'nav/plans/2031-04-05-a.md'])(
+    'a system-state checkout writes nothing else: %s is refused',
     (path) => {
-      const { host, container } = openHost({ ...tree, [`/r/${path}`]: 'kept' });
+      const { host, container } = openHost(tree);
       const files = container.resolve('checkoutFiles').open('/r', 'system-state');
       expect(
         caught(() => {
-          files.remove(path);
+          files.write(path, 'overwritten');
         }),
       ).toMatchObject({
-        message: `${path}: is not inside wiki/index/, the only place a system-state checkout removes`,
+        message: `${path}: is not puni.json or AGENTS.md, the only place a system-state checkout writes`,
       });
-      expect(host.nodes.get(`/r/${path}`)).toBe('kept');
-      files.write('wiki/index/index.md', 'generated');
-      files.remove('wiki/index/index.md');
-      expect(host.nodes.get('/r/wiki/index/index.md')).toBeUndefined();
+      expect(host.nodes.get('/r/README.md')).toBe('r');
+      expect(host.nodes.has(`/r/${path}`)).toBe(path === 'README.md');
     },
   );
-
-  test('a write outside wiki/index/, puni.json and AGENTS.md is refused, writing nothing', () => {
-    const { host, container } = openHost(tree);
-    const files = container.resolve('checkoutFiles').open('/r', 'system-state');
-    expect(
-      caught(() => {
-        files.write('README.md', 'overwritten');
-      }),
-    ).toBeInstanceOf(CheckoutPathRefused);
-    expect(host.nodes.get('/r/README.md')).toBe('r');
-    files.write('wiki/index/index.md', 'generated');
-    expect(host.nodes.get('/r/wiki/index/index.md')).toBe('generated');
-  });
 
   test.each([
     ['nav/plans/2031-04-05-a.md', true],
@@ -187,25 +167,6 @@ describe('checkoutFiles over a memory file system', () => {
       message: `${path}: is not directly inside a kind directory (nav/plans, nav/research, bur/adr, bur/assessments, bur/archive), the only place a system-records checkout writes`,
     });
     expect(host.nodes.get(`/r/${path}`)).toBe(path === 'AGENTS.md' ? 'a' : undefined);
-  });
-
-  test('a records checkout empties no directory, and a state checkout writes no record', () => {
-    const { container } = openHost(tree);
-    const records = container.resolve('checkoutFiles').open('/r', 'system-records');
-    expect(
-      caught(() => {
-        records.removeEmptyDirectories('nav/plans');
-      }),
-    ).toBeInstanceOf(CheckoutPathRefused);
-    const state = container.resolve('checkoutFiles').open('/r', 'system-state');
-    expect(
-      caught(() => {
-        state.write('nav/plans/2031-04-05-a.md', 'x');
-      }),
-    ).toMatchObject({
-      message:
-        'nav/plans/2031-04-05-a.md: is not inside wiki/index/ or puni.json or AGENTS.md, the only place a system-state checkout writes',
-    });
   });
 
   test('the HEAD commit is read from git; none is the repository.git defect', () => {
@@ -279,7 +240,7 @@ describe('the staged view of a checkout', () => {
     expect(caught(() => staged.readText('b.md'))).toBeInstanceOf(StagedTextUnreadable);
     expect(
       caught(() => {
-        staged.write('wiki/index/index.md', 'x');
+        staged.write('nav/plans/2031-04-05-a.md', 'x');
       }),
     ).toBeInstanceOf(CheckoutPathRefused);
   });

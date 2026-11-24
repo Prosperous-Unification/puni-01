@@ -153,10 +153,10 @@ function listNewer(rules: readonly Rule[], pin: number): string[] {
 
 /**
  * The reading of the whole repository `files` holds, registered by `registry`: every file, every
- * reference, the composed CLI's commands and the index and records resources.
+ * reference, the composed CLI's commands, the project sources of the map and the records.
  */
 function readWhole(
-  { commandCatalog, checkoutWikiIndex, recordsCatalog }: CheckServices,
+  { commandCatalog, projectSources, recordsCatalog }: CheckServices,
   files: CheckoutFiles,
   registry: RepositoryRegistry,
 ): RuleReading {
@@ -166,7 +166,7 @@ function readWhole(
     commands: commandCatalog.list(),
     scope: repositoryScope,
     references: { kind: 'all' },
-    wikiIndex: checkoutWikiIndex,
+    projectSources,
     records: recordsCatalog,
   };
 }
@@ -196,12 +196,12 @@ function selectProjectRules(rules: readonly LeveledRule[], scope: CheckScope): r
  * rule. With `project`, only what that project of the `system-state` repository owns, by the
  * rules of its level, references reaching only paths the same project owns. With
  * `crossProjectLinks`, every file, by its cross-project rules, references reaching only paths
- * another project owns. So every project check, the cross-project check and the `whole`-level
- * rules together find what the whole check finds. With `staged`, the staged files as the index
- * holds them, by the secret rules of the type. With `commits`, what each commit of the range adds
- * and its message, judged apart, by the same rules, each finding's path `<commit>:<path>` and its
- * remedy saying how to take the commit out: by rewriting the branch, or, with `merged`, by a pull
- * request. Every run applies only the rules that apply at its `puni.json` pin, by
+ * another project owns. So every project check and the cross-project check together find what
+ * the whole check finds. With `staged`, the staged files as the index holds them, by the secret
+ * rules of the type. With `commits`, what each commit of the range adds and its message, judged
+ * apart, by the same rules, each finding's path `<commit>:<path>` and its remedy saying how to
+ * take the commit out: by rewriting the branch, or, with `merged`, by a pull request. Every run
+ * applies only the rules that apply at its `puni.json` pin, by
  * {@link appliesAt}, and names those that start after it. Findings are sorted by their printed
  * form.
  */

@@ -9,14 +9,16 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { indexFile } from '@puni/shared-checkout';
+import { formatRegistry, indexWordBudget } from '@puni/shared-checkout';
+import { readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
+  fixtureRemotes,
   removeScratchDirectoriesAfterEach,
   runGit,
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
+import { agentsWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
 import { digestRulesSection } from './agents-rules';
 import {
   type CheckHost,
@@ -26,11 +28,12 @@ import {
   type Judged,
   openCheckHost,
 } from './check.test-host';
-import { listEveryRule, type Rule } from './finding';
+import { appliesAt, listEveryRule, type Rule } from './finding';
 import { checkRules, codeRules } from './rule-set.rule';
 import {
   agentsExists,
   agentsNamesIndex,
+  agentsNamesMap,
   agentsWords,
   claudeLinksAgents,
   readmeExists,
@@ -39,7 +42,7 @@ import {
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
   limitIndexWords,
-  matchGeneratedIndex,
+  requirePurposes,
   requireReadFirst,
   requireReadWhen,
   requireScope,
@@ -51,9 +54,13 @@ import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
+import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
-import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
+import {
+  fixtureAgentsRules,
+  formatFixtureRegistry,
+  makeRepository,
+} from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -68,16 +75,20 @@ afterAll(async () => {
   await host.close();
 });
 
-beforeEach(async () => {
-  root = await makeRepository(scratchDirectories);
+beforeEach(() => {
+  root = makeRepository(scratchDirectories);
+  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(2));
 });
+
+/** The system-state rules that apply at the fixture's pin, epoch 2. */
+const pinnedCodeRules = codeRules.filter(({ rule }) => appliesAt(rule, 2));
 
 function judge(rule: Rule): Judged[] {
   return dropRemedies(host.judge(rule, root));
 }
 
 function words(count: number): string {
-  return `${'word '.repeat(count - 1)}wiki/index/index.md\n`;
+  return `${'word '.repeat(count - 4)}puni burokrat wiki map\n`;
 }
 
 const recordsName = ['demo', 'records'].join('-');
@@ -88,6 +99,29 @@ function editAgents(from: string, to: string): void {
   const text = readFileSync(path, 'utf8');
   if (!text.includes(from)) throw new Error(`AGENTS.md does not hold ${from}`);
   writeFileSync(path, text.replace(from, to));
+}
+
+/** Rewrites the fixture's `puni.json` with `purposes` as its map. */
+function writePurposes(purposes: readonly (readonly [string, string])[]): void {
+  writeRepositoryFile(
+    root,
+    'puni.json',
+    formatRegistry('system-state', fixtureRemotes, 2, new Map(purposes)),
+  );
+}
+
+/** The words the map of `app` prints once {@link writeCrowdedPartition} fills it. */
+const crowdedWords = 459;
+
+/** Twenty projects in the partition `index`, each with a "Read when" of twenty words. */
+function writeCrowdedPartition(index: readonly string[]): void {
+  for (const at of Array.from({ length: 20 }, (_, count) => String(count))) {
+    writeProject(root, `libs/many${at}`, `many${at}`, {
+      readWhen: `changing ${'many '.repeat(18)}${at}`,
+      readFirst: 'src/index.ts',
+      index,
+    });
+  }
 }
 
 const fixtureCodeRules = fixtureRuleSets['system-state'];
@@ -123,12 +157,20 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
-    'AGENTS.md not naming the index',
+    'AGENTS.md not naming the index, up to epoch 2',
     agentsNamesIndex,
     () => {
-      writeRepositoryFile(root, 'AGENTS.md', '# demo\n');
+      writeRepositoryFile(root, 'AGENTS.md', '# demo\n\nRun `puni burokrat wiki map`.\n');
     },
     { rule: 'agents.index', path: 'AGENTS.md', message: 'does not name wiki/index/index.md' },
+  ],
+  [
+    'AGENTS.md not naming the map command',
+    agentsNamesMap,
+    () => {
+      writeRepositoryFile(root, 'AGENTS.md', '# demo\n\nRead the old index.\n');
+    },
+    { rule: 'agents.index', path: 'AGENTS.md', message: 'does not name puni burokrat wiki map' },
   ],
   [
     'CLAUDE.md missing',
@@ -218,78 +260,80 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     },
   ],
   [
-    'a stale index',
-    matchGeneratedIndex,
+    'a partition the map shows without a purpose',
+    requirePurposes,
     () => {
-      appendFileSync(join(root, indexFile), 'x');
+      writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
     },
     {
-      rule: 'index.current',
-      path: indexFile,
-      message: 'is stale',
+      rule: 'index.purpose',
+      path: 'puni.json',
+      message: 'map has no purpose for partition app, which the map shows',
+      remedy: 'add "app": "<the task an agent comes to app for>" to the map of puni.json',
     },
   ],
   [
-    'a missing index',
-    matchGeneratedIndex,
+    'a purpose for a partition where no project is placed',
+    requirePurposes,
     () => {
-      rmSync(join(root, indexFile));
+      writePurposes([
+        ['app', 'changing the app'],
+        ['dash/ops', 'reaching a node'],
+      ]);
     },
     {
-      rule: 'index.current',
-      path: indexFile,
-      message: 'is missing',
+      rule: 'index.purpose',
+      path: 'puni.json',
+      message: 'map gives a purpose for partition dash/ops, where no project is placed',
+      remedy: 'remove "dash/ops" from the map of puni.json, or place a project there',
     },
   ],
   [
-    'an unexpected file in the index',
-    matchGeneratedIndex,
+    'a purpose that does not complete "Read this when"',
+    requirePurposes,
     () => {
-      writeRepositoryFile(root, 'wiki/index/modules.md', 'old');
+      writePurposes([['app', 'The app.']]);
     },
     {
-      rule: 'index.current',
-      path: 'wiki/index/modules.md',
-      message: 'is not generated',
-    },
-  ],
-  [
-    'an index that cannot be generated',
-    matchGeneratedIndex,
-    () => {
-      writeProject(root, 'libs/two', 'two', {});
-    },
-    {
-      rule: 'index.current',
-      path: 'wiki/index',
-      message:
-        'cannot be generated: 2 index.read-when, index.read-first, index.scope or index.section findings',
+      rule: 'index.purpose',
+      path: 'puni.json',
+      message: 'map.app must start with a lower-case letter, must not end with a full stop',
       remedy:
-        'fix the index.read-when, index.read-first, index.scope and index.section findings, then run `bun run puni burokrat wiki index`',
+        'make the purpose of app a phrase completing "Read this when …": lower-case first letter, one line, no full stop, at most 20 words',
     },
   ],
   [
-    'an index over budget',
+    'a partition whose projects do not fit the budget',
     limitIndexWords,
     () => {
-      writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
+      writeCrowdedPartition(['app']);
     },
     {
       rule: 'index.words',
-      path: indexFile,
-      message: `has ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+      path: 'puni.json',
+      message: `the map of partition app (\`puni burokrat wiki map app\`) prints ${String(crowdedWords)} words; at most ${String(indexWordBudget)}`,
+      remedy:
+        'place some of its projects in a partition below app (metadata.index in an Nx project.json) and give that partition a purpose in the map of puni.json, or shorten their read-when',
     },
   ],
   [
-    'an index partition over budget, the index file within it',
+    'a root map that does not fit the budget',
     limitIndexWords,
     () => {
-      writeRepositoryFile(root, 'wiki/index/app.md', words(indexWordBudget + 1));
+      for (const index of Array.from({ length: 20 }, (_, at) => String(at))) {
+        writeRepositoryFile(
+          root,
+          `wiki/page${index}.md`,
+          `---\ntitle: Page ${index}\nread-when: reading ${'page '.repeat(18)}${index}\n---\n`,
+        );
+      }
     },
     {
       rule: 'index.words',
-      path: 'wiki/index/app.md',
-      message: `has ${String(indexWordBudget + 1)} words; at most ${String(indexWordBudget)}`,
+      path: 'wiki',
+      message: `the root map (\`puni burokrat wiki map\`) prints 477 words; at most ${String(indexWordBudget)}`,
+      remedy:
+        'shorten the read-when of the wiki pages and the purposes of the top-level partitions in the map of puni.json, or merge pages',
     },
   ],
   [
@@ -310,6 +354,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.scope',
       path: 'libs/two/project.json',
       message: 'project two has no scope:<name> tag',
+      remedy: scopeRemedy,
     },
   ],
   [
@@ -399,6 +444,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'index.read-first',
       path: 'libs/two/project.json',
       message: 'project two metadata.readFirst names a missing file',
+      remedy: readFirstRemedy,
     },
   ],
   [
@@ -612,7 +658,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
         {
           rule: 'agents.rules',
           path: 'AGENTS.md',
-          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 1`,
+          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 2`,
         },
       ] as const,
   ),
@@ -636,18 +682,6 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       path: 'CLAUDE.md',
       message: 'is a directory, not a symlink to AGENTS.md',
       remedy: 'remove the directory, then link: rm -r CLAUDE.md && ln -s AGENTS.md CLAUDE.md',
-    },
-  ],
-  [
-    'nx.json without the index sync generator',
-    requireIndexSync,
-    () => {
-      writeRepositoryFile(root, 'nx.json', JSON.stringify({ sync: { globalGenerators: [] } }));
-    },
-    {
-      rule: 'nx.sync',
-      path: 'nx.json',
-      message: 'does not list @puni/nx-sync:wiki-index in sync.globalGenerators',
     },
   ],
   [
@@ -712,29 +746,30 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       writeRepositoryFile(
         root,
         'wiki/ops/deploy.md',
-        'See [the index](../index/index.md#nowhere).\n',
+        'See [the rules](../../AGENTS.md#nowhere).\n',
       );
     },
     {
       rule: 'links.resolve',
       path: 'wiki/ops/deploy.md',
       message:
-        'links to ../index/index.md#nowhere, but wiki/index/index.md has no heading with the anchor #nowhere',
-      remedy: 'point the link at a heading of wiki/index/index.md, or drop the #nowhere',
+        'links to ../../AGENTS.md#nowhere, but AGENTS.md has no heading with the anchor #nowhere',
+      remedy: 'point the link at a heading of AGENTS.md, or drop the #nowhere',
     },
   ],
   [
     'a backticked path to a heading that does not exist',
     judgeDocPaths,
     () => {
-      appendFileSync(join(root, 'README.md'), 'Read `wiki/index/index.md#nowhere`.\n');
+      writeRepositoryFile(root, 'apps/one/NOTES.md', '# Notes\n');
+      appendFileSync(join(root, 'README.md'), 'Read `apps/one/NOTES.md#nowhere`.\n');
     },
     {
       rule: 'docs.paths',
       path: 'README.md',
       message:
-        'names wiki/index/index.md#nowhere, but wiki/index/index.md has no heading with the anchor #nowhere',
-      remedy: 'name a heading of wiki/index/index.md, or drop the fragment',
+        'names apps/one/NOTES.md#nowhere, but apps/one/NOTES.md has no heading with the anchor #nowhere',
+      remedy: 'name a heading of apps/one/NOTES.md, or drop the fragment',
     },
   ],
   [
@@ -787,17 +822,36 @@ describe('rule boundaries', () => {
     expect(judge(judgeDocSymbols)).toEqual([]);
   });
 
-  test('a repository without nx.json holds no workspace: nx.sync and ci.gate judge nothing', () => {
+  test('while the map sources have defects, index.words and unused purposes judge nothing', () => {
+    writeCrowdedPartition(['app']);
+    writePurposes([
+      ['app', 'changing the app'],
+      ['dash', 'operating nodes'],
+    ]);
+    expect(judge(limitIndexWords)).toHaveLength(1);
+    expect(judge(requirePurposes)).toHaveLength(1);
+    writeProject(root, 'libs/two', 'two', {});
+    expect([...judge(limitIndexWords), ...judge(requirePurposes)]).toEqual([]);
+  });
+
+  test('a partition without a purpose leaves index.words to index.purpose', () => {
+    writeCrowdedPartition(['dash']);
+    expect(judge(limitIndexWords)).toEqual([]);
+    expect(judge(requirePurposes)).toEqual([
+      {
+        rule: 'index.purpose',
+        path: 'puni.json',
+        message: 'map has no purpose for partition dash, which the map shows',
+      },
+    ]);
+  });
+
+  test('a repository without nx.json holds no workspace: ci.gate judges nothing', () => {
     rmSync(join(root, 'nx.json'));
     rmSync(join(root, '.github'), { recursive: true });
-    expect([...judge(requireIndexSync), ...judge(requireCiGate)]).toEqual([]);
+    expect(judge(requireCiGate)).toEqual([]);
     writeRepositoryFile(root, 'nx.json', '{}');
-    expect([...judge(requireIndexSync), ...judge(requireCiGate)]).toEqual([
-      {
-        rule: 'nx.sync',
-        path: 'nx.json',
-        message: 'does not list @puni/nx-sync:wiki-index in sync.globalGenerators',
-      },
+    expect(judge(requireCiGate)).toEqual([
       { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'is missing' },
     ]);
   });
@@ -867,12 +921,12 @@ describe('rule boundaries', () => {
       { path: 'demo burokrat', brief: 'Judge.' },
       { path: 'demo burokrat check', brief: 'Check.' },
       { path: 'demo burokrat wiki', brief: 'Wiki.' },
-      { path: 'demo burokrat wiki index', brief: 'Index.' },
+      { path: 'demo burokrat wiki map', brief: 'Map.' },
     ]);
     try {
       appendFileSync(
         join(root, 'README.md'),
-        '`demo burokrat check here` `demo burokrat wiki index now` `demo burokrat wiki nope`\n',
+        '`demo burokrat check here` `demo burokrat wiki map now` `demo burokrat wiki nope`\n',
       );
       expect(dropRemedies(leaves.judge(judgeDocCommands, root))).toEqual([
         {
@@ -928,7 +982,7 @@ describe('the check command', () => {
   test('a clean repository prints one ok line and exits 0', () => {
     expect(runIn(root)).toEqual({
       code: 0,
-      printed: `ok: system-state, ${String(codeRules.length)} rules, no findings.\n`,
+      printed: `ok: system-state, ${String(pinnedCodeRules.length)} rules, no findings.\n`,
     });
   });
 
@@ -938,11 +992,11 @@ describe('the check command', () => {
     expect(runIn(root)).toEqual({
       code: 1,
       printed: [
-        'agents.index AGENTS.md: does not name wiki/index/index.md; fix: name wiki/index/index.md in AGENTS.md as the map to read first',
+        'agents.index AGENTS.md: does not name puni burokrat wiki map; fix: name `puni burokrat wiki map` in AGENTS.md as the command printing the map to read first',
         'agents.records AGENTS.md: does not give the records checkout ../demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'agents.records AGENTS.md: does not give the records repository URL https://github.com/acme/demo-records; fix: write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
         'readme.exists README.md: is missing; fix: create README.md at the root: what the repository is, for a person arriving',
-        `fail: system-state, ${String(codeRules.length)} rules, 4 findings.`,
+        `fail: system-state, ${String(pinnedCodeRules.length)} rules, 4 findings.`,
         '',
       ].join('\n'),
     });
@@ -1014,15 +1068,6 @@ describe('a link target the file system cannot describe is missing, not a crash'
     expect(run.code).toBe(1);
     expect(run.stdout).toStartWith(`${finding('apps/one/notes.md', 'src/index.ts/child')}\n`);
   });
-
-  test('wiki/index replaced by a file leaves a project check ok', () => {
-    rmSync(join(root, 'wiki/index'), { recursive: true });
-    writeFileSync(join(root, 'wiki/index'), 'x\n');
-    expect(runCheck({ project: 'one' })).toEqual({
-      code: 0,
-      stdout: 'ok: system-state, project one, 11 rules, no findings.\n',
-    });
-  });
 });
 
 describe('a git that cannot list the checkout', () => {
@@ -1048,7 +1093,9 @@ describe('a git that cannot list the checkout', () => {
     const lines = run.stdout.split('\n');
     expect(lines).toHaveLength(3);
     expect(lines[0]).toMatch(/^repository\.git \.: git ls-files exited 128: /u);
-    expect(lines[1]).toBe(`fail: system-state, ${String(codeRules.length)} rules, 1 finding.`);
+    expect(lines[1]).toBe(
+      `fail: system-state, ${String(pinnedCodeRules.length)} rules, 1 finding.`,
+    );
   });
 });
 

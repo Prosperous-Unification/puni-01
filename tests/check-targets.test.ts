@@ -108,10 +108,6 @@ describe('puni-bur-check targets', () => {
     expect(declaring).toEqual([]);
   });
 
-  test('the package the nx.sync rule names is the sync generator', () => {
-    expect(field(readJson('tools/nx-sync/package.json'), 'name')).toBe('@puni/nx-sync');
-  });
-
   test('test helpers are not production inputs', () => {
     expect(readStrings(field(nx, 'namedInputs', 'production'))).toEqual([
       'default',

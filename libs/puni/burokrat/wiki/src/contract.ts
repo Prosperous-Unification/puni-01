@@ -1,47 +1,46 @@
-import type { Command, CommandCatalog } from '@puni/shared-command';
+import type { Command } from '@puni/shared-command';
 import type {
   CheckoutFilesResource,
+  ProjectSource,
   RepositoryRegistryResource,
-  WikiIndexResource,
 } from '@puni/shared-checkout';
 
-/** A parsed `wiki index` request: write the index, or with `print` only print it. */
-export interface WikiIndexRequest {
-  readonly kind: 'wiki index';
-  readonly print?: boolean | undefined;
+/** A parsed `wiki map` request: print the root of the map, or with `partition` that partition. */
+export interface WikiMapRequest {
+  readonly kind: 'wiki map';
+  readonly partition?: string | undefined;
 }
 
-/** What writing the index did: the changes it made, or why it wrote nothing. */
-export type WikiIndexOutcome =
+/**
+ * What printing the map gave: its text; a partition the map does not show, with every partition
+ * it does; or why it cannot be printed.
+ */
+export type WikiMapOutcome =
+  | { readonly kind: 'printed'; readonly text: string }
   | {
-      readonly kind: 'written';
-      readonly written: readonly string[];
-      readonly removed: readonly string[];
+      readonly kind: 'unknown';
+      readonly partition: string;
+      readonly partitions: readonly string[];
     }
   | { readonly kind: 'refused'; readonly reason: string };
 
-/** What rendering the index gave: every file of `wiki/index/` by path, or why there is none. */
-export type WikiIndexRendering =
-  | { readonly kind: 'rendered'; readonly files: ReadonlyMap<string, string> }
-  | { readonly kind: 'refused'; readonly reason: string };
-
-/** The capability "write the wiki index". */
-export interface WikiIndexWriter {
-  /** Regenerates `wiki/index/` of the system-state repository found from `cwd`. */
-  write(cwd: string): WikiIndexOutcome;
-  /** Renders `wiki/index/` of the system-state repository found from `cwd`, writing nothing. */
-  render(cwd: string): WikiIndexRendering;
+/** The capability "print the map". */
+export interface WikiMapPrinter {
+  /**
+   * Renders the root of the map of the system-state repository found from `cwd`, or with
+   * `partition` that partition, writing nothing.
+   */
+  print(cwd: string, partition: string | undefined): WikiMapOutcome;
 }
 
-/** What the wiki module needs from its host. */
+/** What the wiki module needs from its host: the checkout resources and the project sources. */
 export interface WikiRequirements {
   readonly checkoutRegistry: RepositoryRegistryResource;
   readonly checkoutFiles: CheckoutFilesResource;
-  readonly checkoutWikiIndex: WikiIndexResource;
-  readonly commandCatalog: CommandCatalog;
+  readonly projectSources: readonly ProjectSource[];
 }
 
 /** What the wiki module exports. */
 export interface WikiExports {
-  readonly burokratWikiIndexCommand: Command<WikiIndexRequest>;
+  readonly burokratWikiMapCommand: Command<WikiMapRequest>;
 }

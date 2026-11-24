@@ -22,7 +22,8 @@ describe('burokratParser', () => {
   });
 
   test.each([
-    ['wiki index', { kind: 'wiki index', print: false }],
+    ['wiki map', { kind: 'wiki map', partition: undefined }],
+    ['wiki map dash/ops', { kind: 'wiki map', partition: 'dash/ops' }],
     [
       'check',
       {
@@ -103,7 +104,9 @@ describe('burokratParser', () => {
     '--bogus',
     'wiki stray',
     'wiki --bogus',
-    'wiki index --check',
+    'wiki map --check',
+    'wiki map dash ops',
+    'wiki index',
     'check --bogus',
     'check stray',
     'check --project',

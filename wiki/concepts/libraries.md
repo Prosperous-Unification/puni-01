@@ -5,8 +5,9 @@ read-when: deciding which library new code belongs in, or what one library may i
 
 # Libraries
 
-Every project is an Nx project whose `scope:<name>` tag places it in one partition of the
-[index](../index/index.md). Three shapes:
+Every project is an Nx project whose `scope:<name>` tag is its lint boundary and, unless
+`metadata.index` says otherwise, its partition of the map `bun run puni burokrat wiki map`
+prints. Three shapes:
 
 - **app**: `apps/puni/cli` (`scope:app`). It only wires: it parses the command line, composes the
   graph and dispatches to commands, so it holds only the files

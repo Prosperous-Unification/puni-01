@@ -278,7 +278,7 @@ export default tseslint.config(
   },
   { files: ['**/*.js', '**/*.cjs'], ...tseslint.configs.disableTypeChecked },
   {
-    // A CommonJS file, such as the Nx sync generator Nx loads with require, imports by require.
+    // A CommonJS file, such as one Nx loads with require, imports by require.
     files: ['**/*.cjs'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
     languageOptions: {

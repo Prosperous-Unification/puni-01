@@ -1,5 +1,5 @@
 import type { FileSystem, Git, PathKind } from '@puni/shared-ports';
-import type { IndexDrift, IndexSources } from './index-sources';
+import type { ProjectReading } from './map-sources';
 import type { CheckScope, Project, ProjectScope } from './ownership';
 import type { Repository, RepositoryType } from './registry';
 
@@ -79,19 +79,11 @@ export interface CheckoutFiles {
   /** Every path git shows that exists in the working tree, of whatever kind. */
   listVisibleEntries(): readonly CheckoutEntry[];
   /**
-   * Writes `text` at `path` in the checkout's write area, creating its directories, replacing a
-   * file there. A system-state checkout writes only inside `wiki/index/`, `puni.json` and
-   * `AGENTS.md`; a records checkout only
-   * directly inside a kind directory. Any other path is refused with `CheckoutPathRefused`.
+   * Writes `text` at `path`, creating its directories, replacing a file there. A system-state
+   * checkout writes only `puni.json` and `AGENTS.md`; a records checkout only directly inside a
+   * kind directory. Any other path is refused with `CheckoutPathRefused`.
    */
   write(path: string, text: string): void;
-  /** Removes the file at `path` in the checkout's write area. */
-  remove(path: string): void;
-  /**
-   * Removes every empty directory below `directory`, which is `wiki/index` or inside it; a
-   * records checkout empties none.
-   */
-  removeEmptyDirectories(directory: string): void;
 }
 
 /**
@@ -102,7 +94,7 @@ export type NewCheckoutPlace = 'empty-directory' | 'absent';
 
 /**
  * A repository being created: it only adds the entry files a new repository of its type starts
- * with (`seedFiles`), and for a system-state repository the generated index, each once.
+ * with (`seedFiles`), each once.
  * Paths are repository-relative POSIX paths; any other path, or one where something already
  * exists, is refused with `CheckoutPathRefused`.
  */
@@ -180,27 +172,14 @@ export interface ProjectScopeResource {
   resolve(files: CheckoutFiles, name: string): ProjectScope;
 }
 
-/** The sources of the generated wiki index and the committed index itself. */
-export interface WikiIndexResource {
-  /**
-   * Reads every Nx project (`project.json` under `apps/` and `libs/`) and every authored page
-   * (Markdown under `wiki/` outside `wiki/index/`) that is visible and not below `node_modules`;
-   * a project's entry carries its scope. In an Nx workspace (one with `nx.json`) a missing
-   * `apps/` or `libs/` is a defect. A defect in them is no failure; each one is returned, sorted
-   * by path.
-   */
-  readSources(files: CheckoutFiles): IndexSources;
-  /**
-   * How the visible files of the committed `wiki/index/` differ from `expected`; a file standing
-   * where the `wiki/index` directory belongs is unexpected.
-   */
-  compare(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
-  /**
-   * Makes the visible files of `wiki/index/` exactly `expected`: removes each unexpected one,
-   * then writes each missing or stale file, removes every directory left empty, and returns that
-   * drift. A file git ignores there is neither compared nor removed.
-   */
-  write(files: CheckoutFiles, expected: ReadonlyMap<string, string>): IndexDrift;
+/**
+ * A plugin that finds a repository's projects for the map, one per build tool: it reads the
+ * projects its tool declares in `files`, each with its place in the map, and reports every
+ * defect of their declarations, each with its remedy, instead of failing on it. The host
+ * composes the sources a repository is read with as the `projectSources` list.
+ */
+export interface ProjectSource {
+  readProjects(files: CheckoutFiles): ProjectReading;
 }
 
 /** What the checkout module exports. */
@@ -208,5 +187,4 @@ export interface CheckoutExports {
   readonly checkoutRegistry: RepositoryRegistryResource;
   readonly checkoutFiles: CheckoutFilesResource;
   readonly checkoutProjectScope: ProjectScopeResource;
-  readonly checkoutWikiIndex: WikiIndexResource;
 }

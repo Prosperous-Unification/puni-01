@@ -1,21 +1,18 @@
 import { mkdirSync, symlinkSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { CommandBrief } from '@puni/shared-command';
-import { checkoutModule, formatRegistry, indexDirectory, renderIndex } from '@puni/shared-checkout';
+import { formatRegistry } from '@puni/shared-checkout';
 import { recordDirectories, recordKinds } from '@puni/shared-records';
 import {
   fixtureRemotes,
-  nodeHostModule,
-  removeScratchPath,
   runGit,
   type ScratchDirectoryOwner,
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
-import { DiBag } from 'di-bag';
 import { digestRulesSection } from './agents-rules';
 
-/** The command tree fixture repositories are indexed with. */
+/** The command tree fixture repositories are judged with. */
 export const fixtureCommands: readonly CommandBrief[] = [
   { path: 'demo dash', brief: 'Do it.' },
   { path: 'demo burokrat', brief: 'Judge.' },
@@ -28,43 +25,23 @@ export const fixtureAgentsRules =
 /** The digest `agents.rules` pins in fixture checks: that of {@link fixtureAgentsRules}. */
 export const fixtureAgentsRulesDigest = digestRulesSection(fixtureAgentsRules);
 
-/** The `nx.json` of a fixture repository: the index sync generator registered, nothing else. */
-export const fixtureNx = { sync: { globalGenerators: ['@puni/nx-sync:wiki-index'] } };
+/** The purposes of a fixture repository's partitions: `app`, where its project `one` is. */
+export const fixturePurposes: ReadonlyMap<string, string> = new Map([['app', 'changing the app']]);
 
-/**
- * Rewrites `wiki/index/index.md` of the git repository at `root` from its sources, read through
- * the checkout resources over this machine.
- *
- * @throws Error when the sources have defects; fixtures are expected to be valid here.
- * @throws ScratchRemovalRefused when `root` does not lie below this process's scratch root.
- */
-export async function regenerateIndex(root: string): Promise<void> {
-  const container = DiBag.createBuilder()
-    .withInstalledModules([nodeHostModule, checkoutModule])
-    .buildContainer();
-  try {
-    const files = container.resolve('checkoutFiles').open(root, 'system-state');
-    const sources = container.resolve('checkoutWikiIndex').readSources(files);
-    if (sources.defects.length > 0)
-      throw new Error(`fixture defects: ${JSON.stringify(sources.defects)}`);
-    removeScratchPath(join(root, indexDirectory));
-    for (const [path, text] of renderIndex(sources.entries, fixtureCommands)) {
-      writeRepositoryFile(root, path, text);
-    }
-  } finally {
-    await container.close();
-  }
+/** A fixture `puni.json` registering the pair at `rules`, with {@link fixturePurposes} as its map. */
+export function formatFixtureRegistry(rules: number): string {
+  return formatRegistry('system-state', fixtureRemotes, rules, fixturePurposes);
 }
 
 /**
- * Builds a system-state repository named `demo` at `root` that passes every rule: `puni.json`,
- * entry files (`AGENTS.md` holding {@link fixtureAgentsRules}), `nx.json`, the CI workflow, the root project
- * `workspace`, one project `one`, a generated index, and every file staged in a real git
- * repository.
+ * Builds a system-state repository named `demo` at `root` that passes every rule: `puni.json`
+ * (pinned at epoch 1, see {@link formatFixtureRegistry}), entry files (`AGENTS.md` holding {@link fixtureAgentsRules}), an empty
+ * `nx.json`, the CI workflow, the root project `workspace`, one project `one`, and every file
+ * staged in a real git repository.
  */
-async function buildStateRepository(root: string): Promise<void> {
+function buildStateRepository(root: string): void {
   mkdirSync(root);
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
+  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry(1));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeRepositoryFile(root, 'package.json', JSON.stringify({ name: 'demo' }));
   writeProject(root, 'apps/one', 'one', {
@@ -75,9 +52,9 @@ async function buildStateRepository(root: string): Promise<void> {
   writeRepositoryFile(
     root,
     'AGENTS.md',
-    `# demo\n\nStart at \`wiki/index/index.md\`. History lives in ${fixtureRemotes['system-records']}, checked out as \`../demo-records\`.\n\n${fixtureAgentsRules}`,
+    `# demo\n\nStart at \`puni burokrat wiki map\`, once wiki/index/index.md. History lives in ${fixtureRemotes['system-records']}, checked out as \`../demo-records\`.\n\n${fixtureAgentsRules}`,
   );
-  writeRepositoryFile(root, 'nx.json', JSON.stringify(fixtureNx));
+  writeRepositoryFile(root, 'nx.json', '{}');
   symlinkSync('AGENTS.md', join(root, 'CLAUDE.md'));
   writeRepositoryFile(root, 'README.md', '# demo\n\nRules: [AGENTS.md](AGENTS.md).\n');
   writeRepositoryFile(
@@ -86,7 +63,6 @@ async function buildStateRepository(root: string): Promise<void> {
     'on: [push, pull_request]\njobs:\n  gate:\n    steps:\n      - run: bun run gate\n      - run: bun run gate:affected\n',
   );
   runGit(root, ['init', '-q']);
-  await regenerateIndex(root);
   runGit(root, ['add', '-A']);
 }
 
@@ -125,26 +101,22 @@ export interface RepositoryPair {
  * A fresh pair in one temporary directory: `demo` (system-state) and `demo-records`
  * (system-records), each passing every rule of its type. `scratchDirectories` removes both.
  */
-export async function makeRepositoryPair(
-  scratchDirectories: ScratchDirectoryOwner,
-): Promise<RepositoryPair> {
+export function makeRepositoryPair(scratchDirectories: ScratchDirectoryOwner): RepositoryPair {
   const parent = scratchDirectories.createDirectory('puni-pair-');
   const pair = { state: join(parent, 'demo'), records: join(parent, 'demo-records') };
-  await buildStateRepository(pair.state);
+  buildStateRepository(pair.state);
   buildRecordsRepository(pair.records);
   return pair;
 }
 
 /** The system-state repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRepository(scratchDirectories: ScratchDirectoryOwner): Promise<string> {
-  return (await makeRepositoryPair(scratchDirectories)).state;
+export function makeRepository(scratchDirectories: ScratchDirectoryOwner): string {
+  return makeRepositoryPair(scratchDirectories).state;
 }
 
 /** The records repository of a fresh {@link makeRepositoryPair}. */
-export async function makeRecordsRepository(
-  scratchDirectories: ScratchDirectoryOwner,
-): Promise<string> {
-  return (await makeRepositoryPair(scratchDirectories)).records;
+export function makeRecordsRepository(scratchDirectories: ScratchDirectoryOwner): string {
+  return makeRepositoryPair(scratchDirectories).records;
 }
 
 /** Front matter for a fixture record: every required key, valid for `path`, then `extra`. */

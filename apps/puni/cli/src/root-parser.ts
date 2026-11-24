@@ -94,7 +94,7 @@ export const burokratParser = map(
       command('check', checkParser, {
         brief: message`Judge the repository against its rules.`,
       }),
-      command('wiki', wikiParser, { brief: message`Generate the wiki index.` }),
+      command('wiki', wikiParser, { brief: message`Print the wiki map.` }),
       command('repo', repoParser, {
         brief: message`Set up the repositories puni governs, and raise their rules pin.`,
       }),
@@ -195,8 +195,8 @@ export type Leaf =
       readonly request: Extract<BurokratRequest, { kind: 'check' }>;
     }
   | {
-      readonly kind: 'burokrat wiki index';
-      readonly request: Extract<BurokratRequest, { kind: 'wiki index' }>;
+      readonly kind: 'burokrat wiki map';
+      readonly request: Extract<BurokratRequest, { kind: 'wiki map' }>;
     }
   | {
       readonly kind: 'burokrat repo init';
@@ -227,7 +227,7 @@ export const handlerKeys = {
   'dash resources exec': 'dashResourcesExecCommand',
   'dash resources remove': 'dashResourcesRemoveCommand',
   'burokrat check': 'burokratCheckCommand',
-  'burokrat wiki index': 'burokratWikiIndexCommand',
+  'burokrat wiki map': 'burokratWikiMapCommand',
   'burokrat repo init': 'burokratRepoInitCommand',
   'burokrat repo upgrade': 'burokratRepoUpgradeCommand',
   'burokrat adr add': 'burokratAdrAddCommand',
@@ -272,8 +272,8 @@ function selectBurokratLeaf(request: BurokratRequest): Leaf {
       return { kind: 'help', path: ['burokrat', ...request.path] };
     case 'check':
       return { kind: 'burokrat check', request };
-    case 'wiki index':
-      return { kind: 'burokrat wiki index', request };
+    case 'wiki map':
+      return { kind: 'burokrat wiki map', request };
     case 'repo init':
       return { kind: 'burokrat repo init', request };
     case 'repo upgrade':

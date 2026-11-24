@@ -13,6 +13,7 @@ import {
   agentsExists,
   agentsKeepRules,
   agentsNamesIndex,
+  agentsNamesMap,
   agentsWords,
   claudeLinksAgents,
   readmeExists,
@@ -21,7 +22,7 @@ import {
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
   limitIndexWords,
-  matchGeneratedIndex,
+  requirePurposes,
   requireReadFirst,
   requireReadWhen,
   requireScope,
@@ -42,23 +43,23 @@ import {
   forbidRecordsAddresses,
   forbidStateAddresses,
 } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
+import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 
 const at =
   (level: RuleLevel) =>
   (rule: Rule): LeveledRule => ({ level, rule });
 
 /**
- * The rules for a `system-state` repository. The generated index is judged only whole; entry
- * files, the index budget, `nx.json` and the index sources (every `project.json`, which the root
- * project's check reads) are repository-level; the per-file and per-project rules are
- * project-level.
+ * The rules for a `system-state` repository. Entry files, the map (its sources, every
+ * `project.json`, which the root project's check reads, its purposes and its budget) and the CI
+ * workflow are repository-level; the per-file and per-project rules are project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
     agentsExists,
     agentsWords,
     agentsNamesIndex,
+    agentsNamesMap,
     ...agentsKeepRules,
     claudeLinksAgents,
     readmeExists,
@@ -66,7 +67,7 @@ export const codeRules: readonly LeveledRule[] = [
     limitIndexWords,
     matchRecordsLocation,
     requireCiGate,
-    requireIndexSync,
+    requirePurposes,
     requireReadWhen,
     requireReadFirst,
     requireScope,
@@ -85,7 +86,6 @@ export const codeRules: readonly LeveledRule[] = [
     limitPageWords,
     judgeDocSymbols,
   ].map(at('project')),
-  at('whole')(matchGeneratedIndex),
 ];
 
 /** The rules for the `system-records` repository, which is judged whole. */

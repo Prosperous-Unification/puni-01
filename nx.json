@@ -79,9 +79,6 @@
       ]
     }
   },
-  "sync": {
-    "globalGenerators": ["@puni/nx-sync:wiki-index"]
-  },
   "plugins": [],
   "pluginsConfig": {
     "@nx/js": {
