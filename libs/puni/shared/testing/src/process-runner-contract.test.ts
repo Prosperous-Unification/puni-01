@@ -1,10 +1,13 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBunProcessRunner } from '@puni/shared-adapters';
 import type { ProcessRunner } from '@puni/shared-ports';
 import { createMemoryProcessRunner } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratch = removeScratchDirectoriesAfterAll();
 
 const exitSeven = ['sh', '-c', 'exit 7'];
 const subjects: readonly (readonly [string, () => ProcessRunner])[] = [
@@ -28,12 +31,6 @@ describe.each(subjects)('the ProcessRunner attached contract: %s', (_name, open)
 });
 
 describe('the bun adapter run attached', () => {
-  const temporaries: string[] = [];
-
-  afterAll(() => {
-    for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-  });
-
   test('a child a signal ended exits 128 plus the signal number', () => {
     const outcome = createBunProcessRunner().runAttached(['sh', '-c', 'kill -TERM $$'], {
       cwd: tmpdir(),
@@ -42,8 +39,7 @@ describe('the bun adapter run attached', () => {
   });
 
   test('the child reads and writes the standard streams of this process', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'puni-attached-'));
-    temporaries.push(directory);
+    const directory = scratch.createDirectory('puni-attached-');
     const script = join(directory, 'attached.ts');
     const adapters = new URL('../../adapters/src/index.ts', import.meta.url).pathname;
     writeFileSync(

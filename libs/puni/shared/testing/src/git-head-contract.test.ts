@@ -1,11 +1,13 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import type { Git } from '@puni/shared-ports';
 import { memoryHost } from './memory-host';
 import { runGit } from './repository-files';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratch = removeScratchDirectoriesAfterAll();
 
 /** A git and two repositories: `committed`, whose HEAD names a commit, and `empty`, with none. */
 interface Subject {
@@ -14,15 +16,8 @@ interface Subject {
   readonly empty: string;
 }
 
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
-
 function openBunGit(): Subject {
-  const parent = mkdtempSync(join(tmpdir(), 'puni-git-head-'));
-  temporaries.push(parent);
+  const parent = scratch.createDirectory('puni-git-head-');
   const [committed, empty] = [join(parent, 'committed'), join(parent, 'empty')];
   for (const root of [committed, empty]) runGit(parent, ['init', '-q', root]);
   writeFileSync(join(committed, 'a.md'), 'a');

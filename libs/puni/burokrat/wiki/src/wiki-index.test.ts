@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   chmodSync,
   existsSync,
@@ -20,13 +20,15 @@ import {
 import {
   fixtureRemotes,
   nodeHostModule,
-  removeFixture,
+  removeScratchDirectoriesAfterEach,
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { burokratWikiModule } from './module';
 import { fixtureCommands, makeRepository } from './wiki.test-host';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 let root = '';
 
@@ -72,11 +74,7 @@ function render(): Map<string, string> {
 }
 
 beforeEach(() => {
-  root = makeRepository();
-});
-
-afterEach(() => {
-  removeFixture(root);
+  root = makeRepository(scratch);
 });
 
 describe('renderIndex', () => {

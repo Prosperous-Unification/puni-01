@@ -1,19 +1,14 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
 import type { FileSystem } from '@puni/shared-ports';
 import { createMemoryFileSystem, type MemoryTree } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratch = removeScratchDirectoriesAfterAll();
 
 /** The tree every implementation is judged over, by path below its root. */
 const tree: MemoryTree = {
@@ -37,15 +32,8 @@ interface Subject {
   readonly root: string;
 }
 
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
-
 function writeNodeTree(): Subject {
-  const root = mkdtempSync(join(tmpdir(), 'puni-file-system-'));
-  temporaries.push(root);
+  const root = scratch.createDirectory('puni-file-system-');
   for (const [path, node] of Object.entries(tree)) {
     const absolute = join(root, path);
     mkdirSync(dirname(absolute), { recursive: true });

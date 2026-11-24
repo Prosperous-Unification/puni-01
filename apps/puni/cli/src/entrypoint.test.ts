@@ -12,9 +12,11 @@ import {
 } from 'node:fs';
 import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { removeFixture, runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
 import { makeStateRepository } from './repository.test-host';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -92,7 +94,7 @@ describe('entrypoint', () => {
     }
 
     beforeEach(() => {
-      state = makeStateRepository();
+      state = makeStateRepository(scratch);
       parent = dirname(state);
       records = join(parent, 'demo-records');
       mkdirSync(join(records, 'nav/plans'), { recursive: true });
@@ -101,10 +103,6 @@ describe('entrypoint', () => {
       writeRecord(first, '2031-04-05', `superseded-by: ${second}`);
       writeRecord(second, '2031-04-06', `supersedes: ${first}`);
       runGit(records, ['init', '-q']);
-    });
-
-    afterEach(() => {
-      removeFixture(state);
     });
 
     test('check --repo system-records passes two records, one superseding the other', () => {

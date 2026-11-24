@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   appendFileSync,
   chmodSync,
@@ -10,7 +10,12 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { indexFile } from '@puni/shared-checkout';
-import { removeFixture, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeProject,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { agentsWordBudget, indexWordBudget, readmeWordBudget } from './budgets';
 import { digestRulesSection } from './agents-rules';
 import {
@@ -48,6 +53,8 @@ import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/w
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { fixtureAgentsRules, makeRepository } from './repository-pair.test-host';
 
+const scratch = removeScratchDirectoriesAfterEach();
+
 let root = '';
 let host: CheckHost;
 
@@ -60,11 +67,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRepository();
-});
-
-afterEach(() => {
-  removeFixture(root);
+  root = await makeRepository(scratch);
 });
 
 function judge(rule: Rule): Judged[] {

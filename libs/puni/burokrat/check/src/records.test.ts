@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
 import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,7 +12,12 @@ import {
   recordTopicLimit,
   requiredRecordKeys,
 } from '@puni/shared-records';
-import { fixtureRemotes, removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  fixtureRemotes,
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
 import type { CheckRequest } from './contract';
 import type { Rule } from './finding';
@@ -35,6 +40,8 @@ import {
 import { forbidPlaintextSecrets, forbidRecordsAddresses } from './rules/secrets.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 
+const scratch = removeScratchDirectoriesAfterEach();
+
 let root = '';
 let host: CheckHost;
 
@@ -47,11 +54,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await makeRecordsRepository();
-});
-
-afterEach(() => {
-  removeFixture(root);
+  root = await makeRecordsRepository(scratch);
 });
 
 /** The system-state repository beside the records repository under test. */

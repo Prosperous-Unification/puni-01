@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { removeFixture } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -24,7 +26,7 @@ describe('dash ops through the entrypoint, demo beside demo-records, a fake ssh 
   let log = '';
 
   beforeEach(() => {
-    state = makeStateRepository();
+    state = makeStateRepository(scratch);
     const parent = dirname(state);
     const records = join(parent, 'demo-records');
     mkdirSync(join(records, 'dash/ops'), { recursive: true });
@@ -42,10 +44,6 @@ describe('dash ops through the entrypoint, demo beside demo-records, a fake ssh 
     writeFileSync(join(bin, 'ssh'), fakeSsh);
     chmodSync(join(bin, 'ssh'), 0o755);
     log = join(parent, 'ssh.log');
-  });
-
-  afterEach(() => {
-    removeFixture(state);
   });
 
   function runPuni(

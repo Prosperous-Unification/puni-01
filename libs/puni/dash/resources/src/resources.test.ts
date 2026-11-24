@@ -1,13 +1,13 @@
 import { parse } from '@optique/core';
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkoutModule, formatRegistry } from '@puni/shared-checkout';
 import {
   closeAfterEach,
   fixtureRemotes,
   nodeHostModule,
+  removeScratchDirectoriesAfterEach,
   runGit,
   writeRepositoryFile,
 } from '@puni/shared-testing';
@@ -16,6 +16,8 @@ import { DiBag } from 'di-bag';
 import type { ResourcesExports } from './contract';
 import { resourcesParser } from './group';
 import { dashResourcesModule } from './module';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 const track = closeAfterEach();
 const identity = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
@@ -90,7 +92,7 @@ describe('dash resources over a temporary system-state repository', () => {
   const probe = () => join(state, '.worktrees/probe');
 
   beforeEach(() => {
-    parent = mkdtempSync(join(tmpdir(), 'puni-resources-'));
+    parent = scratch.createDirectory('puni-resources-');
     state = join(parent, 'demo');
     writeRepositoryFile(state, 'puni.json', formatRegistry('system-state', fixtureRemotes));
     writeRepositoryFile(state, '.gitignore', '.worktrees/\n');
@@ -98,10 +100,6 @@ describe('dash resources over a temporary system-state repository', () => {
     runGit(state, ['add', '-A']);
     runGit(state, [...identity, 'commit', '-qm', 'state']);
     commands = open();
-  });
-
-  afterEach(() => {
-    rmSync(parent, { recursive: true, force: true });
   });
 
   const create = (name = 'probe', from = 'HEAD') =>
@@ -284,14 +282,10 @@ describe('dash resources over a temporary system-state repository', () => {
   });
 
   test('a directory with no puni.json above it fails in one line, exit 1', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'puni-resources-none-'));
-    try {
-      const listed = list(outside);
-      expect([listed.code, listed.stdout]).toEqual([1, '']);
-      expect(listed.stderr).toMatch(/^error: [^\n]*puni\.json[^\n]*; fix: [^\n]+\n$/u);
-    } finally {
-      rmSync(outside, { recursive: true, force: true });
-    }
+    const outside = scratch.createDirectory('puni-resources-none-');
+    const listed = list(outside);
+    expect([listed.code, listed.stdout]).toEqual([1, '']);
+    expect(listed.stderr).toMatch(/^error: [^\n]*puni\.json[^\n]*; fix: [^\n]+\n$/u);
   });
 
   test('a repository git cannot read fails in one line, exit 1', () => {

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 const root = new URL('../', import.meta.url).pathname;
 
@@ -216,17 +218,13 @@ function readFormatStep(name: string): string {
  * for a package script.
  */
 function runFormatStep(step: string, exitCode: number) {
-  const bin = mkdtempSync(join(tmpdir(), 'puni-format-step-'));
-  try {
-    writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
-    const child = Bun.spawnSync(['sh', '-c', step], {
-      env: { PATH: `${bin}:/usr/bin:/bin` },
-      stderr: 'pipe',
-    });
-    return { exitCode: child.exitCode, stderr: child.stderr.toString() };
-  } finally {
-    rmSync(bin, { recursive: true, force: true });
-  }
+  const bin = scratch.createDirectory('puni-format-step-');
+  writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
+  const child = Bun.spawnSync(['sh', '-c', step], {
+    env: { PATH: `${bin}:/usr/bin:/bin` },
+    stderr: 'pipe',
+  });
+  return { exitCode: child.exitCode, stderr: child.stderr.toString() };
 }
 
 /** Formatting is Bun's own `bun fmt`; Prettier is not a dependency. */

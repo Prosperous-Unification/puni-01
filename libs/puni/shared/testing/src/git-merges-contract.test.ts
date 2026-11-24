@@ -1,10 +1,12 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import type { Git, GitMerge } from '@puni/shared-ports';
 import { memoryHost } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratch = removeScratchDirectoriesAfterAll();
 
 /**
  * A git and a repository whose `main` merged `feature` (which itself merged `inner`) and then
@@ -15,12 +17,6 @@ interface Subject {
   readonly root: string;
   readonly outer: string;
 }
-
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
 
 const times = {
   inner: '2026-11-22T09:00:00Z',
@@ -41,8 +37,7 @@ function runGitAt(root: string, args: readonly string[], date: string = times.in
 }
 
 function openBunGit(): Subject {
-  const root = mkdtempSync(join(tmpdir(), 'puni-git-merges-'));
-  temporaries.push(root);
+  const root = scratch.createDirectory('puni-git-merges-');
   const commit = (file: string) => {
     writeFileSync(join(root, file), file);
     runGitAt(root, ['add', '-A']);

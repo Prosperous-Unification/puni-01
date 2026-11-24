@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import syncWikiIndex from './wiki-index.cjs';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 /** The part of an Nx tree the generator uses, over a map of files. */
 function makeTree(files: Record<string, string>, root = '/nowhere') {
@@ -82,14 +82,12 @@ describe('the wiki index sync generator', () => {
   });
 
   test('a failing command throws naming it and its error, so sync:check cannot pass', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'puni-nx-sync-'));
+    const root = scratch.createDirectory('puni-nx-sync-');
     let failure: unknown;
     try {
       await syncWikiIndex(makeTree({}, root));
     } catch (caught) {
       failure = caught;
-    } finally {
-      rmSync(root, { recursive: true, force: true });
     }
     expect(failure).toBeInstanceOf(Error);
     expect(String(failure)).toContain(

@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   closeAfterEach,
   type MemoryTree,
   memoryHost,
   nodeHostModule,
-  removeFixture,
+  removeScratchDirectoriesAfterEach,
   runGit,
   writeProject,
   writeRepositoryFile,
@@ -17,6 +15,8 @@ import { DiBag } from 'di-bag';
 import { CheckoutUnlistable } from './failures';
 import { checkoutModule } from './module';
 import { indexFile } from './render-index';
+
+const scratch = removeScratchDirectoriesAfterEach();
 
 const track = closeAfterEach();
 
@@ -159,46 +159,36 @@ describe('compare and write', () => {
 
 describe('a path git ignores is invisible', () => {
   test('an ignored page, project.json or index file is not read, compared or removed', () => {
-    const root = join(mkdtempSync(join(tmpdir(), 'puni-wiki-index-')), 'demo');
-    try {
-      writeProject(root, 'apps/one', 'one', {
-        readWhen: 'changing one',
-        readFirst: 'src/index.ts',
-      });
-      writeRepositoryFile(root, 'libs/.gitkeep', '');
-      writeRepositoryFile(
-        root,
-        '.gitignore',
-        'wiki/scratch.md\nlibs/stray/\nwiki/index/local.md\n',
-      );
-      writeRepositoryFile(root, 'wiki/scratch.md', '# no front matter\n');
-      writeRepositoryFile(root, 'libs/stray/project.json', '{ not json');
-      writeRepositoryFile(root, 'wiki/index/local.md', 'kept');
-      runGit(root, ['init', '-q']);
-      const container = track(
-        DiBag.createBuilder()
-          .withInstalledModules([nodeHostModule, checkoutModule])
-          .buildContainer(),
-      );
-      const files = container.resolve('checkoutFiles').open(root, 'system-state');
-      const wikiIndex = container.resolve('checkoutWikiIndex');
-      expect(wikiIndex.readSources(files)).toEqual({
-        entries: [
-          { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one', scope: 'app' },
-        ],
-        defects: [],
-      });
-      const expected = new Map([[indexFile, 'fresh']]);
-      expect(wikiIndex.write(files, expected)).toEqual({
-        missing: [indexFile],
-        stale: [],
-        unexpected: [],
-      });
-      expect(container.resolve('fileSystem').readText(join(root, 'wiki/index/local.md'))).toBe(
-        'kept',
-      );
-    } finally {
-      removeFixture(root);
-    }
+    const root = join(scratch.createDirectory('puni-wiki-index-'), 'demo');
+    writeProject(root, 'apps/one', 'one', {
+      readWhen: 'changing one',
+      readFirst: 'src/index.ts',
+    });
+    writeRepositoryFile(root, 'libs/.gitkeep', '');
+    writeRepositoryFile(root, '.gitignore', 'wiki/scratch.md\nlibs/stray/\nwiki/index/local.md\n');
+    writeRepositoryFile(root, 'wiki/scratch.md', '# no front matter\n');
+    writeRepositoryFile(root, 'libs/stray/project.json', '{ not json');
+    writeRepositoryFile(root, 'wiki/index/local.md', 'kept');
+    runGit(root, ['init', '-q']);
+    const container = track(
+      DiBag.createBuilder().withInstalledModules([nodeHostModule, checkoutModule]).buildContainer(),
+    );
+    const files = container.resolve('checkoutFiles').open(root, 'system-state');
+    const wikiIndex = container.resolve('checkoutWikiIndex');
+    expect(wikiIndex.readSources(files)).toEqual({
+      entries: [
+        { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing one', scope: 'app' },
+      ],
+      defects: [],
+    });
+    const expected = new Map([[indexFile, 'fresh']]);
+    expect(wikiIndex.write(files, expected)).toEqual({
+      missing: [indexFile],
+      stale: [],
+      unexpected: [],
+    });
+    expect(container.resolve('fileSystem').readText(join(root, 'wiki/index/local.md'))).toBe(
+      'kept',
+    );
   });
 });

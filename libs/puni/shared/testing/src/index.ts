@@ -1,5 +1,5 @@
 export { closeAfterEach } from './containers';
-export { FixtureGitFailed } from './failures';
+export { FixtureGitFailed, ScratchRemovalRefused, TemporaryDirectoryUnresolved } from './failures';
 export {
   fixedInstant,
   type MemoryHost,
@@ -9,10 +9,12 @@ export {
   type MemoryTree,
 } from './memory-host';
 export { nodeHostModule } from '@puni/shared-adapters';
+export { fixtureRemotes, runGit, writeProject, writeRepositoryFile } from './repository-files';
 export {
-  fixtureRemotes,
-  removeFixture,
-  runGit,
-  writeProject,
-  writeRepositoryFile,
-} from './repository-files';
+  createScratchDirectoryOwner,
+  removeScratchDirectoriesAfterAll,
+  removeScratchDirectoriesAfterEach,
+  removeScratchPath,
+  resolveRemovableScratchPath,
+  type ScratchDirectoryOwner,
+} from './scratch-directories';

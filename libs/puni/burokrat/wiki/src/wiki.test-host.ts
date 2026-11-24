@@ -1,9 +1,14 @@
-import { mkdirSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatRegistry, renderIndex } from '@puni/shared-checkout';
 import type { CommandBrief } from '@puni/shared-command';
-import { fixtureRemotes, runGit, writeProject, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  fixtureRemotes,
+  runGit,
+  type ScratchDirectoryOwner,
+  writeProject,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 
 /** The command tree the fixture repository is indexed with. */
 export const fixtureCommands: readonly CommandBrief[] = [
@@ -15,12 +20,12 @@ export const fixtureCommands: readonly CommandBrief[] = [
 ];
 
 /**
- * A fresh git repository `demo` in a temporary directory, the index sources a wiki index needs:
+ * A fresh git repository `demo` in a directory `scratch` creates, the index sources a wiki index needs:
  * `puni.json`, the root project, one project `one` under `apps/`, an empty `libs/`, and the
- * index generated from them. `removeFixture` deletes it.
+ * index generated from them. `scratch` removes it.
  */
-export function makeRepository(): string {
-  const root = join(mkdtempSync(join(tmpdir(), 'puni-wiki-')), 'demo');
+export function makeRepository(scratch: ScratchDirectoryOwner): string {
+  const root = join(scratch.createDirectory('puni-wiki-'), 'demo');
   writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeProject(root, 'apps/one', 'one', {

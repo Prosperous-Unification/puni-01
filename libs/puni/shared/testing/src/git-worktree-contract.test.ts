@@ -1,11 +1,13 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createBunGit, createBunProcessRunner } from '@puni/shared-adapters';
 import type { Git } from '@puni/shared-ports';
 import { memoryHost } from './memory-host';
 import { runGit } from './repository-files';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratch = removeScratchDirectoriesAfterAll();
 
 /**
  * A git, a repository `root` on `main` with one commit, and how to make the worktree at a path
@@ -18,16 +20,10 @@ interface Subject {
   readonly commit: (path: string, branch: string) => void;
 }
 
-const temporaries: string[] = [];
 const identity = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
 
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
-
 function openBunGit(): Subject {
-  const parent = mkdtempSync(join(tmpdir(), 'puni-git-worktree-'));
-  temporaries.push(parent);
+  const parent = scratch.createDirectory('puni-git-worktree-');
   const root = join(parent, 'repo');
   runGit(parent, ['init', '-q', '-b', 'main', root]);
   writeFileSync(join(root, 'a.md'), 'a');
