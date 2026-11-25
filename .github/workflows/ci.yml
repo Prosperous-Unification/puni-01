@@ -38,9 +38,28 @@ jobs:
           case "$GITHUB_REF" in refs/heads/main | refs/tags/*) merged=--merged ;; esac
           bun run puni burokrat check --commits "$base..$PUSHED_RANGE_HEAD" $merged
 
-  gate:
+  # Each part of the gate is its own job, so the gate takes as long as its slowest part, not the sum
+  # of them. A pull request runs the affected part, main and the merge queue the whole one.
+  part:
+    name: gate ${{ matrix.part }}
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: checks
+            whole: bun run gate:checks
+            affected: bun run gate:checks:affected
+          - part: lint
+            whole: bun run gate:lint
+            affected: bun run gate:lint:affected
+          - part: test
+            whole: bun run gate:test
+            affected: bun run gate:test:affected
+    env:
+      GATE_PART: ${{ matrix.part }}
+      GATE_MINUTES: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,20 +69,50 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: secrets in the merge group
-        if: github.event_name == 'merge_group'
+        if: github.event_name == 'merge_group' && matrix.part == 'checks'
         env:
           MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
         run: |
           git cat-file -e "$MERGE_GROUP_BASE^{commit}"
           bun run puni burokrat check --commits "$MERGE_GROUP_BASE..HEAD"
-      - name: gate
-        timeout-minutes: 2
+      - name: start the clock
+        run: echo "GATE_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      - name: ${{ matrix.part }}
+        timeout-minutes: ${{ fromJSON(env.GATE_MINUTES) }}
         env:
           NX_BASE: ${{ github.event.pull_request.base.sha }}
+          GATE_WHOLE: ${{ matrix.whole }}
+          GATE_AFFECTED: ${{ matrix.affected }}
         run: |
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-            bun run gate
+            $GATE_WHOLE
             exit
           fi
           git cat-file -e "$NX_BASE^{commit}"
-          bun run gate:affected
+          $GATE_AFFECTED
+      # A part that nears its cap fails while it still finishes, so the gate is made faster before
+      # a timeout leaves nothing to fix.
+      - name: time budget
+        run: |
+          elapsed=$(($(date +%s) - GATE_STARTED))
+          budget=$((GATE_MINUTES * 60 * 6 / 10))
+          if [ "$elapsed" -gt "$budget" ]; then
+            echo "error: gate part $GATE_PART took $elapsed s, over its budget of $budget s, 60% of its $GATE_MINUTES-minute cap; make the part faster or split it" >&2
+            exit 1
+          fi
+          echo "gate part $GATE_PART took $elapsed s of its $budget s budget"
+
+  # The check main requires: it passes only when every part passed.
+  gate:
+    if: always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')
+    needs: part
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - env:
+          PARTS: ${{ needs.part.result }}
+        run: |
+          if [ "$PARTS" != success ]; then
+            echo "error: the gate parts ended $PARTS; the failed part's job names the failure" >&2
+            exit 1
+          fi
