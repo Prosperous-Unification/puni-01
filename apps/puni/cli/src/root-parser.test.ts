@@ -319,7 +319,7 @@ describe('listCommands', () => {
       { path: 'puni burokrat skills', brief: "Manage PUNI's repository skills." },
       {
         path: 'puni burokrat skills install',
-        brief: 'Install the PUNI review skills in this checkout.',
+        brief: 'Install the PUNI skills in this checkout.',
       },
       {
         path: 'puni burokrat review',
