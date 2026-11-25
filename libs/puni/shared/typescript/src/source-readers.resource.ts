@@ -1,7 +1,7 @@
 import {
   type InstalledGlobals,
   type SourceReader,
-  SourceReaderBroken,
+  SourceReaderFailed,
   type SourceReading,
   SourceUnreadable,
 } from '@puni/shared-checkout';
@@ -9,11 +9,13 @@ import type ts from 'typescript';
 import type { TypescriptCompiler } from './contract';
 import { type Compiler, declare, listReexports, listTopLevel } from './declarations';
 import { findDocComments, listLinkTags, listNodes } from './doc-comments';
+import { listTemplateNames } from './jsdoc-tags';
 import {
   headOf,
   isJudgedTarget,
   listAmbientNames,
-  listTemplateNames,
+  listAugmentedNames,
+  listExpandedNames,
   listTopNames,
   resolvesInFile,
   usesCommonJs,
@@ -56,6 +58,7 @@ function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean):
     topLevel,
     tagged: new Set(topLevel.filter(({ node }) => node === file).map(({ name }) => name)),
     templates,
+    expanded: listExpandedNames(compiler, nodes, parents),
   };
   return {
     declarations: declare(compiler, file, topLevel),
@@ -64,18 +67,23 @@ function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean):
     links: hosted.flatMap(({ comment: { line, text }, host }) =>
       listLinkTags(text)
         .filter(({ target }) => isJudgedTarget(target))
-        .map(({ target, offset }) => ({
-          target,
-          line: line + offset,
-          head: headOf(target),
-          resolved: resolvesInFile(context, host, target),
-        })),
+        .map(({ target, offset }) => {
+          const verdict = resolvesInFile(context, host, target);
+          return {
+            target,
+            line: line + offset,
+            head: headOf(target),
+            resolved: verdict === 'resolved',
+            memberMissing: verdict === 'member-missing',
+          };
+        }),
     ),
     ambient: listAmbientNames(
       compiler,
       file,
       compiler.isExternalModule(file) || usesCommonJs(compiler, nodes),
     ),
+    augmented: listAugmentedNames(compiler, file),
   };
 }
 
@@ -95,8 +103,8 @@ function collectGlobals(compiler: Compiler, texts: readonly string[], into: Set<
  * JavaScript, JSX), each reading a text in one pass of the compiler's parser alone: no program,
  * no type checking and no other file, the syntax tree dropped once read. A text the parser
  * cannot follow, as one nested past the stack, is `SourceUnreadable`; any other failure of a
- * reading is the reader's own, `SourceReaderBroken`. The compiler is loaded on the first
- * reading. The globals of a repository are the names the global declarations puni installs
+ * reading is the reader's own, `SourceReaderFailed`. The compiler is loaded on the first
+ * reading, a compiler that cannot be loaded being `SourceReaderBroken`. The globals of a repository are the names the global declarations puni installs
  * declare for every file (see `TypescriptCompiler.globalDeclarationTexts`), with `globalThis`,
  * which the compiler knows without declaring it, and those the repository installs (see
  * `TypescriptCompiler.repositoryDeclarations`), read once for all the readers.
@@ -148,7 +156,7 @@ export function createTypescriptSourceReaders({
           });
         }
         const problem = caught instanceof Error ? caught.message : String(caught);
-        throw new SourceReaderBroken({ details: { reader: 'TypeScript', problem }, cause: caught });
+        throw new SourceReaderFailed({ details: { reader: 'TypeScript', problem }, cause: caught });
       }
     },
     globals: readGlobals,

@@ -74,8 +74,11 @@ function readBracket(
   return undefined;
 }
 
-/** One segment of a pattern, no `/` in it, as an expression: `*` and `?` never cross a `/`. */
-function compileSegment(segment: string): string {
+/**
+ * One segment of a pattern, no `/` in it, as an expression: `*` and `?` never cross a `/`;
+ * `undefined` for a bracket expression that never closes, which makes git match nothing.
+ */
+function compileSegment(segment: string): string | undefined {
   let expression = '';
   for (let at = 0; at < segment.length; at += 1) {
     const char = segment[at] ?? '';
@@ -85,12 +88,9 @@ function compileSegment(segment: string): string {
       expression += '[^/]';
     } else if (char === '[') {
       const bracket = readBracket(segment, at);
-      if (bracket === undefined) {
-        expression += '\\[';
-      } else {
-        expression += bracket.expression;
-        at = bracket.end;
-      }
+      if (bracket === undefined) return undefined;
+      expression += bracket.expression;
+      at = bracket.end;
     } else if (char === '\\' && at + 1 < segment.length) {
       expression += (segment[at + 1] ?? '').replace(/[.+^${}()|[\]\\*?/]/gu, '\\$&');
       at += 1;
@@ -105,7 +105,8 @@ function compileSegment(segment: string): string {
  * The expression a path below its attributes file's directory matches the pattern `pattern` by,
  * as git's wildmatch reads it: a pattern with a `/` but at its end is anchored at the directory,
  * one without matches a name at any depth; a `**` segment matches any directories, the last
- * one anything below; a pattern ending in `/` names a directory, which no file is.
+ * one anything below; a pattern ending in `/` names a directory, which no file is, and one with
+ * an unclosed `[` matches nothing.
  */
 function compilePattern(pattern: string): RegExp {
   const anchored = pattern.replace(/\/$/u, '').includes('/');
@@ -113,8 +114,10 @@ function compilePattern(pattern: string): RegExp {
   let expression = '';
   for (const [index, segment] of segments.entries()) {
     const last = index === segments.length - 1;
+    const compiled = segment === '**' ? undefined : compileSegment(segment);
     if (segment === '**') expression += last ? '.*' : '(?:.*/)?';
-    else expression += `${compileSegment(segment)}${last ? '' : '/'}`;
+    else if (compiled === undefined) return /(?!)/u;
+    else expression += `${compiled}${last ? '' : '/'}`;
   }
   return new RegExp(anchored ? `^${expression}$` : `(?:^|/)${expression}$`, 'u');
 }

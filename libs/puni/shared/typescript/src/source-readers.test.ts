@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { type SourceReader, SourceReaderBroken, SourceUnreadable } from '@puni/shared-checkout';
+import { readFileSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  type SourceReader,
+  SourceReaderBroken,
+  SourceReaderFailed,
+  SourceUnreadable,
+} from '@puni/shared-checkout';
 import {
   closeAfterEach,
   removeScratchDirectoriesAfterEach,
@@ -639,6 +645,269 @@ describe('the links of the TypeScript readers', () => {
   });
 });
 
+describe('the members TypeScript resolves', () => {
+  test('are open for what an expression, annotation or later assignment gives, and every object has', () => {
+    const text = [
+      'export const nest = { inner: { deep: 1 }, typed: {} as { a: 1; b: 2 } };',
+      'export class Reference { static READ = 1; }',
+      'Reference.RW = 3;',
+      'export const config: Partial<{ timeout: number }> = {};',
+      'export const bag = { a: 1 };',
+      'export function handler() {}',
+      "handler.displayName = 'h';",
+      'export class Thing {}',
+      'export const cast = make() as Shape;',
+      'export const annotated: { a: 1 } = make();',
+      'export const target = { a: 1 };',
+      'Object.assign(target, { b: 2 });',
+      'export const generic = <T,>(value: T) => value as T;',
+      '/**',
+      ' * {@link nest.inner.hasOwnProperty}, {@link nest.typed.b}, {@link Reference.RW},',
+      ' * {@link config.timeout}, {@link bag.toString}, {@link handler.displayName},',
+      ' * {@link Thing.constructor}, {@link cast.any}, {@link target.b}, {@link annotated.a},',
+      ' * {@link annotated.valueOf}. Refused: {@link annotated.zz}, {@link nest.typed.c},',
+      ' * {@link bag.nope}, {@link nest.inner.gone}.',
+      ' */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '18 annotated.zz false',
+      '18 nest.typed.c false',
+      '19 bag.nope false',
+      '19 nest.inner.gone false',
+    ]);
+  });
+
+  test('open a JavaScript class whose methods assign this.<member>', () => {
+    const text = [
+      'export class Grown { constructor() { this.later = 1; } }',
+      'export class Fixed { constructor() { void 0; } }',
+      '/** {@link Grown.later}, {@link Fixed.later}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual(['3 Grown.later true', '3 Fixed.later false']);
+  });
+
+  test('mark a link whose name the file declares but not its member, and name what a file augments', () => {
+    const reading = readerOf('.ts').read(
+      "export interface Options { a: 1 }\n/** {@link Options.b} and {@link Gone.b}. */\nexport const after = 1;\ndeclare module './other' { interface Extra { x: 1 } global { interface NotAugmented {} } }",
+    );
+    expect([
+      reading.links.map(({ target, resolved, memberMissing }) => [target, resolved, memberMissing]),
+      reading.augmented,
+    ]).toEqual([
+      [
+        ['Options.b', false, true],
+        ['Gone.b', false, false],
+      ],
+      ['Extra'],
+    ]);
+  });
+
+  test('resolve a diamond of 22 levels of bases quickly', () => {
+    const lines = ['interface L0 { m0: 1 }'];
+    for (let level = 1; level <= 22; level += 1) {
+      lines.push(
+        `interface A${String(level)} extends L${String(level - 1)} { a${String(level)}: 1 }`,
+      );
+      lines.push(
+        `interface B${String(level)} extends L${String(level - 1)} { b${String(level)}: 1 }`,
+      );
+      lines.push(`interface L${String(level)} extends A${String(level)}, B${String(level)} {}`);
+    }
+    lines.push('/** {@link L22.m0}, {@link L22.zz}. */', 'export const after = 1;');
+    const started = performance.now();
+    expect(links(lines.join('\n'))).toEqual([
+      `${String(lines.length - 1)} L22.m0 true`,
+      `${String(lines.length - 1)} L22.zz false`,
+    ]);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('each scope and member form, one by one', () => {
+  /** The links of `lines` as a file of `extension`. */
+  const linked = (lines: readonly string[], extension = '.ts') =>
+    links(lines.join('\n'), extension);
+
+  test('an interface member sees its siblings', () => {
+    expect(
+      linked(['export interface I {', '  /** {@link other}. */', '  a: 1;', '  other: 2;', '}']),
+    ).toEqual(['2 other true']);
+  });
+
+  test('a type literal member sees its siblings', () => {
+    expect(
+      linked(['export type T = {', '  /** {@link sib}. */', '  a: 1;', '  sib: 2;', '};']),
+    ).toEqual(['2 sib true']);
+  });
+
+  test('a function expression sees its own name', () => {
+    expect(
+      linked([
+        'export const f = function named() {',
+        '  /** {@link named}. */',
+        '  return 1;',
+        '};',
+      ]),
+    ).toEqual(['2 named true']);
+  });
+
+  test('a class expression sees its own name', () => {
+    expect(
+      linked(['export const K = class Named {', '  /** {@link Named}. */', '  m() {}', '};']),
+    ).toEqual(['2 Named true']);
+  });
+
+  test('a case clause sees its locals', () => {
+    expect(
+      linked([
+        'export function f(x: number) {',
+        '  switch (x) {',
+        '    case 1:',
+        '      const inCase = 1;',
+        '      /** {@link inCase}. */',
+        '      void inCase;',
+        '  }',
+        '}',
+      ]),
+    ).toEqual(['5 inCase true']);
+  });
+
+  test('a comment on a cast value documents the value inside', () => {
+    expect(
+      linked(['/** {@link p}. */', 'export const f = ((p: number) => p) as unknown;']),
+    ).toEqual(['1 p true']);
+  });
+
+  test('a comment on an assignment documents the value assigned', () => {
+    expect(
+      linked(['/** {@link q}. */', 'module.exports.g = function (q) { return q; };'], '.js'),
+    ).toEqual(['1 q true']);
+  });
+
+  test('a comment on export default documents the value exported', () => {
+    expect(linked(['/** {@link r}. */', 'export default (r: number) => r;'])).toEqual(['1 r true']);
+  });
+
+  test('this.<member> in an object literal names a member of that literal', () => {
+    expect(
+      linked([
+        'export const o = {',
+        '  a: 1,',
+        '  /** {@link this.a}, {@link this.zz}. */',
+        '  m() {},',
+        '};',
+      ]),
+    ).toEqual(['3 this.a true', '3 this.zz false']);
+  });
+
+  test('a name declared once open and once closed is open', () => {
+    expect(
+      linked([
+        'export interface M { a: 1 }',
+        'export declare const M: Open;',
+        '/** {@link M.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 M.zz true']);
+  });
+
+  test('a function merged with a namespace has the members of both and of every function', () => {
+    expect(
+      linked([
+        'export function Fn() {}',
+        'export namespace Fn { export const x = 1; }',
+        '/** {@link Fn.name}, {@link Fn.x}, {@link Fn.nope}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 Fn.name true', '3 Fn.x true', '3 Fn.nope false']);
+  });
+
+  test('a member declared once open and once closed is open', () => {
+    expect(
+      linked([
+        'export interface I { a: { x: 1 } }',
+        'export interface I { a: Open }',
+        'export interface J { a: { x: 1 } }',
+        '/** {@link I.a.zz}, {@link J.a.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['4 I.a.zz true', '4 J.a.zz false']);
+  });
+
+  test('an index after a name is cut before the name is judged', () => {
+    expect(
+      linked(['export const a = [1];', '/** {@link a[0]}. */', 'export const after = 1;']),
+    ).toEqual(['2 a[0] true']);
+  });
+
+  test('a file assigning exports.<name> is a module, declaring nothing for every file', () => {
+    expect(readerOf('.js').read('exports.a = 1;\nfunction helper() {}').ambient).toEqual([]);
+  });
+
+  test('a module file sees the names of its own declare global block', () => {
+    expect(
+      linked([
+        'declare global { interface G { a: 1 } }',
+        'export {};',
+        '/** {@link G}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 G true']);
+  });
+
+  test('a nested class with a base is open, one without closed', () => {
+    expect(
+      linked([
+        'export namespace N { export class C extends Base {} }',
+        'export namespace M { export class C {} }',
+        '/** {@link N.C.zz}, {@link M.C.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 N.C.zz true', '3 M.C.zz false']);
+  });
+
+  test("a property assigned a parenthesized object has that object's members", () => {
+    expect(
+      linked([
+        'export const o = { p: ({ a: 1 }) };',
+        '/** {@link o.p.a}, {@link o.p.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['2 o.p.a true', '2 o.p.zz false']);
+  });
+});
+
+describe('the JSDoc tags of JavaScript', () => {
+  test('declare the names of @import tags, and of typedefs and templates whose types nest braces', () => {
+    const text = [
+      '/** @import Default from "./a" */',
+      '/** @import { first, second as renamed } from "./b" */',
+      '/** @import * as space from "./c" */',
+      '/** @typedef {{ a: number, b: { c: 1 } }} Thing */',
+      '/**',
+      ' * @template {Record<string, {a:number}>} K',
+      ' * @template [D=Thing]',
+      ' * @param {K} key {@link K}, {@link D}',
+      ' */',
+      'export function pick(key) { return key; }',
+      '/** {@link Default}, {@link first}, {@link renamed}, {@link second}, {@link space}, {@link Thing}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual([
+      '8 K true',
+      '8 D true',
+      '11 Default true',
+      '11 first true',
+      '11 renamed true',
+      '11 second false',
+      '11 space true',
+      '11 Thing true',
+    ]);
+  });
+});
+
 describe('the failures of the TypeScript readers', () => {
   test('a text nested past what the parser can follow is unreadable, naming why', () => {
     throws(
@@ -649,7 +918,7 @@ describe('the failures of the TypeScript readers', () => {
     );
   });
 
-  test('a compiler that cannot be loaded, or fails otherwise, breaks the reader, never the file', () => {
+  test('a compiler that cannot be loaded breaks the reader, and one failing otherwise fails it, never the file', () => {
     const broken = new SourceReaderBroken({
       details: {
         reader: 'TypeScript',
@@ -685,9 +954,8 @@ describe('the failures of the TypeScript readers', () => {
     throws(
       () => faulty?.read('export const a = 1;'),
       (caught) =>
-        caught instanceof SourceReaderBroken &&
-        caught.message ===
-          'the TypeScript source reader cannot read: not a function; reinstall puni with its dependencies',
+        caught instanceof SourceReaderFailed &&
+        caught.message === 'the TypeScript source reader failed: not a function',
     );
   });
 });
@@ -748,6 +1016,41 @@ describe('the globals a repository installs', () => {
     expect(links(text).filter((line) => line.endsWith(' true'))).toEqual([]);
     expect(readerOf('.ts').globals(root).missing).toEqual([
       { name: 'absent-types', listedIn: 'tsconfig.json' },
+    ]);
+  });
+});
+
+describe('the UMD globals a repository installs', () => {
+  test('take the name export as namespace gives, linked from TSX', () => {
+    const root = scratchDirectories.createDirectory('puni-umd-');
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/react/index.d.ts',
+      'export = React;\nexport as namespace React;\ndeclare namespace React { class Component {} }\n',
+    );
+    const text =
+      '/** {@link React.Component} and {@link Preact}. */\nexport const View = () => <p />;';
+    expect([links(text, '.tsx', root), links(text, '.tsx')]).toEqual([
+      ['1 React.Component true', '1 Preact false'],
+      ['1 React.Component false', '1 Preact false'],
+    ]);
+  });
+
+  test('take @types packages installed as symlinks, and the types tsconfig.base.json lists', () => {
+    const root = scratchDirectories.createDirectory('puni-linked-');
+    const elsewhere = scratchDirectories.createDirectory('puni-store-');
+    writeRepositoryFile(elsewhere, 'index.d.ts', 'declare const linkedGlobal: number;\n');
+    writeRepositoryFile(root, 'node_modules/@types/.keep', '');
+    symlinkSync(elsewhere, join(root, 'node_modules/@types/linked'));
+    writeRepositoryFile(
+      root,
+      'tsconfig.base.json',
+      '{ "compilerOptions": { "types": ["absent-base"] } }\n',
+    );
+    const globals = readerOf('.ts').globals(root);
+    expect([globals.names.has('linkedGlobal'), globals.missing]).toEqual([
+      true,
+      [{ name: 'absent-base', listedIn: 'tsconfig.base.json' }],
     ]);
   });
 });

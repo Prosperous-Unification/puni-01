@@ -29,6 +29,7 @@ function wordReader(
         docComments: [],
         links: [],
         ambient: words,
+        augmented: [],
       };
     },
     globals(root) {

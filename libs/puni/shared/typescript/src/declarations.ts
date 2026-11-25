@@ -1,5 +1,7 @@
 import type { SourceDeclaration } from '@puni/shared-checkout';
 import type ts from 'typescript';
+import { inherit } from './inheritance';
+import { listImportNames, listTypedefs } from './jsdoc-tags';
 
 /** The compiler's module, as a reading is given it. */
 export type Compiler = typeof ts;
@@ -38,12 +40,18 @@ export function bindingNames(compiler: Compiler, name: ts.BindingName): string[]
 }
 
 /**
- * `expression` without the parentheses, `as` and `satisfies` around it, and the argument of an
- * `Object.freeze(…)` call.
+ * What gives `expression` its members: the expression without the parentheses, `as const` and
+ * `satisfies` around it, and the argument of an `Object.freeze(…)` call; or the type `T` of an
+ * `as T`, whose members the value then has.
  */
-function unwrap(compiler: Compiler, file: ts.SourceFile, expression: ts.Expression): ts.Expression {
+function unwrap(
+  compiler: Compiler,
+  file: ts.SourceFile,
+  expression: ts.Expression,
+): ts.Expression | ts.TypeNode {
   let inner = expression;
   for (;;) {
+    if (compiler.isAsExpression(inner) && inner.type.getText(file) !== 'const') return inner.type;
     if (
       compiler.isParenthesizedExpression(inner) ||
       compiler.isAsExpression(inner) ||
@@ -107,7 +115,7 @@ function declarationOf(
 }
 
 /** A shape's own members, and the names of the bases it extends, `undefined` for an unnamed one. */
-interface OwnMembers extends Members {
+export interface OwnMembers extends Members {
   readonly bases: readonly (string | undefined)[];
 }
 
@@ -179,6 +187,7 @@ function namespaceMembers(compiler: Compiler, node: ts.ModuleDeclaration): Membe
 
 /** The own members of the shape `node` declares (see {@link Members}). */
 function ownMembersOf(compiler: Compiler, node: ts.Node): OwnMembers {
+  if (compiler.isTypeNode(node)) return { ...typeMembers(compiler, node), bases: [] };
   if (compiler.isClassDeclaration(node) || compiler.isClassExpression(node)) {
     return classMembers(compiler, node);
   }
@@ -228,6 +237,7 @@ export function membersOfMember(compiler: Compiler, file: ts.SourceFile, node: t
   if (compiler.isPropertyAssignment(node)) {
     return membersOfMember(compiler, file, unwrap(compiler, file, node.initializer));
   }
+  if (compiler.isTypeNode(node)) return typeMembers(compiler, node);
   if (
     compiler.isClassDeclaration(node) ||
     compiler.isClassExpression(node) ||
@@ -255,7 +265,7 @@ export interface TopLevel {
 }
 
 /** A top-level name before its members inherit those of its bases. */
-type RawTopLevel = Omit<TopLevel, 'members'> & { readonly own: OwnMembers };
+export type RawTopLevel = Omit<TopLevel, 'members'> & { readonly own: OwnMembers };
 
 /** The names `exports.<name> = …`, `module.exports.<name> = …` or `module.exports = { … }` assigns. */
 function commonJsExports(
@@ -308,49 +318,12 @@ function listStatements(
   );
 }
 
-/** The names the `@typedef` and `@callback` tags of a doc comment's text declare, at tag position. */
-export function listTypedefs(text: string): string[] {
-  return [
-    ...text.matchAll(/^\s*@(?:typedef|callback)(?:\s+\{[^}]*\})?\s+([A-Za-z_$][\w$]*)/gmu),
-  ].map((match) => match[1] ?? '');
-}
-
-/**
- * The top-level names of `raw`, each shape's members joined by those of each base it extends
- * that the file declares at the top level, outside a global block: closed only when every base
- * is such a closed shape, so an inherited member of another file's base can be anything.
- */
-function inherit(raw: readonly RawTopLevel[]): TopLevel[] {
-  const byName = new Map<string, OwnMembers[]>();
-  for (const { name, own, global } of raw) {
-    if (!global) byName.set(name, [...(byName.get(name) ?? []), own]);
-  }
-  const resolve = (own: OwnMembers, seen: ReadonlySet<string>): Members => {
-    const listed = [...own.listed];
-    let closed = own.closed;
-    for (const base of own.bases) {
-      const parts = base === undefined || seen.has(base) ? undefined : byName.get(base);
-      if (base === undefined || parts === undefined) {
-        closed = false;
-        continue;
-      }
-      for (const part of parts) {
-        const inherited = resolve(part, new Set([...seen, base]));
-        listed.push(...inherited.listed);
-        closed &&= inherited.closed;
-      }
-    }
-    return { listed, closed, callable: own.callable };
-  };
-  return raw.map(({ own, ...rest }) => ({ ...rest, members: resolve(own, new Set([rest.name])) }));
-}
-
 /**
  * The top-level names `file` declares: functions, classes, interfaces, type aliases, enums,
  * namespaces, imports by `=` and variables (each name a destructuring binds), with `default`
  * for a default export; those of its `declare global` blocks, marked global; the names CommonJS
- * assigns to `exports`; and, in a JavaScript file (`javascript`), each `@typedef` and
- * `@callback` tag of `docTexts`, its doc comments. A shape has its own members and those of the
+ * assigns to `exports`; and, in a JavaScript file (`javascript`), each name a `@typedef`,
+ * `@callback` or `@import` tag of `docTexts`, its doc comments, declares. A shape has its own members and those of the
  * bases the file declares (see `inherit`). Declarations of one name are listed each, as merged
  * interfaces and a function with its namespace are.
  */
@@ -366,11 +339,13 @@ export function listTopLevel(
     const { exported, isDefault } = modifiersOf(compiler, statement);
     if (compiler.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        const initializer = declaration.initializer;
+        const { initializer, type } = declaration;
         const own =
-          initializer === undefined
-            ? unknown
-            : ownMembersOf(compiler, unwrap(compiler, file, initializer));
+          type !== undefined
+            ? ownMembersOf(compiler, type)
+            : initializer === undefined
+              ? unknown
+              : ownMembersOf(compiler, unwrap(compiler, file, initializer));
         for (const name of bindingNames(compiler, declaration.name)) {
           raw.push({ name, node: declaration, own, exported, global });
         }
@@ -388,7 +363,10 @@ export function listTopLevel(
     if (isDefault) raw.push({ name: 'default', node: statement, own, exported: true, global });
   }
   if (javascript) {
-    for (const name of docTexts.flatMap(listTypedefs)) {
+    for (const name of docTexts.flatMap((text) => [
+      ...listTypedefs(text),
+      ...listImportNames(text),
+    ])) {
       raw.push({ name, node: file, own: unknown, exported: true, global: false });
     }
   }

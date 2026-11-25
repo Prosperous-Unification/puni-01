@@ -36,6 +36,8 @@ export {
   RevisionUnknown,
   RulesPinAhead,
   SourceReaderBroken,
+  SourceReaderFailed,
+  SourceReadingFailed,
   SourceReadersOverlap,
   SourceUnreadable,
 } from './failures';

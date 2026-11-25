@@ -5,7 +5,9 @@ import {
   repositoryScope,
   type SourceReader,
   SourceReaderBroken,
+  SourceReaderFailed,
   type SourceReading,
+  SourceReadingFailed,
   SourceUnreadable,
 } from '@puni/shared-checkout';
 import {
@@ -33,6 +35,7 @@ const emptyReading: SourceReading = {
   docComments: [],
   links: [],
   ambient: [],
+  augmented: [],
 };
 
 /** A reader of `.ts` from epoch 1 reading nothing, with no globals. */
@@ -300,6 +303,17 @@ describe('docs.spans', () => {
     expect(judge(judgeDocSpans)).toEqual([]);
   });
 
+  test('a stale typed reference whose text another file exports is one finding, of docs.references', () => {
+    writeRepositoryFile(root, 'src/basket.ts', 'export function renderBasket() {}\n');
+    writePage('stale', '[`renderBasket`](../src/cart.ts#renderBasket).');
+    expect([judge(judgeDocSpans), messages(judgeDocReferences)]).toEqual([
+      [],
+      [
+        'line 8 links to ../src/cart.ts#renderBasket, but src/cart.ts declares no renderBasket; it re-exports some-package, which this check does not follow',
+      ],
+    ]);
+  });
+
   test('a stale typed reference is one finding of the whole check', () => {
     writeRepositoryFile(
       root,
@@ -432,7 +446,7 @@ describe('docs.comment-links', () => {
       read: (): SourceReading => ({
         ...emptyReading,
         docComments: [{ line: 1, text: 'x' }],
-        links: [{ target: 'gone', line: 1, head: 'gone', resolved: false }],
+        links: [{ target: 'gone', line: 1, head: 'gone', resolved: false, memberMissing: false }],
       }),
       globals: () => {
         throw broken;
@@ -480,6 +494,27 @@ describe('docs.comment-links', () => {
     );
     expect(messages(judgeDocLinks)).toEqual([
       'line 1 links notJest, which names nothing visible there',
+    ]);
+  });
+});
+
+describe('docs.comment-links and augmentation', () => {
+  test('accepts a member another file adds by declare module, and refuses one no file adds', () => {
+    writeRepositoryFile(
+      root,
+      'libs/x/src/options.ts',
+      'export interface Options { a: 1 }\n/** {@link Options.b} and {@link Options.c}. */\nexport const use = 1;\n',
+    );
+    writeRepositoryFile(
+      root,
+      'libs/x/src/augment.ts',
+      "declare module './options' { interface Options { b: 1 } }\nexport {};\n",
+    );
+    expect(messages(judgeDocLinks)).toEqual([]);
+    writeRepositoryFile(root, 'libs/x/src/augment.ts', 'export {};\n');
+    expect(messages(judgeDocLinks)).toEqual([
+      'line 2 links Options.b, a member Options does not declare',
+      'line 2 links Options.c, a member Options does not declare',
     ]);
   });
 });
@@ -532,6 +567,18 @@ describe('sources.read', () => {
       );
     }
     throws(() => run(judgeSourceReading, failingReader(new TypeError('a bug'))), TypeError);
+  });
+
+  test('a reader failing on one file names the file, as a defect of puni to report', () => {
+    writeRepositoryFile(root, 'libs/x/src/one.ts', 'defect\n');
+    const failed = new SourceReaderFailed({ details: { reader: 'TypeScript', problem: 'a bug' } });
+    throws(
+      () => run(judgeSourceReading, failingReader(failed)),
+      (caught) =>
+        caught instanceof SourceReadingFailed &&
+        caught.message ===
+          'the TypeScript source reader failed reading libs/x/src/one.ts: a bug; this is a defect of puni: report it with that file',
+    );
   });
 
   test('the check command prints a broken reader as one error, judging nothing', () => {
@@ -652,6 +699,8 @@ describe('isGeneratedFile', () => {
         '-w.ts',
       ],
     ],
+    [{ '.gitattributes': '[^a]y.ts linguist-generated\n' }, ['ay.ts', 'by.ts', 'y.ts']],
+    [{ '.gitattributes': '[un.ts linguist-generated\n' }, ['[un.ts', 'u.ts', 'n.ts']],
   ];
 
   test.each(cases.map((entry, index) => [index, ...entry] as const))(
@@ -713,7 +762,6 @@ describe('the epoch contract', () => {
       'docs.comment-links',
       'docs.paths',
       'docs.references',
-      'docs.spans',
       'docs.spans',
     ]);
   });

@@ -236,7 +236,13 @@ function judgeSpans(reading: RuleReading, selection: DocSelection): Breach[] {
     .flatMap((path) => {
       const markdown = readMarkdown(files.readText(path), skipHidden);
       const typed = markdown.links.map((link) => readTypedLink(reading, path, link));
-      const judged = new Set<number>();
+      const judged = new Set<number>(
+        typed.flatMap((link, index) =>
+          link !== undefined && !readDeclared(reading, link.resolved).names.has(link.fragment)
+            ? [index]
+            : [],
+        ),
+      );
       const breaches: Breach[] = [];
       const given = new Set<string>();
       for (const { code, line, link } of markdown.spans) {
@@ -279,7 +285,8 @@ const spansRemedy =
  * link's whole text or part of it. A plain lower-case word is not judged. And a link whose text
  * is one code span agrees with its typed reference's fragment, so a link whose symbol was
  * renamed under its text fails too, unless its text is no name but a flag or command. One link
- * gives at most one finding, as does a span repeated on one line. Any project's source may
+ * gives at most one finding, as does a span repeated on one line, and a typed reference whose
+ * fragment its file does not declare none, `docs.references` naming it. Any project's source may
  * export a name, so a project check, whose reach is `within-project`, judges none; the
  * cross-project run and the whole check judge them all. Epoch 3; {@link judgeTypedDocSpans}
  * chooses the documentation by its declared type.
@@ -300,19 +307,26 @@ export const judgeTypedDocSpans: Rule = {
   judge: (reading) => judgeSpans(reading, 'type'),
 };
 
-/** The names every source file of the repository read at the pin declares for every file. */
-function collectAmbient(reading: RuleReading): ReadonlySet<string> {
-  const names = new Set<string>();
+/** The names the source files of the repository read at the pin declare for every file, and augment in another module. */
+function collectRepositoryNames(reading: RuleReading): {
+  readonly ambient: ReadonlySet<string>;
+  readonly augmented: ReadonlySet<string>;
+} {
+  const ambient = new Set<string>();
+  const augmented = new Set<string>();
   for (const path of reading.files.listVisible(repositoryScope)) {
-    for (const name of readSourceFile(reading, path)?.ambient ?? []) names.add(name);
+    const read = readSourceFile(reading, path);
+    for (const name of read?.ambient ?? []) ambient.add(name);
+    for (const name of read?.augmented ?? []) augmented.add(name);
   }
-  return names;
+  return { ambient, augmented };
 }
 
 /**
  * Every inline link of a doc comment of the files of `listCommentedFiles` names something: the
- * file itself resolves it where the comment stands (see `DocLink.resolved`), or its first name
- * is a global of the libraries puni or the repository installs (see `SourceReader.globals`), or
+ * file itself resolves it where the comment stands (see `DocLink.resolved`); or the file
+ * declares its first name but not the member after it, and another file augments that name by
+ * `declare module`; or its first name is a global of the libraries puni or the repository installs (see `SourceReader.globals`), or
  * one some source file of the repository declares for every file. A type package the
  * repository's configuration lists but does not install is one finding of the file listing it,
  * when the globals are first needed. Globals puni's own installation cannot give stop the check,
@@ -326,17 +340,26 @@ export const judgeDocLinks: Rule = {
     'name it so it resolves where the comment is, or link it by a typed path#symbol reference in prose',
   judge(reading) {
     if (reading.references.kind === 'within-project') return [];
-    let ambient: ReadonlySet<string> | undefined;
+    let repository: ReturnType<typeof collectRepositoryNames> | undefined;
     const breaches: Breach[] = [];
     const reported = new Set<SourceReader>();
     for (const path of listCommentedFiles(reading)) {
       const reader = reading.sources.readerOf(path, reading.registry.rules);
       const read = readSourceFile(reading, path);
       if (reader === undefined || read === undefined) continue;
-      for (const { target, line, head, resolved } of read.links) {
+      for (const { target, line, head, resolved, memberMissing } of read.links) {
         if (resolved) continue;
-        ambient ??= collectAmbient(reading);
-        if (ambient.has(head)) continue;
+        repository ??= collectRepositoryNames(reading);
+        if (memberMissing) {
+          if (!repository.augmented.has(head)) {
+            breaches.push({
+              path,
+              message: `line ${String(line)} links ${target}, a member ${head} does not declare`,
+            });
+          }
+          continue;
+        }
+        if (repository.ambient.has(head)) continue;
         const globals = reader.globals(reading.files.root);
         if (!reported.has(reader)) {
           reported.add(reader);

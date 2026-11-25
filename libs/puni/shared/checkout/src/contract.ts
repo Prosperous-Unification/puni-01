@@ -249,6 +249,11 @@ export interface DocLink {
   readonly head: string;
   /** Whether the file resolves the target where the comment stands; when not, only a global can. */
   readonly resolved: boolean;
+  /**
+   * Whether the file declares the target's first name but not a member after it: another file
+   * augmenting that name (see `SourceReading.augmented`) may declare the member.
+   */
+  readonly memberMissing: boolean;
 }
 
 /** Everything a source reader reads in one text, read in one pass. */
@@ -269,6 +274,8 @@ export interface SourceReading {
   readonly links: readonly DocLink[];
   /** The names the text declares for every file: those of a script, or of a global block. */
   readonly ambient: readonly string[];
+  /** The names the text adds members to in another module, as `declare module` does. */
+  readonly augmented: readonly string[];
 }
 
 /**
@@ -289,8 +296,10 @@ export interface SourceReader {
    * Everything the reader reads in `text`.
    *
    * @throws SourceUnreadable when the text itself cannot be read, as one its parser gives up on.
-   * @throws SourceReaderBroken when the reader cannot read at all, as without its compiler: a
-   *   defect of puni's installation, never of the file.
+   * @throws SourceReaderBroken when the reader cannot load what it reads with, as its compiler:
+   *   a defect of puni's installation, never of the file.
+   * @throws SourceReaderFailed when the reader fails otherwise while reading the text: a defect
+   *   of the reader, never of the file.
    */
   read(text: string): SourceReading;
   /**

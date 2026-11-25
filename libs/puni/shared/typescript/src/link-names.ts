@@ -22,6 +22,22 @@ const functionMembers: ReadonlySet<string> = new Set([
   'caller',
 ]);
 
+/** The names every object has from `Object.prototype`, which any shape is linked by too. */
+const objectMembers: ReadonlySet<string> = new Set([
+  'constructor',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toLocaleString',
+  'toString',
+  'valueOf',
+  '__proto__',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
+]);
+
 /** The names a statement declares in the block it stands in. */
 function statementNames(compiler: Compiler, statement: ts.Statement): string[] {
   if (compiler.isVariableStatement(statement)) {
@@ -209,6 +225,8 @@ export interface LinkContext {
   readonly tagged: ReadonlySet<string>;
   /** The names a `@template` tag of a JavaScript doc comment declares, by the node it leads. */
   readonly templates: ReadonlyMap<ts.Node, readonly string[]>;
+  /** The names given members after their declaration (see {@link listExpandedNames}). */
+  readonly expanded: ReadonlySet<string>;
 }
 
 /** Whether a scope a doc comment leading `host` sees declares `name`, the top level aside. */
@@ -249,12 +267,13 @@ function isEnclosingMember(context: LinkContext, host: ts.Node, name: string): b
 
 /**
  * The members the top-level name `head` has, when the file pins them down: declared at the top
- * level outside a global block, as shapes whose members are all listed. A name a global block
- * declares may be merged into by any file.
+ * level outside a global block, as shapes whose members are all listed, and given none after
+ * (see {@link listExpandedNames}). A name a global block declares may be merged into by any file.
  */
 function closedMembersOf(context: LinkContext, head: string): Members | undefined {
   const parts = context.topLevel.filter(({ name }) => name === head);
   if (parts.length === 0 || parts.some(({ global }) => global)) return undefined;
+  if (context.expanded.has(head)) return undefined;
   if (!parts.every(({ members }) => members.closed)) return undefined;
   return {
     listed: parts.flatMap(({ members }) => members.listed),
@@ -265,8 +284,9 @@ function closedMembersOf(context: LinkContext, head: string): Members | undefine
 
 /**
  * Whether each of `segments`, a member path below a shape with the members `members`, names a
- * member: of a shape the file lists whole, a listed member or, for a class or function, one
- * every function has; below a shape it does not list whole, anything.
+ * member: of a shape the file lists whole, a listed member, one every object has from
+ * `Object.prototype` or, for a class or function, one every function has; below a shape it does
+ * not list whole, anything.
  */
 function resolvesMembers(
   context: LinkContext,
@@ -277,7 +297,9 @@ function resolvesMembers(
   for (const segment of segments) {
     if (current === undefined || !current.closed || segment === '') return true;
     const found = current.listed.filter(({ name }) => name === segment);
-    if (found.length === 0) return current.callable && functionMembers.has(segment);
+    if (found.length === 0) {
+      return objectMembers.has(segment) || (current.callable && functionMembers.has(segment));
+    }
     const inner = found.map(({ node }) => membersOfMember(context.compiler, context.file, node));
     current = inner.every(({ closed }) => closed)
       ? {
@@ -296,7 +318,7 @@ export function nameOfTarget(target: string): string {
 }
 
 /**
- * Whether the doc comment leading `host` resolves the link target `target` itself. Its first
+ * What the doc comment leading `host` makes of the link target `target` (see {@link LinkVerdict}). Its first
  * name is declared in a scope the comment sees (see `scopeNames`): one of the nodes it documents
  * (see `effectiveHosts`) or one they stand in, then the file's top level (its statements,
  * imports and global blocks) and the names its doc comments declare by tag. A name a scope
@@ -305,17 +327,91 @@ export function nameOfTarget(target: string): string {
  * `this.<member>` resolves when the member is one of the nearest enclosing class, interface or
  * object literal. A type argument list, call or index after the name is not judged.
  */
-export function resolvesInFile(context: LinkContext, host: ts.Node, target: string): boolean {
+export function resolvesInFile(context: LinkContext, host: ts.Node, target: string): LinkVerdict {
   const [head = '', ...segments] = nameOfTarget(target).split(/[.#]/u);
   if (head === 'this') {
     const [member] = segments;
-    return member !== undefined && isEnclosingMember(context, host, member);
+    return member !== undefined && isEnclosingMember(context, host, member)
+      ? 'resolved'
+      : 'unresolved';
   }
-  if (inScope(context, host, head)) return true;
+  if (inScope(context, host, head)) return 'resolved';
   if (context.topNames.has(head)) {
-    return resolvesMembers(context, closedMembersOf(context, head), segments);
+    return resolvesMembers(context, closedMembersOf(context, head), segments)
+      ? 'resolved'
+      : 'member-missing';
   }
-  return context.tagged.has(head);
+  return context.tagged.has(head) ? 'resolved' : 'unresolved';
+}
+
+/**
+ * What the file makes of a link: it resolves the link, or declares its first name but none of
+ * the members after it, or does not declare that name.
+ */
+export type LinkVerdict = 'resolved' | 'member-missing' | 'unresolved';
+
+/** The identifier a property access or element access chain starts from, if one does. */
+function rootName(compiler: Compiler, expression: ts.Expression): string | undefined {
+  let inner = expression;
+  while (compiler.isPropertyAccessExpression(inner) || compiler.isElementAccessExpression(inner)) {
+    inner = inner.expression;
+  }
+  return compiler.isIdentifier(inner) ? inner.text : undefined;
+}
+
+/** The name of the class `node` stands in, if it stands in a named one. */
+function enclosingClassName(
+  compiler: Compiler,
+  node: ts.Node,
+  parents: ReadonlyMap<ts.Node, ts.Node>,
+): string | undefined {
+  for (let at = parents.get(node); at !== undefined; at = parents.get(at)) {
+    if (compiler.isClassLike(at)) return at.name?.text;
+  }
+  return undefined;
+}
+
+/**
+ * The names `nodes`, a file's, give members after declaring them, so no one declaration lists
+ * them all: one assigned a member anywhere (`Head.x = …`, `Head.a.b = …`, a function's
+ * expandos among them), one passed first to `Object.assign`, and a class whose methods assign
+ * `this.<member>`.
+ */
+export function listExpandedNames(
+  compiler: Compiler,
+  nodes: readonly ts.Node[],
+  parents: ReadonlyMap<ts.Node, ts.Node>,
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  const add = (name: string | undefined): void => {
+    if (name !== undefined) names.add(name);
+  };
+  for (const node of nodes) {
+    if (
+      compiler.isBinaryExpression(node) &&
+      node.operatorToken.kind >= compiler.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= compiler.SyntaxKind.LastAssignment &&
+      (compiler.isPropertyAccessExpression(node.left) ||
+        compiler.isElementAccessExpression(node.left))
+    ) {
+      add(
+        node.left.expression.kind === compiler.SyntaxKind.ThisKeyword
+          ? enclosingClassName(compiler, node, parents)
+          : rootName(compiler, node.left),
+      );
+    }
+    if (
+      compiler.isCallExpression(node) &&
+      compiler.isPropertyAccessExpression(node.expression) &&
+      compiler.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Object' &&
+      node.expression.name.text === 'assign'
+    ) {
+      const [first] = node.arguments;
+      add(first === undefined ? undefined : rootName(compiler, first));
+    }
+  }
+  return names;
 }
 
 /** The name a link target starts with. */
@@ -338,49 +434,25 @@ export function isJudgedTarget(target: string): boolean {
  * inside a `declare module` block among them.
  */
 export function listTopNames(compiler: Compiler, file: ts.SourceFile): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const statement of file.statements) {
-    const inner = isGlobalBlock(compiler, statement) ? statement.body.statements : [statement];
-    for (const name of blockNames(compiler, inner)) names.add(name);
-  }
-  for (const name of listAmbientNames(compiler, file, true)) names.add(name);
-  return names;
+  return new Set([
+    ...blockNames(compiler, file.statements),
+    ...listAmbientNames(compiler, file, true),
+  ]);
 }
 
 /**
- * The names the `@template` tags of the doc comment `text` declare: `@template T, U`,
- * `@template {C} T` and `@template [T=D]` alike.
- */
-export function listTemplateNames(text: string): string[] {
-  const names: string[] = [];
-  for (const match of text.matchAll(/^\s*@template(?:\s+\{[^}]*\})?\s+([^\n]*)/gmu)) {
-    let rest = match[1] ?? '';
-    for (;;) {
-      const name = /^\s*\[?([A-Za-z_$][\w$]*)[^,\s]*\s*(,?)/u.exec(rest);
-      if (name === null) break;
-      names.push(name[1] ?? '');
-      if (name[2] === '') break;
-      rest = rest.slice(name[0].length);
-    }
-  }
-  return names;
-}
-
-/**
- * The names statements declare for every file: none for an import, and none for a module named
- * by a string, which `statementNames` gives no name.
+ * The names statements declare for every file: those `statementNames` gives, so none for a
+ * module named by a string; an import makes its file a module, whose top level gives none.
  */
 function ambientNames(compiler: Compiler, statements: readonly ts.Statement[]): string[] {
-  return statements.flatMap((statement) =>
-    compiler.isImportDeclaration(statement) ? [] : statementNames(compiler, statement),
-  );
+  return statements.flatMap((statement) => statementNames(compiler, statement));
 }
 
 /**
  * The names `file` declares for every file: each top-level name of a script, a file that is no
  * module (`isModule` says whether it is one, as a file using `require` or `module.exports` is),
- * and each name of a global block, `declare global { … }` at the top level or `global { … }`
- * inside a `declare module` block.
+ * each name of a global block, `declare global { … }` at the top level or `global { … }`
+ * inside a `declare module` block, and the name `export as namespace X` gives a UMD library.
  */
 export function listAmbientNames(
   compiler: Compiler,
@@ -406,7 +478,8 @@ export function listAmbientNames(
       }
       continue;
     }
-    if (!isModule) names.push(...ambientNames(compiler, [statement]));
+    if (compiler.isNamespaceExportDeclaration(statement)) names.push(statement.name.text);
+    else if (!isModule) names.push(...ambientNames(compiler, [statement]));
   }
   return names;
 }
@@ -425,5 +498,23 @@ export function usesCommonJs(compiler: Compiler, nodes: readonly ts.Node[]): boo
         compiler.isIdentifier(node.expression) &&
         ((node.expression.text === 'module' && node.name.text === 'exports') ||
           node.expression.text === 'exports')),
+  );
+}
+
+/**
+ * The names `file` augments in another module: each a `declare module '<module>' { … }` block
+ * declares, outside its global blocks, whose members another file's declaration then lacks.
+ */
+export function listAugmentedNames(compiler: Compiler, file: ts.SourceFile): string[] {
+  return file.statements.flatMap((statement) =>
+    compiler.isModuleDeclaration(statement) &&
+    compiler.isStringLiteral(statement.name) &&
+    statement.body !== undefined &&
+    compiler.isModuleBlock(statement.body)
+      ? blockNames(
+          compiler,
+          statement.body.statements.filter((inner) => !isGlobalBlock(compiler, inner)),
+        )
+      : [],
   );
 }

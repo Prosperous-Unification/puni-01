@@ -960,7 +960,14 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
           if (text.startsWith('unreadable')) {
             throw new SourceUnreadable({ details: { reason: 'the text is unreadable' } });
           }
-          return { declarations: [], reexports: [], docComments: [], links: [], ambient: [] };
+          return {
+            declarations: [],
+            reexports: [],
+            docComments: [],
+            links: [],
+            ambient: [],
+            augmented: [],
+          };
         },
         globals: () => ({ names: new Set(), missing: [] }),
       },

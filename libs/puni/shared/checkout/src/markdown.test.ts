@@ -151,6 +151,14 @@ describe('readMarkdown, its block edges', () => {
     expect(code('para\n\n    ```\n    `x`\n    ```')).toEqual(['    ```', '    `x`', '    ```']);
   });
 
+  test('counts a tab four columns of indentation', () => {
+    const listed = '- see [x]\n\n\t[x]: a.ts';
+    expect([
+      code('para\n\n\t`tabbed`'),
+      readMarkdown(listed, skipBoth).links.map(({ destination }) => destination),
+    ]).toEqual([['\t`tabbed`'], ['a.ts']]);
+  });
+
   test('reads a reference definition indented under a list item', () => {
     const text = '- see [the cart][cart]\n\n    [cart]: a.ts#Cart';
     expect(readMarkdown(text, skipBoth).links.map(({ destination }) => destination)).toEqual([

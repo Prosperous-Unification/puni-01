@@ -144,7 +144,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
         root,
         'wiki/ops/tools.md',
         page(
-          'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`, [`home`](../../libs/two/src/index.ts#gone) and [options](../../apps/one/tsconfig.json#strict).\n',
+          'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`, [`home`](../../libs/two/src/index.ts#gone), [`elsewhere`](../../libs/two/src/index.ts#home) and [options](../../apps/one/tsconfig.json#strict).\n',
         ),
       );
       writeRepositoryFile(
