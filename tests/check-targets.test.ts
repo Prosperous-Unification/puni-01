@@ -85,6 +85,15 @@ describe('puni-bur-check targets', () => {
     ]);
   });
 
+  test('a project check is cached on what it reads outside its project, .gitattributes among them', () => {
+    expect(field(nx, 'namedInputs', 'puniBurCheck')).toEqual([
+      '{workspaceRoot}/puni.json',
+      '{workspaceRoot}/**/.gitignore',
+      '{workspaceRoot}/**/.gitattributes',
+      '{workspaceRoot}/.bun-version',
+    ]);
+  });
+
   test.each(listProjectFiles())('%s declares the target', (path) => {
     expect(field(readJson(path), 'targets', 'puni-bur-check')).toBeDefined();
   });
@@ -280,9 +289,9 @@ describe('the CI workflow', () => {
 });
 
 describe('versions', () => {
-  test('bun-types is the Bun of .bun-version', () => {
+  test('bun-types, a dependency for the globals doc comments link, is the Bun of .bun-version', () => {
     const pinned = readFileSync(join(root, '.bun-version'), 'utf8').trim();
-    expect(field(readJson('package.json'), 'devDependencies', 'bun-types')).toBe(pinned);
+    expect(field(readJson('package.json'), 'dependencies', 'bun-types')).toBe(pinned);
   });
 });
 

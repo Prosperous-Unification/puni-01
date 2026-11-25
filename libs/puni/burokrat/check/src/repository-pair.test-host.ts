@@ -53,7 +53,7 @@ const epochOneIndex: Readonly<Record<string, string>> = {
 /**
  * Writes the files of the fixture at `root` that the rules epoch `epoch` shapes: `puni.json`
  * pinned there, and `AGENTS.md` pointing to the map. At epoch 1 that is the committed generated
- * index, `wiki/index/index.md`; from epoch 2 it is `puni burokrat wiki map`, the generated index
+ * index, `index.md` of `wiki/index`; from epoch 2 it is `puni burokrat wiki map`, the generated index
  * removed, as following the remedies of `repo upgrade` leaves it.
  */
 export function writeEpochFiles(root: string, epoch: number): void {

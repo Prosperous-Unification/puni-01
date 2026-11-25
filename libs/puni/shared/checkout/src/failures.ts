@@ -187,3 +187,13 @@ export const FileUnreadable = defineException({
   tag: 'puni/shared-checkout/FileUnreadable',
   message: ({ path, reason }: { path: string; reason: string }) => `cannot read ${path}: ${reason}`,
 });
+
+/**
+ * Two composed source readers claiming one file extension, so no one reader reads its files: a
+ * defect of the composition.
+ */
+export const SourceReadersOverlap = defineException({
+  tag: 'puni/shared-checkout/SourceReadersOverlap',
+  message: ({ extension }: { extension: string }) =>
+    `two source readers read ${extension}; compose one reader per extension`,
+});

@@ -41,7 +41,14 @@ import {
   judgeReviewRecords,
   judgeSupersession,
 } from './rules/records.rule';
-import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
+import {
+  judgeDocCommands,
+  judgeDocPaths,
+  judgeMarkdownCommands,
+  judgeMarkdownPaths,
+} from './rules/docs.rule';
+import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import {
   forbidPlaintextSecrets,
@@ -88,10 +95,16 @@ export const codeRules: readonly LeveledRule[] = [
     forbidStateAddresses,
     forbidFileHeaders,
     requireProjectTargets,
+    judgeMarkdownPaths,
     judgeDocPaths,
+    judgeMarkdownCommands,
     judgeDocCommands,
     limitPageWords,
     judgeDocSymbols,
+    judgeDocReferences,
+    judgeDocSpans,
+    judgeDocLinks,
+    judgeSourceReading,
     judgeEntryKinds,
   ].map(at('project')),
 ];
@@ -122,13 +135,17 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
 /**
  * The rules `check --cross-project-links` applies over every file of a `system-state`
  * repository, judging only the references that leave the linking file's project (a symlink's
- * target among them), and the symbols documentation names, which a project check leaves to this
- * run.
+ * target among them), and the symbols documentation names, which a project check leaves to
+ * this run.
  */
 export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
+  judgeMarkdownPaths,
   judgeDocPaths,
   judgeDocSymbols,
+  judgeDocReferences,
+  judgeDocSpans,
+  judgeDocLinks,
   judgeEntryKinds,
 ];
 

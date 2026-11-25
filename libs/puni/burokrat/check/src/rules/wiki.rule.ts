@@ -1,23 +1,10 @@
 import { countWords, repositoryScope } from '@puni/shared-checkout';
 import { pageWordBudget } from '../budgets';
-import { isDocumentation, listCode } from '../docs';
+import { isDocumentation, isSymbolName, listCode } from '../docs';
 import type { Breach, Rule } from '../finding';
 
-/** The extensions of the files whose words a symbol named in documentation may be. */
-const sourceExtensions = /\.(?:[cm]?[jt]s|json|ya?ml|toml|sh)$/u;
-
-/**
- * Whether `word` reads as a code symbol rather than prose: a camelCase or compound PascalCase
- * name (`renderRootMap`, `CommandExitCode`) or an upper-case name with an underscore
- * (`PUNI_FAILURE_REPORT`). A single capitalised or lower-case word is prose.
- */
-export function isSymbolName(word: string): boolean {
-  return (
-    /^[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*$/u.test(word) ||
-    /^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/u.test(word) ||
-    /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/u.test(word)
-  );
-}
+/** The configuration files, beside those a source reader reads, whose words a symbol may be. */
+const configurationFiles = /\.(?:json|ya?ml|toml|sh)$/u;
 
 /** The symbol names (see {@link isSymbolName}) in the code spans and fenced blocks of `text`. */
 export function listSymbolNames(text: string): string[] {
@@ -33,18 +20,23 @@ export function listSymbolNames(text: string): string[] {
  * some source file of the repository, so a step that names a function, type, key or variable
  * goes stale loudly when the code renames or removes it. Any project's source may hold a symbol,
  * so a cached project check, whose reach is `within-project`, judges none; the cross-project run
- * and the whole check, which read every file, judge them all.
+ * and the whole check, which read every file, judge them all. The source files are those a
+ * source reader reads, from any epoch, since another file to find a word in only ever accepts
+ * more, and the configuration files.
  */
 export const judgeDocSymbols: Rule = {
   id: 'docs.symbols',
   since: 1,
   remedy: 'name the symbol as the code now spells it, or remove it',
-  judge({ files, references }) {
+  judge({ files, references, sources }) {
     if (references.kind === 'within-project') return [];
     const visible = files.listVisible(repositoryScope);
     const words = new Set<string>();
     for (const path of visible) {
-      if (!sourceExtensions.test(path) || isDocumentation(path)) continue;
+      const isSource =
+        sources.readerOf(path, Number.POSITIVE_INFINITY) !== undefined ||
+        configurationFiles.test(path);
+      if (!isSource || isDocumentation(path)) continue;
       for (const match of files.readText(path).matchAll(/[A-Za-z_$][\w$]*/gu)) words.add(match[0]);
     }
     return visible

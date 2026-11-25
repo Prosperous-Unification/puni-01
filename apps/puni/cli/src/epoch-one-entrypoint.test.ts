@@ -37,7 +37,7 @@ function readRemedies(stdout: string): Map<string, string> {
 
 /**
  * A repository pinned at epoch 1 keeps the verdict the puni of epoch 1 gave it until it upgrades:
- * here the one `repo init` made then, its generated `wiki/index/` committed and named by its
+ * here the one `repo init` made then, its generated `wiki/index` committed and named by its
  * entry files.
  */
 describe('a repository as repo init made it at rules epoch 1', () => {
@@ -53,7 +53,7 @@ describe('a repository as repo init made it at rules epoch 1', () => {
     });
   });
 
-  test('upgrades to epoch 2 once its findings are fixed as their remedies say', () => {
+  test('upgrades to the latest epoch, 3, once its findings are fixed as their remedies say', () => {
     const state = makeEpochOnePair(scratchDirectories, readRules());
     const refused = runPuni(['burokrat', 'repo', 'upgrade'], state);
     expect(refused.code).toBe(1);
@@ -75,7 +75,7 @@ describe('a repository as repo init made it at rules epoch 1', () => {
     }
     expect(runPuni(['burokrat', 'repo', 'upgrade'], state)).toEqual({
       code: 0,
-      stdout: 'upgraded: rules epoch 1 -> 2\n',
+      stdout: 'upgraded: rules epoch 1 -> 3\n',
       stderr: '',
     });
     const check = runPuni(['burokrat', 'check'], state);

@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "puni-shared-typescript",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:plugin"],
+  "metadata": {
+    "readWhen": "changing what a TypeScript or JavaScript file is read to declare, document or bring into scope",
+    "readFirst": "src/source-readers.resource.ts"
+  },
+  "sourceRoot": "libs/puni/shared/typescript/src",
+  "targets": {
+    "test": {},
+    "lint": {},
+    "typecheck": {},
+    "puni-bur-check": {}
+  }
+}

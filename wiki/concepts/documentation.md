@@ -28,8 +28,8 @@ Each layer is short, and names the next:
 
 1. `AGENTS.md`, read every session: the rules, the gate, and the map's command.
 2. The root of the map, `bun run puni burokrat wiki map`, which the `SessionStart` hook of
-   `.claude/settings.json` prints into every Claude Code session (or the error that stopped it
-   and how to fix it): a "Read when" line per page, by section, and a line per top-level partition.
+   `.claude/settings.json` prints into every Claude Code session (or the error that
+   stopped it): a "Read when" line per page, by section, and a line per top-level partition.
 3. A section or partition, `bun run puni burokrat wiki map <name>`: a "Read when" line per page,
    or per library placed there, linking its `readFirst`, and the partitions below.
 4. The page, or the library's `readFirst` file and the JSDoc on its exports.
@@ -44,7 +44,7 @@ only text an agent weighs before choosing.
 ## Pages
 
 A page answers one "Read this when …", given as `read-when` in its front matter, within
-`pageWordBudget` words. It lives directly in `wiki/` or in one of the sections `wikiSections`
+[`pageWordBudget`](../../libs/puni/burokrat/check/src/budgets.ts#pageWordBudget) words. It lives directly in `wiki/` or in one of the sections [`wikiSections`](../../libs/puni/shared/checkout/src/wiki-sections.ts#wikiSections)
 names; the map lists each section with what its pages are for.
 
 A page links to the symbol, test or config entry that holds a fact rather than restating it.
@@ -54,6 +54,6 @@ A page links to the symbol, test or config entry that holds a fact rather than r
 The gate judges the documentation as it judges code: the `docs`, `links` and `index` rules of
 [rule-set.rule.ts](../../libs/puni/burokrat/check/src/rule-set.rule.ts) resolve its links and
 paths, its commands and the symbols it names, and hold each page to a section, a `read-when`
-and its budget. What no check can judge is the change's: a change that makes a line untrue
+and its budget. Typed links (`path#name`, epoch 3) name exported symbols. What no check can judge is the change's: a change that makes a line untrue
 rewrites or deletes it in the same commit, as
 [documenting a change](../how-to/document-a-change.md) says.

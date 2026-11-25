@@ -9,7 +9,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry, indexWordBudget } from '@puni/shared-checkout';
+import {
+  formatRegistry,
+  indexWordBudget,
+  openSourceRegistry,
+  repositoryScope,
+  type SourceRegistry,
+} from '@puni/shared-checkout';
 import { nxPlacementHint, readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
   fixtureRemotes,
@@ -29,7 +35,7 @@ import {
   openCheckHost,
 } from './check.test-host';
 import { appliesAt, listEveryRule, type Rule } from './finding';
-import { checkRules, codeRules } from './rule-set.rule';
+import { checkRules, codeRules, latestRulesEpoch } from './rule-set.rule';
 import {
   agentsExists,
   agentsNamesIndex,
@@ -53,7 +59,14 @@ import {
 } from './rules/index.rule';
 import { resolveLinks } from './rules/links.rule';
 import { judgeDocSymbols, limitPageWords } from './rules/wiki.rule';
-import { judgeDocCommands, judgeDocPaths } from './rules/docs.rule';
+import {
+  judgeDocCommands,
+  judgeDocPaths,
+  judgeMarkdownCommands,
+  judgeMarkdownPaths,
+} from './rules/docs.rule';
+import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
@@ -75,11 +88,11 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  root = makeRepository(scratchDirectories, 2);
+  root = makeRepository(scratchDirectories, latestRulesEpoch);
 });
 
-/** The system-state rules that apply at the fixture's pin, epoch 2. */
-const pinnedCodeRules = codeRules.filter(({ rule }) => appliesAt(rule, 2));
+/** The system-state rules that apply at the fixture's pin, the latest epoch. */
+const pinnedCodeRules = codeRules.filter(({ rule }) => appliesAt(rule, latestRulesEpoch));
 
 function judge(rule: Rule): Judged[] {
   return dropRemedies(host.judge(rule, root));
@@ -104,7 +117,7 @@ function writePurposes(purposes: readonly (readonly [string, string])[]): void {
   writeRepositoryFile(
     root,
     'puni.json',
-    formatRegistry('system-state', fixtureRemotes, 2, new Map(purposes)),
+    formatRegistry('system-state', fixtureRemotes, latestRulesEpoch, new Map(purposes)),
   );
 }
 
@@ -163,7 +176,7 @@ describe('every rule holds on the fixture repository', () => {
 /** A breach and the one finding it makes; `remedy` is given only where it is not the rule's own. */
 type Expected = Judged & { readonly remedy?: string };
 
-const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
+const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceRegistry?])[] = [
   [
     'AGENTS.md missing',
     agentsExists,
@@ -760,6 +773,120 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     { rule: 'docs.paths', path: 'README.md', message: 'names the missing path bin/deploy.sh' },
   ],
   [
+    'a backticked path that does not exist, up to epoch 3',
+    judgeMarkdownPaths,
+    () => {
+      appendFileSync(join(root, 'README.md'), 'Deploy with `bin/deploy.sh`.\n');
+    },
+    { rule: 'docs.paths', path: 'README.md', message: 'names the missing path bin/deploy.sh' },
+  ],
+  [
+    'a doc comment naming a path that does not exist',
+    judgeDocPaths,
+    () => {
+      writeRepositoryFile(
+        root,
+        'libs/x/src/a.ts',
+        '/**\n * Runs\n * `apps/gone.sh`, not `bin/deploy.sh`.\n */\nexport const a = 1;\n',
+      );
+    },
+    {
+      rule: 'docs.paths',
+      path: 'libs/x/src/a.ts',
+      message: 'line 3 names the missing path apps/gone.sh',
+    },
+  ],
+  [
+    'a link naming a symbol its source file does not declare',
+    judgeDocReferences,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+      appendFileSync(
+        join(root, 'README.md'),
+        'See [`parse`](libs/x/src/a.ts#parse) and [`gone`](libs/x/src/a.ts#gone).\n',
+      );
+    },
+    {
+      rule: 'docs.references',
+      path: 'README.md',
+      message: 'line 4 links to libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
+    },
+  ],
+  [
+    'a link into a file re-exporting a package whole',
+    judgeDocReferences,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/b.ts', "export * from 'pkg';\n");
+      appendFileSync(join(root, 'README.md'), 'Use [`gone`](libs/x/src/b.ts#gone).\n');
+    },
+    {
+      rule: 'docs.references',
+      path: 'README.md',
+      message:
+        'line 4 links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
+    },
+  ],
+  [
+    'a symbol in backticks outside a link',
+    judgeDocSpans,
+    () => {
+      writeRepositoryFile(
+        root,
+        'libs/x/src/a.ts',
+        'export const parse = 1;\nexport function renderIndex() {}\nconst hidden = 1;\n',
+      );
+      appendFileSync(
+        join(root, 'README.md'),
+        'Call `renderIndex()`, [`parse`](libs/x/src/a.ts#parse), `hidden`, `goneName` and `CLAUDE.md`.\n',
+      );
+    },
+    {
+      rule: 'docs.spans',
+      path: 'README.md',
+      message:
+        'line 4 names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
+    },
+  ],
+  [
+    'a source file its reader cannot read',
+    judgeSourceReading,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/bad.ts', 'unreadable\n');
+    },
+    {
+      rule: 'sources.read',
+      path: 'libs/x/src/bad.ts',
+      message: 'cannot be read as source: the text is unreadable',
+    },
+    openSourceRegistry([
+      {
+        extensions: ['.ts'],
+        since: 1,
+        read(text) {
+          if (text.startsWith('unreadable')) throw new Error('the text is unreadable');
+          return { declarations: [], reexports: [], docComments: [], links: [], ambient: [] };
+        },
+        globals: () => new Set(),
+      },
+    ]),
+  ],
+  [
+    'a doc comment linking a name out of scope',
+    judgeDocLinks,
+    () => {
+      writeRepositoryFile(
+        root,
+        'libs/x/src/a.ts',
+        "import { join } from 'node:path';\n\n/** Uses {@link join}, {@link Box.size}, {@link https://github.com/acme}, then {@link gone}. */\nexport const Box = { size: join('a') };\n",
+      );
+    },
+    {
+      rule: 'docs.comment-links',
+      path: 'libs/x/src/a.ts',
+      message: 'line 3 links gone, which names nothing visible there',
+    },
+  ],
+  [
     'a backticked path git ignores, though it exists on this disk',
     judgeDocPaths,
     () => {
@@ -794,6 +921,35 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       path: 'README.md',
       message: 'runs the script nope, which package.json does not define',
       remedy: 'name a script the root package.json defines, or add the script there',
+    },
+  ],
+  [
+    'a bun run naming no script, up to epoch 3',
+    judgeMarkdownCommands,
+    () => {
+      appendFileSync(join(root, 'README.md'), 'Then `bun run nope`.\n');
+    },
+    {
+      rule: 'docs.commands',
+      path: 'README.md',
+      message: 'runs the script nope, which package.json does not define',
+      remedy: 'name a script the root package.json defines, or add the script there',
+    },
+  ],
+  [
+    'a doc comment naming a command the tree does not hold',
+    judgeDocCommands,
+    () => {
+      writeRepositoryFile(
+        root,
+        'libs/x/src/a.ts',
+        '/** Run `demo burokrat audit`. */\nexport const a = 1;\n',
+      );
+    },
+    {
+      rule: 'docs.commands',
+      path: 'libs/x/src/a.ts',
+      message: 'line 1 names no command demo burokrat audit',
     },
   ],
   [
@@ -863,7 +1019,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
         {
           rule: 'agents.rules',
           path: 'AGENTS.md',
-          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch 2`,
+          message: `rules section digests to ${digestRulesSection(fixtureAgentsRules.replace(from, to))}, not ${digestRulesSection(fixtureAgentsRules)}, the rules in force at epoch ${String(latestRulesEpoch)}`,
         },
       ] as const,
   ),
@@ -988,9 +1144,12 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
 ];
 
 describe('each rule finds its breach', () => {
-  test.each(negatives)('%s', (_name, rule, breach, finding) => {
+  test.each(negatives)('%s', (_name, rule, breach, finding, ...injected) => {
+    const [sources] = injected;
     breach();
-    expect(host.judge(rule, root)).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
+    expect(
+      host.judge(rule, root, root, repositoryScope, { kind: 'all' }, sources ?? undefined),
+    ).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
   });
 
   test('the breaches cover every rule of the system-state rule set', () => {

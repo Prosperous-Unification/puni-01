@@ -56,6 +56,7 @@ describe('the repository check turns defect kinds into findings', () => {
       checkoutFiles: container.resolve('checkoutFiles'),
       checkoutProjectScope: container.resolve('checkoutProjectScope'),
       projectSources: container.resolve('projectSources'),
+      sourceReaders: container.resolve('sourceReaders'),
       recordsCatalog: container.resolve('recordsCatalog'),
       commandCatalog: { list: () => [] },
       programSource: { directory: '/nowhere', version: fixtureVersion },

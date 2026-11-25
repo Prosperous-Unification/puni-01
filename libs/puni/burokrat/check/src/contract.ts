@@ -6,6 +6,7 @@ import type {
   ProjectSource,
   RepositoryRegistryResource,
   RepositoryType,
+  SourceReader,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
@@ -68,6 +69,8 @@ export interface CheckRequirements {
   readonly checkoutFiles: CheckoutFilesResource;
   readonly checkoutProjectScope: ProjectScopeResource;
   readonly projectSources: readonly ProjectSource[];
+  /** The source readers, one per extension, that doc references into source files are read with. */
+  readonly sourceReaders: readonly SourceReader[];
   readonly recordsCatalog: RecordsCatalog;
   readonly commandCatalog: CommandCatalog;
   readonly programSource: ProgramSource;

@@ -114,7 +114,7 @@ export const requirePurposes: Rule = {
 const generatedIndexFile = `${generatedIndexDirectory}/index.md`;
 
 /**
- * From rules epoch 2 the map is printed, never committed: a `wiki/index/` an older puni generated
+ * From rules epoch 2 the map is printed, never committed: a `wiki/index` an older puni generated
  * is a leftover, one finding however many files it holds.
  */
 export const forbidGeneratedIndex: Rule = {
