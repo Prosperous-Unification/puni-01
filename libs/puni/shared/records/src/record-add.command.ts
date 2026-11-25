@@ -23,8 +23,8 @@ function describeDefaultBody(sections: readonly string[]): string {
 }
 
 /**
- * `add --title TEXT --topics LIST --summary TEXT [--body-file PATH]`: one record of `leaf` to
- * file, yielding a request of kind `leaf.request`.
+ * `add --title TEXT --topics LIST --summary TEXT [--body-file PATH] [--supersedes PATH]`: one
+ * record of `leaf` to file, yielding a request of kind `leaf.request`.
  */
 export function recordAddParser<Kind extends string>(leaf: RecordAddLeaf<Kind>) {
   return object({
@@ -47,13 +47,22 @@ export function recordAddParser<Kind extends string>(leaf: RecordAddLeaf<Kind>) 
         ],
       }),
     ),
+    supersedes: optional(
+      option('--supersedes', string({ metavar: 'PATH' }), {
+        description: [
+          text(
+            `The records-repository path of the record this ${leaf.noun} replaces; that record gains superseded-by.`,
+          ),
+        ],
+      }),
+    ),
   });
 }
 
 /**
  * The factory of the `add` command of `leaf`: it files the record in the records repository,
  * prints the new record's path relative to that repository and returns 0; it commits nothing. A
- * refused value, title, existing record or body file prints one `error: ` line and returns 2; a
+ * refused value, title, existing record, body file or superseded record prints one `error: ` line and returns 2; a
  * defective repository or an unreadable body file one `error: ` line and 1.
  */
 export function createRecordAddCommand<Kind extends string>(leaf: RecordAddLeaf<Kind>) {

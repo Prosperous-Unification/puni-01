@@ -103,11 +103,25 @@ describe('burokratParser', () => {
     ['repo upgrade', { kind: 'repo upgrade' }],
     [
       'adr add --title T --topics a,b --summary S',
-      { kind: 'adr add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'adr add',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     [
       'adr add --summary S --body-file b.md --topics a --title T',
-      { kind: 'adr add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'adr add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
     ],
     [
       'assess outcomes --since 2026-11-22T00:00:00Z --until 2026-11-24T00:00:00Z --json',
@@ -166,15 +180,47 @@ describe('navigatorParser', () => {
     ['progress', { kind: 'help', path: ['progress'] }],
     [
       'plan add --title T --topics a,b --summary S',
-      { kind: 'plan add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     [
       'plan add --summary S --body-file b.md --topics a --title T',
-      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
+    ],
+    [
+      'plan add --title T --topics a --summary S --supersedes nav/plans/x.md',
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: 'nav/plans/x.md',
+      },
     ],
     [
       'research add --title T --topics a --summary S --body-file b.md',
-      { kind: 'research add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'research add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
     ],
   ] as const)('%j parses to %j', (line, value) => {
     expect(parse(navigatorParser, line.split(' ').filter(Boolean))).toEqual({
@@ -220,7 +266,14 @@ describe('dashParser', () => {
     ['ops k3s -- -n x get', { kind: 'ops k3s', args: ['-n', 'x', 'get'] }],
     [
       'run log --title T --topics a,b --summary S',
-      { kind: 'run log', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'run log',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     ['resources create --name p', { kind: 'resources create', name: 'p', from: 'HEAD' }],
     ['resources create --from v1 --name p', { kind: 'resources create', name: 'p', from: 'v1' }],

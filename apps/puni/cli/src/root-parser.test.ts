@@ -112,7 +112,14 @@ describe('readInvocation', () => {
     [
       'n plan add --title T --topics a --summary S',
       'navigator',
-      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
   ] as const)('%s selects %s %j', (line, group, request) => {
     const invocation: unknown = readInvocation(line.split(' '), () => undefined);

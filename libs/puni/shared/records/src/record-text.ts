@@ -20,6 +20,8 @@ export interface RecordFields {
   readonly commit: string;
   readonly topics: string;
   readonly summary: string;
+  /** The path of the record this one replaces, written after `summary`. */
+  readonly supersedes?: string | undefined;
 }
 
 /** The keys of {@link RecordFields} in the order a record writes and judges them. */
@@ -28,6 +30,18 @@ export const fieldOrder = ['kind', 'title', 'date', 'commit', 'topics', 'summary
 /** The text of a record: its front matter between `---` lines, a blank line, then `body`. */
 export function formatRecord(fields: RecordFields, body: string): string {
   const lines = fieldOrder.map((key) => `${key}: ${fields[key]}`);
+  if (fields.supersedes !== undefined) lines.push(`supersedes: ${fields.supersedes}`);
   const ending = body.endsWith('\n') ? '' : '\n';
   return ['---', ...lines, '---', '', `${body}${ending}`].join('\n');
+}
+
+/**
+ * `text`, a record whose front matter parses, with `superseded-by: <path>` as the last line of its
+ * front matter; every other byte is kept.
+ */
+export function addSupersededBy(text: string, path: string): string {
+  const lines = text.split(/(?<=\n)/u);
+  const end = lines.findIndex((line, index) => index > 0 && line.replace(/\r?\n$/u, '') === '---');
+  const ending = /\r\n$/u.test(lines[0] ?? '') ? '\r\n' : '\n';
+  return [...lines.slice(0, end), `superseded-by: ${path}${ending}`, ...lines.slice(end)].join('');
 }

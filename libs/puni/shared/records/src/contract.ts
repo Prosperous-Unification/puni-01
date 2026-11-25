@@ -32,6 +32,11 @@ export interface RecordDraft {
   readonly bodyFile?: string | undefined;
   /** The headings of the empty sections a body made without a body file holds. */
   readonly sections?: readonly string[] | undefined;
+  /**
+   * The repository-relative path of a record this one replaces. The new record names it in
+   * `supersedes` and it gains `superseded-by` naming the new record, its other bytes kept.
+   */
+  readonly supersedes?: string | undefined;
 }
 
 /** The records of a records repository. */
@@ -56,6 +61,9 @@ export interface RecordsCatalog {
    * @throws RecordValueRefused naming the key and its expected form when a value is refused.
    * @throws RecordTitleUnsluggable when the title has no letter or digit.
    * @throws RecordExists when the file already exists.
+   * @throws SupersededRecordRefused when `supersedes` names no record file directly inside a kind
+   *   directory, one whose front matter does not parse, or one already superseded; nothing is
+   *   written.
    * @throws BodyFileMissing when `bodyFile` names nothing.
    * @throws FileUnreadable when `bodyFile` exists but cannot be read.
    */
@@ -71,6 +79,8 @@ export interface RecordAddRequest<Kind extends string> {
   readonly summary: string;
   /** The file holding the body, relative to the directory the command started from. */
   readonly bodyFile?: string | undefined;
+  /** The repository-relative path of the record the new one replaces. */
+  readonly supersedes?: string | undefined;
 }
 
 /** What a new record is, apart from what the command line gives it. */

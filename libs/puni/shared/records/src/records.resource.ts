@@ -15,8 +15,15 @@ import {
   RecordExists,
   RecordTitleUnsluggable,
   RecordValueRefused,
+  SupersededRecordRefused,
 } from './failures';
-import { fieldOrder, formatRecord, type RecordFields, slugifyTitle } from './record-text';
+import {
+  addSupersededBy,
+  fieldOrder,
+  formatRecord,
+  type RecordFields,
+  slugifyTitle,
+} from './record-text';
 import { judgeRecordValue, recordKeyForms } from './record-values';
 import { judgeReviewBody } from './review-markdown';
 
@@ -53,6 +60,37 @@ function readBody(
   }
 }
 
+/**
+ * The text of the record at `path` with `superseded-by: <by>` added, after judging that `path` is
+ * a record file directly inside a kind directory, that its front matter parses and that it is
+ * not already superseded.
+ *
+ * @throws RecordValueRefused when `path` is empty, absolute or leaves the repository.
+ * @throws SupersededRecordRefused naming the first problem otherwise.
+ */
+function supersede(files: CheckoutFiles, path: string, by: string): string {
+  const kind = recordKinds.find(
+    (candidate) => posix.dirname(path) === recordDirectories[candidate],
+  );
+  const problem = judgeRecordValue({ path, kind: kind ?? 'plan' }, 'supersedes', path);
+  if (problem !== undefined) {
+    throw new RecordValueRefused({
+      details: { key: 'supersedes', problem, form: recordKeyForms.supersedes },
+    });
+  }
+  const refuse = (reason: string) =>
+    new SupersededRecordRefused({ details: { path, problem: reason } });
+  if (kind === undefined || files.describe(path) !== 'file') {
+    throw refuse('is not a record in a kind directory');
+  }
+  const text = files.readText(path);
+  const frontMatter = parseFrontMatter(text);
+  if (!('fields' in frontMatter)) throw refuse('has front matter that cannot be read');
+  const later = frontMatter.fields.find(({ key }) => key === 'superseded-by');
+  if (later !== undefined) throw refuse(`is already superseded by ${later.value}`);
+  return addSupersededBy(text, by);
+}
+
 /** The {@link RecordsCatalog}; a record it files is dated today in UTC by `clock`. */
 export function createRecordsCatalog({
   clock,
@@ -82,6 +120,7 @@ export function createRecordsCatalog({
           .map((topic) => topic.trim())
           .join(', '),
         summary: draft.summary.trim(),
+        supersedes: draft.supersedes?.trim(),
       };
       for (const key of fieldOrder) {
         const problem = judgeRecordValue({ path, kind: draft.kind }, key, fields[key]);
@@ -91,11 +130,16 @@ export function createRecordsCatalog({
       }
       if (slug === '') throw new RecordTitleUnsluggable({ details: { title } });
       if (files.describe(path) !== 'absent') throw new RecordExists({ details: { path } });
+      const superseded =
+        fields.supersedes === undefined ? undefined : supersede(files, fields.supersedes, path);
       const body = readBody(draft, title, fileSystem);
       const problem = judgeReviewBody(draft.kind, body);
       if (problem !== undefined) throw new RecordBodyRefused({ details: { problem } });
       if (files.createFile(path, formatRecord(fields, body)) === 'exists') {
         throw new RecordExists({ details: { path } });
+      }
+      if (fields.supersedes !== undefined && superseded !== undefined) {
+        files.write(fields.supersedes, superseded);
       }
       return path;
     },

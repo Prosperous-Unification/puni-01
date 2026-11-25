@@ -33,6 +33,16 @@ export const BodyFileMissing = defineException({
   message: ({ path }: { path: string }) => `the body file ${path} does not exist`,
 });
 
+/**
+ * A record a new record would supersede that cannot be superseded: not a record, unreadable front
+ * matter, or already superseded. A refused command line.
+ */
+export const SupersededRecordRefused = defineException({
+  tag: 'puni/shared-records/SupersededRecordRefused',
+  message: ({ path, problem }: { path: string; problem: string }) =>
+    `supersedes ${path} ${problem}`,
+});
+
 /** A draft's body does not satisfy the schema for its kind. */
 export const RecordBodyRefused = defineException({
   tag: 'puni/shared-records/RecordBodyRefused',
