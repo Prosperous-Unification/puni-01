@@ -21,6 +21,14 @@
         "command": "bunx eslint tests"
       }
     },
+    "lint-all": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "inputs": ["{workspaceRoot}/**/*"],
+      "options": {
+        "command": "bunx eslint ."
+      }
+    },
     "typecheck": {
       "options": {
         "command": "bunx tsc --noEmit -p tests/tsconfig.json"

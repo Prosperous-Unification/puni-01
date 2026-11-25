@@ -14,8 +14,9 @@ and names the newer ones; `puni burokrat repo upgrade` raises the pin once the r
 them. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
-`puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull
-request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) says.
+`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts, `checks`, `lint` and
+`test`, which [ci.yml](../.github/workflows/ci.yml) runs as jobs; its `gate` job, the check main
+requires, passes when all three do.
 
 ## When it fails
 

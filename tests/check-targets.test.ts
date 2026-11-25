@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 
@@ -94,6 +94,7 @@ describe('puni-bur-check targets', () => {
     expect(Object.keys(field(readJson('project.json'), 'targets') ?? {})).toEqual([
       'test',
       'lint',
+      'lint-all',
       'typecheck',
       'puni-bur-check',
       'puni-bur-links',
@@ -191,15 +192,90 @@ describe('puni-bur-check targets', () => {
   });
 });
 
+const workflowText = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+const workflow: unknown = Bun.YAML.parse(workflowText);
+
+/** The `run` script of the step named `name` in the job `job` of the CI workflow. */
+function readStepScript(job: string, name: string): string {
+  const steps = field(workflow, 'jobs', job, 'steps');
+  if (!Array.isArray(steps)) throw new Error(`the CI job ${job} has no steps`);
+  const script = field(
+    steps.find((step: unknown) => field(step, 'name') === name),
+    'run',
+  );
+  if (typeof script !== 'string') throw new Error(`the CI job ${job} has no step ${name}`);
+  return script;
+}
+
+/**
+ * Runs the time-budget step of a gate part `elapsed` seconds after its clock started, with `date`
+ * a stub, through `sh` as GitHub runs a step.
+ */
+function runTimeBudget(elapsed: number) {
+  const bin = scratchDirectories.createDirectory('puni-time-budget-');
+  writeFileSync(join(bin, 'date'), `#!/bin/sh\necho ${String(1000 + elapsed)}\n`, { mode: 0o755 });
+  const child = Bun.spawnSync(['sh', '-e', '-c', readStepScript('part', 'time budget')], {
+    env: {
+      PATH: `${bin}:/usr/bin:/bin`,
+      GATE_STARTED: '1000',
+      GATE_MINUTES: String(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')),
+      GATE_PART: 'lint',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return {
+    exitCode: child.exitCode,
+    stdout: child.stdout.toString(),
+    stderr: child.stderr.toString(),
+  };
+}
+
 describe('the CI workflow', () => {
   test('runs for pushes to main, pull requests and the merge queue', () => {
-    const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-    const triggers = /^on:\n((?: {2}.*\n)+)/mu.exec(workflow)?.[1] ?? '';
+    const triggers = /^on:\n((?: {2}.*\n)+)/mu.exec(workflowText)?.[1] ?? '';
     expect(triggers.match(/^ {2}[a-z_]+:/gmu)).toEqual([
       '  push:',
       '  pull_request:',
       '  merge_group:',
     ]);
+  });
+
+  test('a gate part within 60% of its cap passes; one past it fails, naming the part', () => {
+    expect(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')).toBe(2);
+    expect(runTimeBudget(72)).toEqual({
+      exitCode: 0,
+      stdout: 'gate part lint took 72 s of its 72 s budget\n',
+      stderr: '',
+    });
+    expect(runTimeBudget(73)).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'error: gate part lint took 73 s, over its budget of 72 s, 60% of its 2-minute cap; make the part faster or split it\n',
+    });
+  });
+
+  test('the gate job, the check main requires, waits for every part and fails unless all passed', () => {
+    expect(field(workflow, 'jobs', 'gate', 'needs')).toBe('part');
+    expect(field(workflow, 'jobs', 'gate', 'if')).toBe(
+      "always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')",
+    );
+    const steps = field(workflow, 'jobs', 'gate', 'steps');
+    const script = field(Array.isArray(steps) ? steps[0] : undefined, 'run');
+    if (typeof script !== 'string') throw new Error('the CI job gate runs no script');
+    for (const [ending, exitCode] of [
+      ['success', 0],
+      ['failure', 1],
+      ['cancelled', 1],
+      ['skipped', 1],
+    ] as const) {
+      const child = Bun.spawnSync(['sh', '-e', '-c', script], {
+        env: { PATH: '/usr/bin:/bin', PARTS: ending },
+        stderr: 'pipe',
+      });
+      expect([ending, child.exitCode]).toEqual([ending, exitCode]);
+    }
   });
 });
 
@@ -210,8 +286,8 @@ describe('versions', () => {
   });
 });
 
-/** The scripts of the root `package.json` that run the gate. */
-const gateScripts = ['gate', 'gate:affected'];
+/** The scripts of the root `package.json` that run the gate's `bun fmt --check`. */
+const gateScripts = ['gate:checks', 'gate:checks:affected'];
 
 /** The `&&`-joined step of the `name` script that runs `bun fmt --check`. */
 function readFormatStep(name: string): string {
@@ -258,12 +334,13 @@ test('the pre-commit hook runs only the staged secrets check', () => {
   });
 });
 
-/** The `&&`-joined step of the `gate:affected` script that judges the pull request's commits. */
+/** The `&&`-joined step of the `gate:checks:affected` script that judges the pull request's commits. */
 function readCommitsStep(): string {
-  const script = field(readJson('package.json'), 'scripts', 'gate:affected');
-  if (typeof script !== 'string') throw new Error('package.json has no script gate:affected');
+  const script = field(readJson('package.json'), 'scripts', 'gate:checks:affected');
+  if (typeof script !== 'string')
+    throw new Error('package.json has no script gate:checks:affected');
   const step = script.split(' && ').find((part) => part.includes('--commits'));
-  if (step === undefined) throw new Error('gate:affected judges no commits');
+  if (step === undefined) throw new Error('gate:checks:affected judges no commits');
   return step;
 }
 
@@ -312,6 +389,76 @@ describe('the CI workflow judges every push for secrets', () => {
     ]) {
       expect([line, workflow.includes(line)]).toEqual([line, true]);
     }
+  });
+});
+
+/**
+ * Runs the `gate:lint:fast` script through `sh` with `bun` a stub: one whose `bun lint --help`
+ * describes the linter when `hasLint`, and whose `bun lint` run records its arguments and exits
+ * `exitCode`.
+ */
+function runFastLint(hasLint: boolean, exitCode: number) {
+  const bin = scratchDirectories.createDirectory('puni-fast-lint-');
+  const calls = join(bin, 'calls');
+  const help = hasLint
+    ? "echo '  Find and fix problems in JavaScript and TypeScript.'; exit 0"
+    : 'exit 1';
+  writeFileSync(
+    join(bin, 'bun'),
+    `#!/bin/sh\nif [ "$2" = --help ]; then ${help}; fi\necho "$@" >> ${calls}\nexit ${String(exitCode)}\n`,
+    { mode: 0o755 },
+  );
+  const script = field(readJson('package.json'), 'scripts', 'gate:lint:fast');
+  if (typeof script !== 'string') throw new Error('package.json has no script gate:lint:fast');
+  const child = Bun.spawnSync(['sh', '-c', script], {
+    env: { PATH: `${bin}:/usr/bin:/bin` },
+    stderr: 'pipe',
+  });
+  const ran = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+  return { exitCode: child.exitCode, stderr: child.stderr.toString(), ran };
+}
+
+/**
+ * Before ESLint, the lint part runs Bun's own `bun lint` over the same `eslint.config.js`: it
+ * finds most breaches in about a second. ESLint still judges every rule, so a Bun without
+ * `bun lint`, or a rule `bun lint` cannot run, leaves the verdict to ESLint alone. ESLint runs
+ * once over the whole repository, under Nx so that its module-boundary rule has the project
+ * graph: one process builds the shared type information once, where a run per project builds it
+ * per project. Each project's own `lint` target stays, to re-run one project alone.
+ */
+describe('the fast lint step', () => {
+  test('the lint part runs it, then one ESLint over the whole repository, on any change', () => {
+    const scripts = field(readJson('package.json'), 'scripts');
+    expect(field(scripts, 'gate:lint')).toBe('bun run gate:lint:fast && nx run workspace:lint-all');
+    expect(field(scripts, 'gate:lint:affected')).toBe('bun run gate:lint');
+    expect(field(readJson('project.json'), 'targets', 'lint-all')).toEqual({
+      cache: true,
+      executor: 'nx:run-commands',
+      inputs: ['{workspaceRoot}/**/*'],
+      options: { command: 'bunx eslint .' },
+    });
+  });
+
+  test('the root package.json has no lint script, which bun lint would run in its place', () => {
+    expect(field(readJson('package.json'), 'scripts', 'lint')).toBeUndefined();
+  });
+
+  test("a Bun with bun lint runs it type-aware, its exit code the step's", () => {
+    for (const exitCode of [0, 1]) {
+      expect(runFastLint(true, exitCode)).toEqual({
+        exitCode,
+        stderr: '',
+        ran: 'lint --type-aware --allow-unsupported\n',
+      });
+    }
+  });
+
+  test('a Bun without bun lint says so and passes, leaving ESLint to judge', () => {
+    expect(runFastLint(false, 1)).toEqual({
+      exitCode: 0,
+      stderr: 'gate:lint:fast: this Bun has no bun lint, so ESLint judges alone\n',
+      ran: '',
+    });
   });
 });
 
