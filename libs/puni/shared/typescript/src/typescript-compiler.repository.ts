@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type ts from 'typescript';
 import type { TypescriptCompiler } from './contract';
+import { GlobalTypesMissing } from './failures';
 
 /** The `/// <reference …/>` directives of a declaration file: each kind and what it names. */
 function listReferences(text: string): { readonly kind: string; readonly name: string }[] {
@@ -16,14 +17,20 @@ function isCompiler(loaded: unknown): loaded is typeof ts {
   return typeof loaded === 'object' && loaded !== null && 'createSourceFile' in loaded;
 }
 
+/** The type packages whose globals a doc comment may link, as puni depends on them. */
+export const globalTypePackages: readonly string[] = ['bun-types'];
+
 /**
  * The {@link TypescriptCompiler} of this machine: the `typescript` package this puni depends on,
  * required on the first `load` and never before, so a command that reads no source file never
  * pays for it; and the global declarations, read once: the compiler's default library for the
- * latest target and every library it references, then `bun-types` and the types it references,
- * when they are installed beside puni. Types not installed are simply not read.
+ * latest target and every library it references, then each of `packages` and every declaration
+ * file its references reach.
+ *
+ * @throws GlobalTypesMissing from `globalDeclarationTexts` when one of `packages` is not
+ *   installed beside puni.
  */
-export function createTypescriptCompiler(): TypescriptCompiler {
+export function openTypescriptCompiler(packages: readonly string[]): TypescriptCompiler {
   const requireHere = createRequire(import.meta.url);
   let compiler: typeof ts | undefined;
   let globals: readonly string[] | undefined;
@@ -70,9 +77,18 @@ export function createTypescriptCompiler(): TypescriptCompiler {
         }
       };
       read(compilerModule.getDefaultLibFilePath({ target: compilerModule.ScriptTarget.Latest }));
-      read(resolveFrom(import.meta.filename, 'bun-types/index.d.ts'));
+      for (const name of packages) {
+        const entry = resolveFrom(import.meta.filename, `${name}/index.d.ts`);
+        if (entry === undefined) throw new GlobalTypesMissing({ details: { package: name } });
+        read(entry);
+      }
       globals = texts;
       return globals;
     },
   };
+}
+
+/** The {@link openTypescriptCompiler} of the {@link globalTypePackages} puni depends on. */
+export function createTypescriptCompiler(): TypescriptCompiler {
+  return openTypescriptCompiler(globalTypePackages);
 }

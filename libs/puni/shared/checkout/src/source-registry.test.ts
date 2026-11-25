@@ -10,19 +10,31 @@ function wordReader(
   since = 1,
 ): SourceReader & { readonly reads: string[] } {
   const reads: string[] = [];
-  const words = (text: string) => {
-    reads.push(text);
-    return text.split(' ');
-  };
   return {
     reads,
     extensions,
     since,
-    declarations: (text) =>
-      words(text).map((name) => ({ name, exported: true, range: { start: 0, end: 0 } })),
-    reexports: (text) => words(text),
-    docComments: (text) => words(text).map((line, at) => ({ line: at + 1, text: line })),
-    links: (text) => words(text).map((target) => ({ target, line: 1, resolves: true })),
+    read(text) {
+      reads.push(text);
+      if (text === 'unreadable') throw new Error('cannot read');
+      const words = text.split(' ');
+      return {
+        declarations: words.map((name) => ({
+          name,
+          exported: true,
+          reexported: false,
+          range: { start: 0, end: 0 },
+        })),
+        reexports: [],
+        docComments: [],
+        links: [],
+        ambient: words,
+      };
+    },
+    globals() {
+      reads.push('globals');
+      return new Set(['Global']);
+    },
   };
 }
 
@@ -51,16 +63,24 @@ describe('openSourceRegistry', () => {
     ]);
   });
 
-  test('reads each text once per reading, however often it is asked', () => {
+  test('reads each text once, and the globals once, however often it is asked', () => {
     const script = wordReader(['.ts']);
     const reader = openSourceRegistry([script]).readerOf('a.ts', 1);
     for (let round = 0; round < 3; round += 1) {
-      expect(reader?.declarations('a b').map(({ name }) => name)).toEqual(['a', 'b']);
-      expect(reader?.reexports('a b')).toEqual(['a', 'b']);
-      expect(reader?.links('d')).toEqual([{ target: 'd', line: 1, resolves: true }]);
-      expect(reader?.docComments('c')).toEqual([{ line: 1, text: 'c' }]);
+      expect(reader?.read('a b').ambient).toEqual(['a', 'b']);
+      expect(reader?.read('c').ambient).toEqual(['c']);
+      expect(reader?.globals()).toEqual(new Set(['Global']));
     }
-    expect(script.reads).toEqual(['a b', 'a b', 'd', 'c']);
+    expect(script.reads).toEqual(['a b', 'c', 'globals']);
+  });
+
+  test('a text that cannot be read throws again on every ask, read once', () => {
+    const script = wordReader(['.ts']);
+    const reader = openSourceRegistry([script]).readerOf('a.ts', 1);
+    for (let round = 0; round < 2; round += 1) {
+      throws(() => reader?.read('unreadable'), /cannot read/u);
+    }
+    expect(script.reads).toEqual(['unreadable']);
   });
 
   test('two readers of one extension are refused, naming it, whatever its case', () => {

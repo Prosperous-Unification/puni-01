@@ -9,7 +9,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry, indexWordBudget } from '@puni/shared-checkout';
+import {
+  formatRegistry,
+  indexWordBudget,
+  openSourceRegistry,
+  repositoryScope,
+  type SourceRegistry,
+} from '@puni/shared-checkout';
 import { nxPlacementHint, readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
   fixtureRemotes,
@@ -60,6 +66,7 @@ import {
   judgeMarkdownPaths,
 } from './rules/docs.rule';
 import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
@@ -169,7 +176,7 @@ describe('every rule holds on the fixture repository', () => {
 /** A breach and the one finding it makes; `remedy` is given only where it is not the rule's own. */
 type Expected = Judged & { readonly remedy?: string };
 
-const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
+const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceRegistry?])[] = [
   [
     'AGENTS.md missing',
     agentsExists,
@@ -802,7 +809,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.references',
       path: 'README.md',
-      message: 'links to libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
+      message: 'line 4 links to libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
     },
   ],
   [
@@ -816,7 +823,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'docs.references',
       path: 'README.md',
       message:
-        'links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
+        'line 4 links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
     },
   ],
   [
@@ -836,8 +843,32 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.spans',
       path: 'README.md',
-      message: 'names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
+      message:
+        'line 4 names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
     },
+  ],
+  [
+    'a source file its reader cannot read',
+    judgeSourceReading,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/bad.ts', 'unreadable\n');
+    },
+    {
+      rule: 'sources.read',
+      path: 'libs/x/src/bad.ts',
+      message: 'cannot be read as source: the text is unreadable',
+    },
+    openSourceRegistry([
+      {
+        extensions: ['.ts'],
+        since: 1,
+        read(text) {
+          if (text.startsWith('unreadable')) throw new Error('the text is unreadable');
+          return { declarations: [], reexports: [], docComments: [], links: [], ambient: [] };
+        },
+        globals: () => new Set(),
+      },
+    ]),
   ],
   [
     'a doc comment linking a name out of scope',
@@ -1113,9 +1144,12 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
 ];
 
 describe('each rule finds its breach', () => {
-  test.each(negatives)('%s', (_name, rule, breach, finding) => {
+  test.each(negatives)('%s', (_name, rule, breach, finding, ...injected) => {
+    const [sources] = injected;
     breach();
-    expect(host.judge(rule, root)).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
+    expect(
+      host.judge(rule, root, root, repositoryScope, { kind: 'all' }, sources ?? undefined),
+    ).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
   });
 
   test('the breaches cover every rule of the system-state rule set', () => {

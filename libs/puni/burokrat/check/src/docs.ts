@@ -86,30 +86,3 @@ export function isSymbolName(word: string): boolean {
     /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/u.test(word)
   );
 }
-
-/** One piece of code in a text, and the 0-based line of the text it stands on. */
-export interface CodeLine {
-  readonly offset: number;
-  readonly code: string;
-}
-
-/**
- * Every piece of code in `text` with its line: each inline code span outside fenced blocks, on
- * one line, and, when `fenced`, each line of a fenced block.
- */
-export function listCodeLines(text: string, fenced: boolean): CodeLine[] {
-  const pieces: CodeLine[] = [];
-  let inFence = false;
-  for (const [offset, line] of text.split('\n').entries()) {
-    if (/^\s*(```|~~~)/u.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) {
-      if (fenced) pieces.push({ offset, code: line });
-      continue;
-    }
-    for (const span of line.matchAll(/`([^`]+)`/gu)) pieces.push({ offset, code: span[1] ?? '' });
-  }
-  return pieces;
-}

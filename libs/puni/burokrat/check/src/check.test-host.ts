@@ -3,6 +3,7 @@ import {
   checkoutModule,
   openSourceRegistry,
   repositoryScope,
+  type SourceRegistry,
 } from '@puni/shared-checkout';
 import { type NxExports, nxModule } from '@puni/shared-nx';
 import { type TypescriptExports, typescriptModule } from '@puni/shared-typescript';
@@ -108,7 +109,8 @@ export function openCheckHost(
     /**
      * Runs `rule` on the checkout at `root`, with the registry found from `registryRoot`; the
      * references it reaches are every one in the whole repository and those within the project
-     * in a project scope, unless `references` says otherwise.
+     * in a project scope, unless `references` says otherwise; the run's source registry is that
+     * of the host's readers unless `sources` is given.
      */
     judge(
       rule: Rule,
@@ -118,6 +120,7 @@ export function openCheckHost(
       references: ReferenceReach = scope.kind === 'repository'
         ? { kind: 'all' }
         : { kind: 'within-project', projects: scope.projects },
+      sources: SourceRegistry = openSourceRegistry(container.resolve('sourceReaders')),
     ): Finding[] {
       const located = container.resolve('checkoutRegistry').locate(registryRoot);
       const type = root === located.root ? located.type : 'system-records';
@@ -128,7 +131,7 @@ export function openCheckHost(
         scope,
         references,
         projectSources: container.resolve('projectSources'),
-        sources: openSourceRegistry(container.resolve('sourceReaders')),
+        sources,
         records: container.resolve('recordsCatalog'),
       });
     },

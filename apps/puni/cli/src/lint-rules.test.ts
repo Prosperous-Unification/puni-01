@@ -322,9 +322,21 @@ describe('the plugin boundary', () => {
     ['a group', `${check}/x.ts`, "import type ts from 'typescript';"],
     ['a test', `${check}/x.test.ts`, "import { version } from '@typescript/old';"],
     ['the app', 'apps/puni/cli/src/x.ts', "import ts from 'typescript';"],
+    ['a root test', 'tests/x.test.ts', "import ts from 'typescript';"],
   ])('%s importing the TypeScript compiler is refused', async (_name, path, source) => {
     expect(await lintRules(path, `${source}\nexport {};`)).toContain(
       '@typescript-eslint/no-restricted-imports',
+    );
+  });
+
+  test('only a plugin that loads its tool registers a repository in its module.ts', async () => {
+    const source =
+      "import { createX } from './x.repository';\n\n/** A. */\nexport const a = createX;";
+    expect(await lintRules('libs/puni/shared/typescript/src/module.ts', source)).not.toContain(
+      'no-restricted-imports',
+    );
+    expect(await lintRules('libs/puni/shared/nx/src/module.ts', source)).toContain(
+      'no-restricted-imports',
     );
   });
 

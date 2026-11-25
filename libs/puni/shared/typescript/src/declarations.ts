@@ -76,9 +76,11 @@ export interface Members {
   readonly listed: readonly Member[];
   /** False when the shape has members no one text lists: inherited, spread or of an unknown type. */
   readonly closed: boolean;
+  /** Whether the shape is a function or a class, which has the members of every function. */
+  readonly callable: boolean;
 }
 
-const unknownMembers: Members = { listed: [], closed: false };
+const unknownMembers: Members = { listed: [], closed: false, callable: false };
 
 /** `nodes` that have a name, as members. */
 function named(compiler: Compiler, nodes: readonly ts.NamedDeclaration[]): Member[] {
@@ -104,8 +106,27 @@ function declarationOf(
     : undefined;
 }
 
-/** The members of a class: its elements, and the properties its constructor's parameters declare. */
-function classMembers(compiler: Compiler, node: ts.ClassLikeDeclaration): Members {
+/** A shape's own members, and the names of the bases it extends, `undefined` for an unnamed one. */
+interface OwnMembers extends Members {
+  readonly bases: readonly (string | undefined)[];
+}
+
+/** The names the `extends` clauses of a class or interface name, one per base. */
+function baseNames(
+  compiler: Compiler,
+  clauses: ts.NodeArray<ts.HeritageClause> | undefined,
+): (string | undefined)[] {
+  return (clauses ?? [])
+    .filter(({ token }) => token === compiler.SyntaxKind.ExtendsKeyword)
+    .flatMap(({ types }) =>
+      types.map(({ expression }) =>
+        compiler.isIdentifier(expression) ? expression.text : undefined,
+      ),
+    );
+}
+
+/** The own members of a class: its elements, and the properties its constructor's parameters declare. */
+function classMembers(compiler: Compiler, node: ts.ClassLikeDeclaration): OwnMembers {
   const parameters = node.members
     .filter(compiler.isConstructorDeclaration)
     .flatMap((constructor) =>
@@ -117,19 +138,23 @@ function classMembers(compiler: Compiler, node: ts.ClassLikeDeclaration): Member
     );
   return {
     listed: [...named(compiler, node.members), ...named(compiler, parameters)],
-    closed: node.heritageClauses === undefined,
+    closed: true,
+    callable: true,
+    bases: baseNames(compiler, node.heritageClauses),
   };
 }
 
 /** The members of a type: those of each type literal it is, unites or intersects. */
 function typeMembers(compiler: Compiler, type: ts.TypeNode): Members {
-  if (compiler.isTypeLiteralNode(type))
-    return { listed: named(compiler, type.members), closed: true };
+  if (compiler.isTypeLiteralNode(type)) {
+    return { listed: named(compiler, type.members), closed: true, callable: false };
+  }
   if (compiler.isUnionTypeNode(type) || compiler.isIntersectionTypeNode(type)) {
     const parts = type.types.map((part) => typeMembers(compiler, part));
     return {
       listed: parts.flatMap(({ listed }) => listed),
       closed: parts.every(({ closed }) => closed),
+      callable: false,
     };
   }
   return unknownMembers;
@@ -149,130 +174,197 @@ function namespaceMembers(compiler: Compiler, node: ts.ModuleDeclaration): Membe
     const declaration = declarationOf(compiler, statement);
     return declaration === undefined ? [] : named(compiler, [declaration]);
   });
-  return { listed, closed: true };
+  return { listed, closed: true, callable: false };
 }
 
-/** The members of the shape `node` declares (see {@link Members}). */
-function membersOf(compiler: Compiler, node: ts.Node): Members {
+/** The own members of the shape `node` declares (see {@link Members}). */
+function ownMembersOf(compiler: Compiler, node: ts.Node): OwnMembers {
   if (compiler.isClassDeclaration(node) || compiler.isClassExpression(node)) {
     return classMembers(compiler, node);
   }
   if (compiler.isInterfaceDeclaration(node)) {
-    return { listed: named(compiler, node.members), closed: node.heritageClauses === undefined };
-  }
-  if (compiler.isEnumDeclaration(node))
-    return { listed: named(compiler, node.members), closed: true };
-  if (compiler.isTypeAliasDeclaration(node)) return typeMembers(compiler, node.type);
-  if (compiler.isModuleDeclaration(node)) return namespaceMembers(compiler, node);
-  if (compiler.isObjectLiteralExpression(node)) {
     return {
-      listed: named(compiler, node.properties),
-      closed: !node.properties.some(compiler.isSpreadAssignment),
+      listed: named(compiler, node.members),
+      closed: true,
+      callable: false,
+      bases: baseNames(compiler, node.heritageClauses),
     };
   }
-  if (compiler.isFunctionDeclaration(node)) return { listed: [], closed: true };
-  return unknownMembers;
+  const plain = (members: Members): OwnMembers => ({ ...members, bases: [] });
+  if (compiler.isEnumDeclaration(node)) {
+    return plain({ listed: named(compiler, node.members), closed: true, callable: false });
+  }
+  if (compiler.isTypeAliasDeclaration(node)) return plain(typeMembers(compiler, node.type));
+  if (compiler.isModuleDeclaration(node)) return plain(namespaceMembers(compiler, node));
+  if (compiler.isObjectLiteralExpression(node)) {
+    return plain({
+      listed: named(compiler, node.properties),
+      closed: !node.properties.some(compiler.isSpreadAssignment),
+      callable: false,
+    });
+  }
+  if (compiler.isFunctionLike(node)) return plain({ listed: [], closed: true, callable: true });
+  return plain(unknownMembers);
 }
 
-/** One top-level name a file declares, the node declaring it, its members and whether it is exported. */
+/** One top-level name a file declares, the node declaring it, its members and how it is declared. */
 export interface TopLevel {
   readonly name: string;
   readonly node: ts.Node;
   readonly members: Members;
   readonly exported: boolean;
+  /** Whether a `declare global` block declares it, for every file rather than this one. */
+  readonly global: boolean;
 }
 
-/** The name `exports.<name> = …` or `module.exports.<name> = …` assigns, if `statement` is one. */
-function commonJsExport(
+/** A top-level name before its members inherit those of its bases. */
+type RawTopLevel = Omit<TopLevel, 'members'> & { readonly own: OwnMembers };
+
+/** The names `exports.<name> = …`, `module.exports.<name> = …` or `module.exports = { … }` assigns. */
+function commonJsExports(
   compiler: Compiler,
   file: ts.SourceFile,
   statement: ts.Statement,
-): string | undefined {
-  if (!compiler.isExpressionStatement(statement)) return undefined;
+): string[] {
+  if (!compiler.isExpressionStatement(statement)) return [];
   const assignment = statement.expression;
   if (
     !compiler.isBinaryExpression(assignment) ||
-    assignment.operatorToken.kind !== compiler.SyntaxKind.EqualsToken ||
-    !compiler.isPropertyAccessExpression(assignment.left)
+    assignment.operatorToken.kind !== compiler.SyntaxKind.EqualsToken
   ) {
-    return undefined;
+    return [];
   }
+  if (assignment.left.getText(file) === 'module.exports') {
+    const right = unwrap(compiler, file, assignment.right);
+    return compiler.isObjectLiteralExpression(right)
+      ? named(compiler, right.properties).map(({ name }) => name)
+      : [];
+  }
+  if (!compiler.isPropertyAccessExpression(assignment.left)) return [];
   const owner = assignment.left.expression.getText(file);
-  return owner === 'exports' || owner === 'module.exports' ? assignment.left.name.text : undefined;
+  return owner === 'exports' || owner === 'module.exports' ? [assignment.left.name.text] : [];
 }
 
-/** The statements of `file`, and those of its `declare global` blocks. */
-function listStatements(compiler: Compiler, file: ts.SourceFile): ts.Statement[] {
-  return file.statements.flatMap((statement) => {
-    if (
-      compiler.isModuleDeclaration(statement) &&
-      (statement.flags & compiler.NodeFlags.GlobalAugmentation) !== 0 &&
-      statement.body !== undefined &&
-      compiler.isModuleBlock(statement.body)
-    ) {
-      return [...statement.body.statements];
+/** Whether `statement` is a `declare global { … }` block, or `global { … }` inside a module. */
+export function isGlobalBlock(
+  compiler: Compiler,
+  statement: ts.Statement,
+): statement is ts.ModuleDeclaration & { readonly body: ts.ModuleBlock } {
+  return (
+    compiler.isModuleDeclaration(statement) &&
+    (statement.flags & compiler.NodeFlags.GlobalAugmentation) !== 0 &&
+    statement.body !== undefined &&
+    compiler.isModuleBlock(statement.body)
+  );
+}
+
+/** The statements of `file` with whether each stands in a `declare global` block. */
+function listStatements(
+  compiler: Compiler,
+  file: ts.SourceFile,
+): { readonly statement: ts.Statement; readonly global: boolean }[] {
+  return file.statements.flatMap(
+    (statement): { readonly statement: ts.Statement; readonly global: boolean }[] =>
+      isGlobalBlock(compiler, statement)
+        ? statement.body.statements.map((inner) => ({ statement: inner, global: true }))
+        : [{ statement, global: false }],
+  );
+}
+
+/** The names the `@typedef` and `@callback` tags of a doc comment's text declare, at tag position. */
+export function listTypedefs(text: string): string[] {
+  return [
+    ...text.matchAll(/^\s*@(?:typedef|callback)(?:\s+\{[^}]*\})?\s+([A-Za-z_$][\w$]*)/gmu),
+  ].map((match) => match[1] ?? '');
+}
+
+/**
+ * The top-level names of `raw`, each shape's members joined by those of each base it extends
+ * that the file declares at the top level, outside a global block: closed only when every base
+ * is such a closed shape, so an inherited member of another file's base can be anything.
+ */
+function inherit(raw: readonly RawTopLevel[]): TopLevel[] {
+  const byName = new Map<string, OwnMembers[]>();
+  for (const { name, own, global } of raw) {
+    if (!global) byName.set(name, [...(byName.get(name) ?? []), own]);
+  }
+  const resolve = (own: OwnMembers, seen: ReadonlySet<string>): Members => {
+    const listed = [...own.listed];
+    let closed = own.closed;
+    for (const base of own.bases) {
+      const parts = base === undefined || seen.has(base) ? undefined : byName.get(base);
+      if (base === undefined || parts === undefined) {
+        closed = false;
+        continue;
+      }
+      for (const part of parts) {
+        const inherited = resolve(part, new Set([...seen, base]));
+        listed.push(...inherited.listed);
+        closed &&= inherited.closed;
+      }
     }
-    return [statement];
-  });
+    return { listed, closed, callable: own.callable };
+  };
+  return raw.map(({ own, ...rest }) => ({ ...rest, members: resolve(own, new Set([rest.name])) }));
 }
 
 /**
  * The top-level names `file` declares: functions, classes, interfaces, type aliases, enums,
  * namespaces, imports by `=` and variables (each name a destructuring binds), with `default`
- * for a default export; those of its `declare global` blocks; the names CommonJS assigns to
- * `exports`; and each `@typedef` and `@callback` of its doc comments. Declarations of one name
- * are listed each, as merged interfaces and a function with its namespace are.
+ * for a default export; those of its `declare global` blocks, marked global; the names CommonJS
+ * assigns to `exports`; and, in a JavaScript file (`javascript`), each `@typedef` and
+ * `@callback` tag of `docTexts`, its doc comments. A shape has its own members and those of the
+ * bases the file declares (see `inherit`). Declarations of one name are listed each, as merged
+ * interfaces and a function with its namespace are.
  */
 export function listTopLevel(
   compiler: Compiler,
   file: ts.SourceFile,
   docTexts: readonly string[],
+  javascript: boolean,
 ): TopLevel[] {
-  const listed: TopLevel[] = [];
-  for (const statement of listStatements(compiler, file)) {
+  const raw: RawTopLevel[] = [];
+  const unknown: OwnMembers = { ...unknownMembers, bases: [] };
+  for (const { statement, global } of listStatements(compiler, file)) {
     const { exported, isDefault } = modifiersOf(compiler, statement);
     if (compiler.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         const initializer = declaration.initializer;
-        const members =
+        const own =
           initializer === undefined
-            ? unknownMembers
-            : membersOf(compiler, unwrap(compiler, file, initializer));
+            ? unknown
+            : ownMembersOf(compiler, unwrap(compiler, file, initializer));
         for (const name of bindingNames(compiler, declaration.name)) {
-          listed.push({ name, node: declaration, members, exported });
+          raw.push({ name, node: declaration, own, exported, global });
         }
       }
       continue;
     }
-    const assigned = commonJsExport(compiler, file, statement);
-    if (assigned !== undefined) {
-      listed.push({ name: assigned, node: statement, members: unknownMembers, exported: true });
-      continue;
+    for (const name of commonJsExports(compiler, file, statement)) {
+      raw.push({ name, node: statement, own: unknown, exported: true, global });
     }
     const declaration = declarationOf(compiler, statement);
-    if (declaration !== undefined) {
-      const members = membersOf(compiler, statement);
-      const name = nameOf(compiler, declaration.name);
-      if (name !== undefined) listed.push({ name, node: statement, members, exported });
-      if (isDefault) listed.push({ name: 'default', node: statement, members, exported: true });
+    if (declaration === undefined) continue;
+    const own = ownMembersOf(compiler, statement);
+    const name = nameOf(compiler, declaration.name);
+    if (name !== undefined) raw.push({ name, node: statement, own, exported, global });
+    if (isDefault) raw.push({ name: 'default', node: statement, own, exported: true, global });
+  }
+  if (javascript) {
+    for (const name of docTexts.flatMap(listTypedefs)) {
+      raw.push({ name, node: file, own: unknown, exported: true, global: false });
     }
   }
-  for (const text of docTexts) {
-    for (const match of text.matchAll(
-      /@(?:typedef|callback)\s+(?:\{[^}]*\}\s*)?([A-Za-z_$][\w$]*)/gu,
-    )) {
-      listed.push({ name: match[1] ?? '', node: file, members: unknownMembers, exported: true });
-    }
-  }
-  return listed;
+  return inherit(raw);
 }
 
 /** Each local name an `export { … }` list without a module exports, and the names it exports it as. */
 function listLocallyExported(compiler: Compiler, file: ts.SourceFile): Map<string, string[]> {
   const names = new Map<string, string[]>();
   for (const statement of file.statements) {
-    if (!compiler.isExportDeclaration(statement) || statement.moduleSpecifier !== undefined)
+    if (!compiler.isExportDeclaration(statement) || statement.moduleSpecifier !== undefined) {
       continue;
+    }
     const clause = statement.exportClause;
     if (clause === undefined || !compiler.isNamedExports(clause)) continue;
     for (const element of clause.elements) {
@@ -288,45 +380,42 @@ function rangeOf(node: ts.Node, file: ts.SourceFile): SourceDeclaration['range']
 }
 
 /**
- * The declarations of `file` (see `SourceReader.declarations`): each top-level name (see
- * {@link listTopLevel}), each name an `export` list, `export … from`, `export * as` or
- * `export default` gives, and `<Name>.<member>` for each listed member of what is exported,
- * under every name it is exported as. A name may repeat, as overloads and accessors do.
+ * The declarations of `file` (see `SourceReading.declarations`) from its top-level names (see
+ * {@link listTopLevel}): each of them, each name an `export` list, `export … from`,
+ * `export * as` or `export default` gives, those passed on from another module marked
+ * re-exported, and `<Name>.<member>` for each listed member of what is exported, under every
+ * name it is exported as. A name may repeat, as overloads and accessors do.
  */
 export function declare(
   compiler: Compiler,
   file: ts.SourceFile,
-  docTexts: readonly string[],
+  topLevel: readonly TopLevel[],
 ): SourceDeclaration[] {
   const declared: SourceDeclaration[] = [];
   const locallyExported = listLocallyExported(compiler, file);
-  for (const { name, node, members, exported } of listTopLevel(compiler, file, docTexts)) {
+  const add = (name: string, node: ts.Node, exported: boolean, reexported = false): void => {
+    declared.push({ name, exported, reexported, range: rangeOf(node, file) });
+  };
+  for (const { name, node, members, exported } of topLevel) {
     const names = [...(exported ? [name] : []), ...(locallyExported.get(name) ?? [])];
-    declared.push({ name, exported: names.length > 0, range: rangeOf(node, file) });
+    add(name, node, names.length > 0);
     for (const as of names) {
-      for (const member of members.listed) {
-        declared.push({
-          name: `${as}.${member.name}`,
-          exported: true,
-          range: rangeOf(member.node, file),
-        });
-      }
+      for (const member of members.listed) add(`${as}.${member.name}`, member.node, true);
     }
   }
   for (const statement of file.statements) {
     if (compiler.isExportAssignment(statement) && statement.isExportEquals !== true) {
-      declared.push({ name: 'default', exported: true, range: rangeOf(statement, file) });
+      add('default', statement, true);
     }
     if (!compiler.isExportDeclaration(statement)) continue;
     const clause = statement.exportClause;
     if (clause === undefined) continue;
+    const passedOn = statement.moduleSpecifier !== undefined;
     if (compiler.isNamespaceExport(clause)) {
-      declared.push({ name: clause.name.text, exported: true, range: rangeOf(clause, file) });
+      add(clause.name.text, clause, true, passedOn);
       continue;
     }
-    for (const element of clause.elements) {
-      declared.push({ name: element.name.text, exported: true, range: rangeOf(element, file) });
-    }
+    for (const element of clause.elements) add(element.name.text, element, true, passedOn);
   }
   return declared;
 }
@@ -341,18 +430,4 @@ export function listReexports(compiler: Compiler, file: ts.SourceFile): string[]
       ? [statement.moduleSpecifier.text]
       : [],
   );
-}
-
-/** The names `file` imports: default, namespace and named bindings, by their local names. */
-export function listImported(compiler: Compiler, file: ts.SourceFile): string[] {
-  return file.statements.flatMap((statement) => {
-    if (!compiler.isImportDeclaration(statement)) return [];
-    const clause = statement.importClause;
-    if (clause === undefined) return [];
-    const names = clause.name === undefined ? [] : [clause.name.text];
-    const bindings = clause.namedBindings;
-    if (bindings === undefined) return names;
-    if (compiler.isNamespaceImport(bindings)) return [...names, bindings.name.text];
-    return [...names, ...bindings.elements.map((element) => element.name.text)];
-  });
 }

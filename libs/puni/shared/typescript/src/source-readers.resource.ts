@@ -1,58 +1,64 @@
-import type { DocLink, SourceReader } from '@puni/shared-checkout';
+import type { SourceReader, SourceReading } from '@puni/shared-checkout';
 import type ts from 'typescript';
 import type { TypescriptCompiler } from './contract';
 import { type Compiler, declare, listReexports, listTopLevel } from './declarations';
-import { type FoundComment, findDocComments, listLinkTags } from './doc-comments';
-import { isJudgedTarget, readGlobalNames, resolvesLink } from './link-scopes';
+import { findDocComments, listLinkTags, listNodes } from './doc-comments';
+import {
+  countDeclaredNames,
+  headOf,
+  isJudgedTarget,
+  listAmbientNames,
+  resolvesInFile,
+} from './link-names';
 
 /** The rules epoch from which the TypeScript and JavaScript readers are read. */
 export const typescriptReadersSince = 3;
 
-/**
- * How many parsed texts a reader keeps, so the readings of one text share one parse: more than
- * a repository's source files, and few enough to hold in memory.
- */
-const parsedTexts = 4096;
-
-/** The extensions the compiler parses alike, and the script kind it parses them as. */
+/** The extensions the compiler parses alike, the script kind it parses them as, and whether it is JavaScript. */
 const languages = [
-  { extensions: ['.ts', '.mts', '.cts'], kind: 'TS' },
-  { extensions: ['.tsx'], kind: 'TSX' },
-  { extensions: ['.js', '.mjs', '.cjs'], kind: 'JS' },
-  { extensions: ['.jsx'], kind: 'JSX' },
+  { extensions: ['.ts', '.mts', '.cts'], kind: 'TS', javascript: false },
+  { extensions: ['.tsx'], kind: 'TSX', javascript: false },
+  { extensions: ['.js', '.mjs', '.cjs'], kind: 'JS', javascript: true },
+  { extensions: ['.jsx'], kind: 'JSX', javascript: true },
 ] as const;
 
-/** The links of `file` (see `SourceReader.links`), each judged by {@link resolvesLink}. */
-function readLinks(
-  compiler: Compiler,
-  file: ts.SourceFile,
-  comments: readonly FoundComment[],
-  globals: () => ReadonlySet<string>,
-): DocLink[] {
-  const topLevel = listTopLevel(
-    compiler,
-    file,
-    comments.map(({ text }) => text),
-  );
-  const context = { compiler, file, topLevel, globals };
-  return comments.flatMap(({ line, text, owner, ancestors }) =>
-    listLinkTags(text)
-      .filter(({ target }) => isJudgedTarget(target))
-      .map(({ target, offset }) => ({
-        target,
-        line: line + offset,
-        resolves: resolvesLink(context, owner, ancestors, target),
-      })),
-  );
+/** Everything a reader reads in the parsed `file`, in one walk of its nodes. */
+function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean): SourceReading {
+  const nodes = listNodes(compiler, file);
+  const docComments = findDocComments(compiler, file, nodes);
+  const texts = docComments.map(({ text }) => text);
+  const topLevel = listTopLevel(compiler, file, texts, javascript);
+  const context = {
+    declared: countDeclaredNames(compiler, nodes),
+    topLevel,
+    tagged: new Set(topLevel.filter(({ node }) => node === file).map(({ name }) => name)),
+  };
+  return {
+    declarations: declare(compiler, file, topLevel),
+    reexports: listReexports(compiler, file),
+    docComments,
+    links: docComments.flatMap(({ line, text }) =>
+      listLinkTags(text)
+        .filter(({ target }) => isJudgedTarget(target))
+        .map(({ target, offset }) => ({
+          target,
+          line: line + offset,
+          head: headOf(target),
+          resolved: resolvesInFile(context, target),
+        })),
+    ),
+    ambient: listAmbientNames(compiler, file),
+  };
 }
 
 /**
  * The {@link SourceReader}s of TypeScript and JavaScript, read from rules epoch
  * {@link typescriptReadersSince}, one per way the compiler parses a file (TypeScript, TSX,
- * JavaScript, JSX), each reading a text through the compiler's parser alone: no program, no
- * type checking and no other file, so an imported name resolves as the import spells it,
- * whatever its module declares. The compiler is loaded on the first reading, and the global
- * declarations on the first link no name of the file resolves.
+ * JavaScript, JSX), each reading a text in one pass of the compiler's parser alone: no program,
+ * no type checking and no other file, the syntax tree dropped once read. The compiler is loaded
+ * on the first reading; the globals, the names the global declarations the compiler finds
+ * declare for every file (see `TypescriptCompiler.globalDeclarationTexts`), with `globalThis`,
+ * which the compiler knows without declaring it, on the first ask, once for all the readers.
  */
 export function createTypescriptSourceReaders({
   typescriptCompiler,
@@ -61,62 +67,30 @@ export function createTypescriptSourceReaders({
 }): readonly SourceReader[] {
   let globals: ReadonlySet<string> | undefined;
   const readGlobals = (): ReadonlySet<string> => {
-    globals ??= readGlobalNames(
-      typescriptCompiler.load(),
-      typescriptCompiler.globalDeclarationTexts(),
-    );
+    if (globals !== undefined) return globals;
+    const compiler = typescriptCompiler.load();
+    const names = new Set<string>(['globalThis']);
+    for (const text of typescriptCompiler.globalDeclarationTexts()) {
+      const file = compiler.createSourceFile('lib.d.ts', text, compiler.ScriptTarget.Latest, false);
+      for (const name of listAmbientNames(compiler, file)) names.add(name);
+    }
+    globals = names;
     return globals;
   };
-  return languages.map(({ extensions, kind }) => {
-    const parsed = new Map<string, ts.SourceFile>();
-    const commented = new WeakMap<ts.SourceFile, FoundComment[]>();
-    const parse = (text: string): { compiler: Compiler; file: ts.SourceFile } => {
+  return languages.map(({ extensions, kind, javascript }) => ({
+    extensions,
+    since: typescriptReadersSince,
+    read(text) {
       const compiler = typescriptCompiler.load();
-      let file = parsed.get(text);
-      if (file === undefined) {
-        if (parsed.size >= parsedTexts) parsed.clear();
-        file = compiler.createSourceFile(
-          `source${extensions[0]}`,
-          text,
-          compiler.ScriptTarget.Latest,
-          false,
-          compiler.ScriptKind[kind],
-        );
-        parsed.set(text, file);
-      }
-      return { compiler, file };
-    };
-    const comments = (compiler: Compiler, file: ts.SourceFile): FoundComment[] => {
-      let found = commented.get(file);
-      if (found === undefined) {
-        found = findDocComments(compiler, file);
-        commented.set(file, found);
-      }
-      return found;
-    };
-    return {
-      extensions,
-      since: typescriptReadersSince,
-      declarations(text) {
-        const { compiler, file } = parse(text);
-        const docTexts = comments(compiler, file).map((comment) => comment.text);
-        return declare(compiler, file, docTexts);
-      },
-      reexports(text) {
-        const { compiler, file } = parse(text);
-        return listReexports(compiler, file);
-      },
-      docComments(text) {
-        const { compiler, file } = parse(text);
-        return comments(compiler, file).map(({ line, text: comment }) => ({
-          line,
-          text: comment,
-        }));
-      },
-      links(text) {
-        const { compiler, file } = parse(text);
-        return readLinks(compiler, file, comments(compiler, file), readGlobals);
-      },
-    };
-  });
+      const file = compiler.createSourceFile(
+        `source${extensions[0]}`,
+        text,
+        compiler.ScriptTarget.Latest,
+        false,
+        compiler.ScriptKind[kind],
+      );
+      return readFile(compiler, file, javascript);
+    },
+    globals: readGlobals,
+  }));
 }

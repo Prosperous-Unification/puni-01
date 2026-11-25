@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { SourceReader } from '@puni/shared-checkout';
 import { closeAfterEach } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { typescriptModule } from './module';
 import { typescriptReadersSince } from './source-readers.resource';
-import { createTypescriptCompiler } from './typescript-compiler.repository';
+import { GlobalTypesMissing } from './failures';
+import {
+  createTypescriptCompiler,
+  globalTypePackages,
+  openTypescriptCompiler,
+} from './typescript-compiler.repository';
 
 const track = closeAfterEach();
 
@@ -25,8 +31,8 @@ function readerOf(extension: string): SourceReader {
 /** The names `text` declares, read as a file of `extension`, sorted. */
 function declared(text: string, extension = '.ts'): string[] {
   return readerOf(extension)
-    .declarations(text)
-    .map(({ name }) => name)
+    .read(text)
+    .declarations.map(({ name }) => name)
     .sort();
 }
 
@@ -141,10 +147,11 @@ describe('the TypeScript source readers', () => {
       'default',
       'ambient',
       'Glob',
+      'Cart.base',
     ]) {
       expect([name, names.includes(name)]).toEqual([name, true]);
     }
-    for (const name of ['Cart.plain', 'Cart.constructor', 'Cart.base', 'Pricing.no', 'local.m']) {
+    for (const name of ['Cart.plain', 'Cart.constructor', 'Pricing.no', 'local.m']) {
       expect([name, names.includes(name)]).toEqual([name, false]);
     }
   });
@@ -153,6 +160,40 @@ describe('the TypeScript source readers', () => {
     expect(declared("import eq = require('./other');\nconst value = 1;\nexport = value;")).toEqual([
       'eq',
       'value',
+    ]);
+  });
+
+  test('declare what module.exports assigns, and a typedef only of JavaScript at tag position', () => {
+    expect(declared('module.exports = { a, b: 1, c() {} };', '.cjs')).toEqual(['a', 'b', 'c']);
+    const tags =
+      '/** @typedef {Object} Tagged\n * Not at tag position: @typedef Prose */\nexport const x = 1;';
+    expect([declared(tags, '.js'), declared(tags, '.ts')]).toEqual([['Tagged', 'x'], ['x']]);
+  });
+
+  test('inherit the members of a base declared in the file, closed only when it is', () => {
+    const text = [
+      'class Base { base = 1; }',
+      'export class Sub extends Base { own = 1; }',
+      'export class Far extends Elsewhere { own = 1; }',
+      'export interface Both extends Shape, Base { b: 1 }',
+      'interface Shape { area: number }',
+    ].join('\n');
+    expect(declared(text).filter((name) => name.includes('.'))).toEqual([
+      'Both.area',
+      'Both.b',
+      'Both.base',
+      'Far.own',
+      'Sub.base',
+      'Sub.own',
+    ]);
+  });
+
+  test('read a deeply nested expression without exhausting the stack', () => {
+    const deep = `/** Sums {@link gone}. */\nexport const sum = ${Array.from({ length: 8000 }, () => '1').join(' + ')};`;
+    const reading = readerOf('.ts').read(deep);
+    expect([reading.declarations.map(({ name }) => name), reading.links.length]).toEqual([
+      ['sum'],
+      1,
     ]);
   });
 
@@ -169,7 +210,7 @@ describe('the TypeScript source readers', () => {
   });
 
   test('give each declaration the range of its text, its doc comment excluded', () => {
-    const declarations = readerOf('.ts').declarations(source);
+    const { declarations } = readerOf('.ts').read(source);
     const textOf = (name: string) => {
       const found = declarations.find((declaration) => declaration.name === name);
       return found === undefined ? undefined : source.slice(found.range.start, found.range.end);
@@ -181,7 +222,7 @@ describe('the TypeScript source readers', () => {
   });
 
   test('name the modules a file re-exports whole, not those it re-exports by name', () => {
-    expect(readerOf('.ts').reexports(source)).toEqual(['./everything']);
+    expect(readerOf('.ts').read(source).reexports).toEqual(['./everything']);
   });
 
   test('list every doc comment with the line of its first text, markers stripped, and no other comment', () => {
@@ -205,7 +246,7 @@ describe('the TypeScript source readers', () => {
       '/**/',
       '/** At the end. */',
     ].join('\n');
-    expect(readerOf('.ts').docComments(text)).toEqual([
+    expect(readerOf('.ts').read(text).docComments).toEqual([
       { line: 2, text: 'Opens `libs/a.ts`.\n\n@example\n```ts\nopen();\n```' },
       { line: 10, text: 'An inner note.' },
       { line: 18, text: 'At the end.' },
@@ -215,7 +256,7 @@ describe('the TypeScript source readers', () => {
   test('read JSX in .tsx, .jsx and .js files, and no comment in JSX text', () => {
     const view = 'export const View = () => <p>/** {@link Gone} `libs/gone.ts` */</p>;';
     for (const extension of ['.tsx', '.jsx', '.js']) {
-      expect([extension, declared(view, extension), readerOf(extension).links(view)]).toEqual([
+      expect([extension, declared(view, extension), readerOf(extension).read(view).links]).toEqual([
         extension,
         ['View'],
         [],
@@ -224,6 +265,10 @@ describe('the TypeScript source readers', () => {
     expect(declared('/** Doubles. */\nexport function double(x) { return x * 2; }', '.js')).toEqual(
       ['double'],
     );
+    const jsxText = 'export const Note = () => (\n  <p>\n    /** see `libs/gone.ts` */\n  </p>\n);';
+    for (const extension of ['.tsx', '.jsx']) {
+      expect([extension, readerOf(extension).read(jsxText).docComments]).toEqual([extension, []]);
+    }
     const attributed = 'export const v = <a href="x">{1}</a>, after = 2;';
     for (const extension of ['.js', '.jsx', '.tsx']) {
       expect([extension, declared(attributed, extension)]).toEqual([extension, ['after', 'v']]);
@@ -231,11 +276,18 @@ describe('the TypeScript source readers', () => {
   });
 });
 
-/** The links of `text` as a `.ts` file, each as `<target> <resolves>`. */
-function links(text: string): string[] {
-  return readerOf('.ts')
-    .links(text)
-    .map(({ target, line, resolves }) => `${String(line)} ${target} ${String(resolves)}`);
+/**
+ * The links of `text` as a file of `extension`, each as `<line> <target> <resolves>`, a link the
+ * file does not resolve resolving when its head is a global.
+ */
+function links(text: string, extension = '.ts'): string[] {
+  const reader = readerOf(extension);
+  return reader
+    .read(text)
+    .links.map(
+      ({ target, line, head, resolved }) =>
+        `${String(line)} ${target} ${String(resolved || reader.globals().has(head))}`,
+    );
 }
 
 const linking = [
@@ -285,6 +337,7 @@ describe('the links of the TypeScript readers', () => {
       .map((line) => line.split(' ')[1]);
     const refused = read.filter((line) => line.endsWith(' false'));
     expect(refused).toEqual([
+      '12 Shaped false',
       '19 SeeLink false',
       '25 Gone false',
       '32 Box.nope false',
@@ -299,7 +352,6 @@ describe('the links of the TypeScript readers', () => {
       'globalThis',
       'NodeJS.Timeout',
       'Window',
-      'Shaped',
       'join',
       'Other',
       'def',
@@ -329,6 +381,73 @@ describe('the links of the TypeScript readers', () => {
     ).toEqual(['2 A true', '3 B true']);
   });
 
+  test('resolve a name declared anywhere in the file, at any depth', () => {
+    const text = [
+      'export namespace Outer { export namespace Ns { export const v = 1; } }',
+      'export const run = (arrowParam: number) => {',
+      '  for (const loopVar of [1]) { void loopVar; }',
+      '  try { void 0; } catch (caughtErr) { void caughtErr; }',
+      '  return { method(objectParam: number) { return objectParam; } };',
+      '};',
+      'export interface Typed { handler: (signatureParam: string) => void }',
+      '/**',
+      ' * {@link arrowParam}, {@link loopVar}, {@link caughtErr}, {@link objectParam},',
+      ' * {@link signatureParam}, {@link Ns}, {@link Ns.anything}, {@link run.name}, {@link run.call}.',
+      ' */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text).filter((line) => !line.endsWith(' true'))).toEqual([]);
+  });
+
+  test('take no URL, module path, file path or anchor for a name', () => {
+    expect(
+      links(
+        '/** {@link https://a.b/c}, {@link module:x}, {@link ./x.ts}, {@link #v}, {@link Gone:x}. */\nexport const a = 1;',
+      ),
+    ).toEqual([]);
+  });
+
+  test('check members only of a top-level shape the file closes, a function or class having those of every function', () => {
+    const text = [
+      'export function Fn() {}',
+      'export class Klass { m() {} }',
+      'export type Open = { a: 1 } | Other;',
+      'export type Shut = { a: 1 } | { b: 2 };',
+      'export const shadowed = { a: 1 };',
+      'function local(shadowed: { z: 1 }) { return shadowed; }',
+      '/**',
+      ' * {@link Fn.call}, {@link Klass.prototype}, {@link Klass.name}, {@link Open.any},',
+      ' * {@link Shut.b}, {@link Shut.c}, {@link shadowed.z}, {@link Fn.nope}.',
+      ' */',
+      'export const after = local;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '9 Shut.c false',
+      '9 Fn.nope false',
+    ]);
+  });
+
+  test('take a global only from the libraries or a global block, not a module top level', () => {
+    expect(
+      links(
+        [
+          "declare module 'shop' { global { interface FromModule {} } }",
+          'declare global { interface FromGlobal {} }',
+          '/** {@link FromModule}, {@link FromGlobal}, {@link ReadableStream}, {@link NotGlobalAnywhere}. */',
+          'export const a = 1;',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      '3 FromModule true',
+      '3 FromGlobal true',
+      '3 ReadableStream true',
+      '3 NotGlobalAnywhere false',
+    ]);
+    const module = readerOf('.ts').read('export interface Exported {}\ninterface Local {}');
+    const script = readerOf('.ts').read('interface Scripted {}\ndeclare const value: number;');
+    expect([module.ambient, script.ambient]).toEqual([[], ['Scripted', 'value']]);
+  });
+
   test('accept any member of a shape the file cannot list whole', () => {
     expect(
       links(
@@ -354,6 +473,17 @@ describe('the TypeScript compiler', () => {
     expect(dependencies['@typescript/old']).toBe(
       `npm:typescript@${createTypescriptCompiler().load().version}`,
     );
+  });
+
+  test('refuses, naming the package, global types that are not installed', () => {
+    throws(
+      () => openTypescriptCompiler(['no-such-global-types']).globalDeclarationTexts(),
+      (caught) =>
+        caught instanceof GlobalTypesMissing &&
+        caught.message ===
+          'the global types of no-such-global-types are not installed beside puni; reinstall puni with its dependencies',
+    );
+    expect(globalTypePackages).toEqual(['bun-types']);
   });
 
   test('reads the global declarations once, the same texts on every call', () => {

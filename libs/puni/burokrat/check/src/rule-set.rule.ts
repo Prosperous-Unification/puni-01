@@ -48,6 +48,7 @@ import {
   judgeMarkdownPaths,
 } from './rules/docs.rule';
 import { judgeDocLinks, judgeDocReferences, judgeDocSpans } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import {
   forbidPlaintextSecrets,
@@ -103,6 +104,7 @@ export const codeRules: readonly LeveledRule[] = [
     judgeDocReferences,
     judgeDocSpans,
     judgeDocLinks,
+    judgeSourceReading,
     judgeEntryKinds,
   ].map(at('project')),
 ];
@@ -143,6 +145,7 @@ export const crossProjectRules: readonly Rule[] = [
   judgeDocSymbols,
   judgeDocReferences,
   judgeDocSpans,
+  judgeDocLinks,
   judgeEntryKinds,
 ];
 
