@@ -5,11 +5,10 @@ read-when: the gate fails, a finding names a rule you do not know, or you change
 
 # The gate
 
-Nx owns the task graph: affected projects, caching, ESLint under `lint`, and the sync generator
-keeping `wiki/index/` current; `bun fmt` formats. Burokrat judges what no tool knows:
+Nx owns the task graph: affected projects, caching and ESLint under `lint`; `bun fmt` formats. Burokrat judges what no tool knows:
 `puni burokrat check` applies the rules of
 [rule-set.rule.ts](../libs/puni/burokrat/check/src/rule-set.rule.ts), whose JSDoc says which run
-per project, which across projects and which only on the whole repository. It applies only the
+per project, which only for the root project and which across projects. It applies only the
 rules that apply at the `rules` pin of [puni.json](../puni.json), by their `since` and `until`,
 and names the newer ones; `puni burokrat repo upgrade` raises the pin once the repository passes
 them. The `gate` and
@@ -23,13 +22,11 @@ requires, passes when all three do.
 
 `bun run gate` runs its steps in order and stops at the first that fails.
 
-- **`nx sync:check`** names a stale or hand-made file under `wiki/index/`: run `bun run fix`. If
-  the generator itself fails, fix what its message names; never remove it from `nx.json` as Nx
-  suggests (the `nx.sync` rule refuses its absence).
 - **`bun fmt --check`**: run `bun run fix`.
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word
-  budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`.
+  budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`,
+  but for the map's `indexWordBudget`, which its renderer in the checkout library obeys.
 - **`puni burokrat check --commits <base>..<head>`** runs in `gate:affected` over a pull
   request's commits, in CI's `pushed-commits` job over every push to any branch or tag, and over
   a merge group. It prints `<rule> <commit>:<path>: <message>; fix: <remedy>`: that commit adds a

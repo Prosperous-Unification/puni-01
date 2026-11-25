@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  checkoutModule,
-  formatRegistry,
-  readRulesSection,
-  renderIndex,
-} from '@puni/shared-checkout';
-import type { CommandBrief } from '@puni/shared-command';
+import { checkoutModule, formatRegistry, readRulesSection } from '@puni/shared-checkout';
 import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { RepoInitRequest } from './contract';
@@ -21,10 +15,6 @@ const sourceTree: MemoryTree = {
 };
 const here = '/w/shop';
 const records = '/w/shop-records';
-const commands: readonly CommandBrief[] = [
-  { path: 'puni burokrat', brief: 'Judge.' },
-  { path: 'puni burokrat check', brief: 'Judge the repository.' },
-];
 
 function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } }) {
   const host = memoryHost(tree);
@@ -33,7 +23,6 @@ function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } })
       .withInstalledModules([checkoutModule, burokratRepoModule])
       .withServices(host.services)
       .withServices({
-        commandCatalog: () => ({ list: () => commands }),
         programSource: () => ({ directory: `${source}/apps/puni/cli/src`, version: '9.8.7' }),
         latestRules: () => ({
           epoch: 3,
@@ -90,7 +79,6 @@ describe('burokrat repo init', () => {
       ].join('\n'),
       stderr: '',
     });
-    const index = renderIndex([], commands);
     expect(created()).toEqual(
       [
         `${here}/.gitignore`,
@@ -98,7 +86,6 @@ describe('burokrat repo init', () => {
         `${here}/CLAUDE.md`,
         `${here}/README.md`,
         `${here}/puni.json`,
-        ...[...index.keys()].map((path) => `${here}/${path}`),
         `${records}/.gitignore`,
         `${records}/AGENTS.md`,
         `${records}/CLAUDE.md`,
@@ -125,7 +112,8 @@ describe('burokrat repo init', () => {
     expect(agents).toContain('<https://github.com/acme/shop-records>');
     expect(agents).toContain('`../shop-records`');
     expect(agents).not.toContain('{{');
-    for (const [path, generated] of index) expect(text(`${here}/${path}`)).toBe(generated);
+    expect(agents).toContain('`puni burokrat wiki map`');
+    expect(text(`${here}/README.md`)).toContain('`puni burokrat wiki map`');
     expect(text(`${records}/AGENTS.md`)).toStartWith('# shop-records\n\nRecords for `shop`');
     expect(text(`${records}/AGENTS.md`)).not.toContain('{{');
     for (const root of [here, records]) {

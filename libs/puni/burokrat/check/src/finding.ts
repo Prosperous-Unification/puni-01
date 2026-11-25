@@ -4,9 +4,9 @@ import {
   type CheckScope,
   findOwner,
   type Project,
+  type ProjectSource,
   type RepositoryRegistry,
   type RepositoryType,
-  type WikiIndexResource,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
@@ -26,8 +26,8 @@ export type ReferenceReach =
 
 /**
  * What a rule judges: the checkout, the project's registry, the composed CLI's commands, the
- * scope of the run, the references it reaches, and the resources that read the index sources
- * and the records. A project-level rule judges only what its scope owns.
+ * scope of the run, the references it reaches, the project sources the map is read with, and the
+ * records. A project-level rule judges only what its scope owns.
  */
 export interface RuleReading {
   readonly files: CheckoutFiles;
@@ -36,7 +36,7 @@ export interface RuleReading {
   readonly commands: readonly CommandBrief[];
   readonly scope: CheckScope;
   readonly references: ReferenceReach;
-  readonly wikiIndex: WikiIndexResource;
+  readonly projectSources: readonly ProjectSource[];
   readonly records: RecordsCatalog;
 }
 
@@ -55,8 +55,9 @@ export interface Breach {
  * pin. So a rule applies to a repository pinned at `pin` when `since <= pin` and, if it has an
  * `until`, `pin < until`. A new rule takes the next epoch as its `since`. A rule made to refuse
  * what it accepted ships as two objects: the old one given `until: N`, and the new one (the same
- * id is allowed) with `since: N`. A rule whose subject puni no longer produces may be retired, by
- * an `until` with no successor or by deleting it, and is listed in `retiredRules`.
+ * id is allowed) with `since: N`. A rule object ended by an `until` with no successor is retired
+ * and listed in `retiredRules`. Deleting a rule outright is a loosening, which keeps the contract,
+ * and is not listed.
  */
 export interface Rule {
   /** A stable `subject.rule` id. */
@@ -71,11 +72,11 @@ export interface Rule {
 }
 
 /**
- * The level a rule judges at. A `whole` rule runs only when the whole repository is judged; a
- * `repository` rule also runs for the root project; a `project` rule runs in every scope and
- * judges only what the scope owns, so each finding comes from exactly one project.
+ * The level a rule judges at. A `repository` rule runs when the whole repository is judged and
+ * for the root project; a `project` rule runs in every scope and judges only what the scope owns,
+ * so each finding comes from exactly one project.
  */
-export type RuleLevel = 'whole' | 'repository' | 'project';
+export type RuleLevel = 'repository' | 'project';
 
 /** A rule and the level it judges at. */
 export interface LeveledRule {

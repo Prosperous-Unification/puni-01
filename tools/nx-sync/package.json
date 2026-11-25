@@ -1,7 +1,0 @@
-{
-  "name": "@puni/nx-sync",
-  "version": "0.0.0",
-  "private": true,
-  "type": "commonjs",
-  "generators": "./generators.json"
-}

@@ -24,7 +24,6 @@ import { ownsPath } from './ownership';
 import { commitMessagePath, leavesRoot } from './paths';
 import { recordDirectories } from './record-directories';
 import type { RepositoryType } from './registry';
-import { indexDirectory } from './render-index';
 import { seedFiles } from './seed-files';
 import { readOrRefuse } from './unreadable';
 
@@ -41,70 +40,38 @@ function normalise(path: string): string {
   return normal;
 }
 
-/** Where a checkout writes: the files and the directories it may change, and how to say so. */
-interface WriteArea {
-  readonly description: string;
-  holdsFile(normal: string): boolean;
-  /** Where the checkout removes files, which may be less than where it writes them. */
-  readonly removedDescription: string;
-  removesFile(normal: string): boolean;
-  holdsDirectory(normal: string): boolean;
-}
-
-/** How a path is changed: a file written or removed, or a directory emptied. */
-type Change = 'write' | 'remove' | 'directory';
-
 const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
- * The files a system-state checkout writes outside the generated index: the registry and the
- * entry file whose rules section follows its `rules` pin.
+ * The files a system-state checkout writes: the registry and the entry file whose rules section
+ * follows its `rules` pin.
  */
 const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md'];
 
-/**
- * The write area of a checkout of each type: a system-state checkout writes only the generated
- * index, anywhere below `wiki/index/`, and the {@link pinnedFiles}, and removes only index
- * files and a file standing where `wiki/index` belongs; a records checkout writes and removes
- * only record files, directly inside a kind directory, and empties no directory.
- */
-const inIndex = (normal: string): boolean =>
-  normal === indexDirectory || normal.startsWith(`${indexDirectory}/`);
-
-const inKindDirectory = (normal: string): boolean =>
-  kindDirectories.includes(posix.dirname(normal));
-
-const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
+/** Where a checkout of each type writes, and how to say so. */
+const writeAreas: Readonly<
+  Record<RepositoryType, { readonly description: string; holdsFile(normal: string): boolean }>
+> = {
   'system-state': {
-    description: `inside ${indexDirectory}/ or ${pinnedFiles.join(' or ')}`,
-    holdsFile: (normal) => pinnedFiles.includes(normal) || inIndex(normal),
-    removedDescription: `inside ${indexDirectory}/`,
-    removesFile: inIndex,
-    holdsDirectory: inIndex,
+    description: pinnedFiles.join(' or '),
+    holdsFile: (normal) => pinnedFiles.includes(normal),
   },
   'system-records': {
     description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    holdsFile: inKindDirectory,
-    removedDescription: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    removesFile: inKindDirectory,
-    holdsDirectory: () => false,
+    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
   },
 };
 
-/** `path` normalised, refused unless the write area of a `type` checkout allows `change` there. */
-function normaliseWritten(path: string, type: RepositoryType, change: Change): string {
+/**
+ * `path` normalised, refused unless a `type` checkout writes it: a system-state checkout writes
+ * only the {@link pinnedFiles}; a records checkout writes only record files, directly inside a
+ * kind directory.
+ */
+function normaliseWritten(path: string, type: RepositoryType): string {
   const normal = normalise(path);
   const area = writeAreas[type];
-  const allowed =
-    change === 'write'
-      ? area.holdsFile(normal)
-      : change === 'remove'
-        ? area.removesFile(normal)
-        : area.holdsDirectory(normal);
-  if (!allowed) {
-    const [where, verb] =
-      change === 'remove' ? [area.removedDescription, 'removes'] : [area.description, 'writes'];
-    refuse(path, `is not ${where}, the only place a ${type} checkout ${verb}`);
+  if (!area.holdsFile(normal)) {
+    refuse(path, `is not ${area.description}, the only place a ${type} checkout writes`);
   }
   return normal;
 }
@@ -180,14 +147,6 @@ function openCheckout(
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
     fileSystem.stat(absolute(path), 'no-follow');
-  const removeEmptyBelow = (directory: string): void => {
-    for (const entry of fileSystem.list(join(root, directory))) {
-      if (entry.kind !== 'directory') continue;
-      const path = posix.join(directory, entry.name);
-      removeEmptyBelow(path);
-      if (fileSystem.list(join(root, path)).length === 0) fileSystem.remove(join(root, path));
-    }
-  };
   return {
     root,
     readText(path) {
@@ -216,12 +175,12 @@ function openCheckout(
       return head.text;
     },
     write(path, text) {
-      const normal = normaliseWritten(path, type, 'write');
+      const normal = normaliseWritten(path, type);
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
     createFile(path, text) {
-      const normal = normaliseWritten(path, type, 'write');
+      const normal = normaliseWritten(path, type);
       ensureCreateParents(fileSystem, root, normal);
       try {
         fileSystem.writeNew(join(root, normal), text);
@@ -230,12 +189,6 @@ function openCheckout(
         if (cause instanceof Error && 'code' in cause && cause.code === 'EEXIST') return 'exists';
         throw cause;
       }
-    },
-    remove(path) {
-      fileSystem.remove(join(root, normaliseWritten(path, type, 'remove')));
-    },
-    removeEmptyDirectories(directory) {
-      removeEmptyBelow(normaliseWritten(directory, type, 'directory'));
     },
   };
 }
@@ -260,8 +213,6 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
     listIndexEntries: () => [],
     write: readOnly,
     createFile: readOnly,
-    remove: readOnly,
-    removeEmptyDirectories: readOnly,
   };
 }
 
@@ -305,8 +256,7 @@ function openCommits(
       listVisibleEntries: () => paths.map((path) => ({ path, kind: 'file' })),
       listIndexEntries: () => [],
       write: readOnly,
-      remove: readOnly,
-      removeEmptyDirectories: readOnly,
+      createFile: readOnly,
     };
     return files;
   };
@@ -367,8 +317,8 @@ function requirePlace(root: string, place: NewCheckoutPlace, fileSystem: FileSys
 }
 
 /**
- * The {@link NewCheckout} at `root`: it adds the {@link seedFiles} of `type` and, for a
- * system-state repository, files inside the generated index, each only where nothing exists.
+ * The {@link NewCheckout} at `root`: it adds the {@link seedFiles} of `type`, each only where
+ * nothing exists.
  */
 function createCheckout(
   root: string,
@@ -378,18 +328,11 @@ function createCheckout(
 ): NewCheckout {
   requirePlace(root, place, fileSystem);
   const seeds = seedFiles[type];
-  const holdsIndex = (normal: string): boolean =>
-    type === 'system-state' && normal.startsWith(`${indexDirectory}/`);
   const normaliseNew = (path: string, kind: 'file' | 'symlink'): string => {
     const normal = normalise(path);
-    if (seeds[normal] !== kind && !(kind === 'file' && holdsIndex(normal))) {
+    if (seeds[normal] !== kind) {
       const listed = Object.keys(seeds).filter((seed) => seeds[seed] === kind);
-      const index =
-        kind === 'file' && type === 'system-state' ? `, or inside ${indexDirectory}/` : '';
-      refuse(
-        path,
-        `is not a ${kind} a new ${type} repository starts with (${listed.join(', ')}${index})`,
-      );
+      refuse(path, `is not a ${kind} a new ${type} repository starts with (${listed.join(', ')})`);
     }
     if (fileSystem.stat(join(root, normal), 'no-follow') !== 'absent') {
       refuse(path, 'already exists; a new repository replaces nothing');

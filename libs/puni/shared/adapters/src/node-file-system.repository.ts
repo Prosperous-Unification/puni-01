@@ -127,9 +127,6 @@ export function createNodeFileSystem(): FileSystem {
       writeFileSync(requireAbsolute(path), text);
     },
     writeNew,
-    remove(path) {
-      rmSync(requireAbsolute(path), { recursive: true });
-    },
     makeDirectory(path) {
       mkdirSync(requireAbsolute(path), { recursive: true });
     },

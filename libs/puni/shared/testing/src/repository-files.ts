@@ -21,6 +21,7 @@ export function writeRepositoryFile(root: string, path: string, content: string)
 export interface FixtureMetadata {
   readonly readWhen?: string | undefined;
   readonly readFirst?: string | undefined;
+  readonly index?: readonly string[] | undefined;
 }
 
 /**

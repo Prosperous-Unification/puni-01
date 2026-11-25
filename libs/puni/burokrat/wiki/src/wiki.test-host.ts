@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry, renderIndex } from '@puni/shared-checkout';
-import type { CommandBrief } from '@puni/shared-command';
+import { formatRegistry } from '@puni/shared-checkout';
 import {
   fixtureRemotes,
   runGit,
@@ -10,35 +9,27 @@ import {
   writeRepositoryFile,
 } from '@puni/shared-testing';
 
-/** The command tree the fixture repository is indexed with. */
-export const fixtureCommands: readonly CommandBrief[] = [
-  { path: 'demo dash', brief: 'Do it.' },
-  { path: 'demo dash ops', brief: 'Operate.' },
-  { path: 'demo dash ops ssh', brief: 'Reach a node.' },
-  { path: 'demo burokrat', brief: 'Judge.' },
-  { path: 'demo burokrat check', brief: 'Check.' },
-];
+/** The `puni.json` of a fixture repository whose map gives `map` as the partitions' purposes. */
+export function formatFixtureRegistry(map: Readonly<Record<string, string>>): string {
+  return formatRegistry('system-state', fixtureRemotes, 1, new Map(Object.entries(map)));
+}
 
 /**
- * A fresh git repository `demo` in a directory `scratchDirectories` creates, the index sources a wiki index needs:
- * `puni.json`, the root project, one project `one` under `apps/`, an empty `libs/`, and the
- * index generated from them. `scratchDirectories` removes it.
+ * A fresh git repository `demo` in a directory `scratchDirectories` creates, holding what a map
+ * needs: `puni.json` giving the partition `app` its purpose, the root project, one project `one`
+ * under `apps/` tagged `scope:app`, an empty `libs/`, and the page `wiki/gate.md`.
+ * `scratchDirectories` removes it.
  */
 export function makeRepository(scratchDirectories: ScratchDirectoryOwner): string {
   const root = join(scratchDirectories.createDirectory('puni-wiki-'), 'demo');
-  writeRepositoryFile(root, 'puni.json', formatRegistry('system-state', fixtureRemotes, 1));
+  writeRepositoryFile(root, 'puni.json', formatFixtureRegistry({ app: 'changing the app' }));
   writeRepositoryFile(root, 'project.json', JSON.stringify({ name: 'workspace' }));
   writeProject(root, 'apps/one', 'one', {
     readWhen: 'changing the one app',
     readFirst: 'src/index.ts',
   });
   mkdirSync(join(root, 'libs'));
-  const entries = [
-    { name: 'one', path: 'apps/one/src/index.ts', readWhen: 'changing the one app', scope: 'app' },
-  ];
-  for (const [path, text] of renderIndex(entries, fixtureCommands)) {
-    writeRepositoryFile(root, path, text);
-  }
+  writeRepositoryFile(root, 'wiki/gate.md', '---\ntitle: Gate\nread-when: the gate fails\n---\n');
   runGit(root, ['init', '-q']);
   runGit(root, ['add', '-A']);
   return root;

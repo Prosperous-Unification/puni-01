@@ -1,14 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { appendFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  findOwner,
-  formatRegistry,
-  indexFile,
-  ownsPath,
-  type RepositoryType,
-} from '@puni/shared-checkout';
+import { findOwner, formatRegistry, ownsPath, type RepositoryType } from '@puni/shared-checkout';
 import {
   FixtureGitFailed,
   fixtureRemotes,
@@ -17,12 +11,12 @@ import {
   writeProject,
   writeRepositoryFile,
 } from '@puni/shared-testing';
-import { agentsWordBudget, indexWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
+import { agentsWordBudget, pageWordBudget, readmeWordBudget } from './budgets';
 import { type CheckHost, openCheckHost } from './check.test-host';
-import { formatFinding } from './finding';
+import { appliesAt } from './finding';
 import { codeRules, crossProjectRules } from './rule-set.rule';
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
-import { makeRepository, regenerateIndex } from './repository-pair.test-host';
+import { fixturePurposes, makeRepository } from './repository-pair.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
@@ -45,19 +39,18 @@ function listProjects() {
   return host.container.resolve('checkoutProjectScope').list(openFiles());
 }
 
-/** The fixture repository with a second project, `two`, and its index regenerated. */
-async function makeTwoProjectRepository(): Promise<string> {
-  const repository = await makeRepository(scratchDirectories);
+/** The fixture repository pinned at epoch 2, with a second project, `two`. */
+function makeTwoProjectRepository(): string {
+  const repository = makeRepository(scratchDirectories, 2);
   writeProject(repository, 'libs/two', 'two', {
     readWhen: 'changing two',
     readFirst: 'src/index.ts',
   });
-  await regenerateIndex(repository);
   return repository;
 }
 
-beforeEach(async () => {
-  root = await makeTwoProjectRepository();
+beforeEach(() => {
+  root = makeTwoProjectRepository();
 });
 
 interface Run {
@@ -83,7 +76,7 @@ function words(count: number): string {
 /** Defects for every code rule, spread over the root and both projects, in two compatible sets. */
 const seeds: readonly (readonly [string, () => void])[] = [
   [
-    'entry files, per-file rules and index sources',
+    'entry files, per-file rules and map sources',
     () => {
       writeRepositoryFile(root, 'AGENTS.md', words(agentsWordBudget + 1));
       rmSync(join(root, 'CLAUDE.md'));
@@ -110,7 +103,6 @@ const seeds: readonly (readonly [string, () => void])[] = [
         'libs/two/docs/notes.md',
         'See [up](../../../apps/one/x.md) on 2031-04-06.\n',
       );
-      writeRepositoryFile(root, indexFile, words(indexWordBudget + 1));
       writeProject(
         root,
         'libs/three',
@@ -147,12 +139,23 @@ const seeds: readonly (readonly [string, () => void])[] = [
     },
   ],
   [
-    'missing AGENTS.md, long README and a stale index',
+    'missing AGENTS.md, long README, a crowded partition and an unused purpose',
     () => {
       rmSync(join(root, 'AGENTS.md'));
-      writeRepositoryFile(root, 'nx.json', '{}');
       writeRepositoryFile(root, 'README.md', words(readmeWordBudget + 1));
-      appendFileSync(join(root, indexFile), 'stale');
+      writeRepositoryFile(root, 'wiki/index/index.md', '# Wiki index\n');
+      for (const index of Array.from({ length: 20 }, (_, at) => String(at))) {
+        writeProject(root, `libs/many${index}`, `many${index}`, {
+          readWhen: `changing ${'many '.repeat(18)}things`,
+          readFirst: 'src/index.ts',
+        });
+      }
+      const purposes = new Map([...fixturePurposes, ['navigator', 'planning the work']]);
+      writeRepositoryFile(
+        root,
+        'puni.json',
+        formatRegistry('system-state', fixtureRemotes, 2, purposes),
+      );
     },
   ],
   [
@@ -161,28 +164,19 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'AGENTS.md',
-        'Start at `wiki/index/index.md`.\n\n## Exceptions\n\nNone.\n',
+        'Start at `puni burokrat wiki map`.\n\n## Exceptions\n\nNone.\n',
       );
     },
   ],
 ];
 
-/** The findings of the `whole`-level rules, printed, which no partial check runs. */
-function judgeWholeLevel(): string[] {
-  return codeRules
-    .filter(({ level }) => level === 'whole')
-    .flatMap(({ rule }) => host.judge(rule, root))
-    .map(formatFinding);
-}
-
-describe('every project check, the cross-project check and the whole-level rules are the whole check', () => {
+describe('every project check and the cross-project check are the whole check', () => {
   test.each(seeds)('%s', (_name, seed) => {
     seed();
     const whole = runIn();
     const union = [
       ...projectNames.flatMap((name) => runIn(name).findings),
       ...runIn(undefined, undefined, true).findings,
-      ...judgeWholeLevel(),
     ].sort();
     expect(whole.code).toBe(1);
     expect(union).toEqual([...whole.findings].sort());
@@ -193,18 +187,13 @@ describe('every project check, the cross-project check and the whole-level rules
     const cross = runIn(undefined, undefined, true).findings;
     const projects = projectNames.flatMap((name) => runIn(name).findings);
     expect(cross.length).toBeGreaterThan(0);
-    expect(judgeWholeLevel().length).toBeGreaterThan(0);
     expect(cross.filter((line) => projects.includes(line))).toEqual([]);
   });
 
-  test('the seeds break every code rule', async () => {
+  test('the seeds break every code rule', () => {
     const broken = new Set<string>();
     for (const [, seed] of seeds) {
-      root = await makeRepository(scratchDirectories);
-      writeProject(root, 'libs/two', 'two', {
-        readWhen: 'changing two',
-        readFirst: 'src/index.ts',
-      });
+      root = makeTwoProjectRepository();
       seed();
       for (const line of runIn().findings) broken.add(line.split(' ')[0] ?? '');
     }
@@ -217,7 +206,8 @@ describe('every project check, the cross-project check and the whole-level rules
         'agents.words',
         'history.date',
         'history.records',
-        'index.current',
+        'index.purpose',
+        'index.leftover',
         'index.read-first',
         'index.read-when',
         'index.scope',
@@ -235,7 +225,6 @@ describe('every project check, the cross-project check and the whole-level rules
         'agents.records',
         'ci.gate',
         'agents.rules',
-        'nx.sync',
         'secrets.addresses',
         'code.header',
         'entries.kind',
@@ -288,8 +277,9 @@ describe('project ownership', () => {
 
 describe('check --project', () => {
   test('names the project and runs only project-level rules outside the root', () => {
-    const projectRules = codeRules.filter(({ level }) => level === 'project').length;
-    const rootRules = codeRules.filter(({ level }) => level !== 'whole').length;
+    const pinned = codeRules.filter(({ rule }) => appliesAt(rule, 2));
+    const projectRules = pinned.filter(({ level }) => level === 'project').length;
+    const rootRules = pinned.length;
     expect(runIn('two')).toEqual({
       code: 0,
       findings: [],

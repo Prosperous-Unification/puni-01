@@ -6,7 +6,7 @@ import { createRulesPinUpgrade } from './rules-pin.feature';
 
 /**
  * `puni burokrat repo init` and `repo upgrade`; the host supplies the checkout resources, the
- * command catalog, the program source and the latest rules.
+ * program source and the latest rules.
  */
 export const burokratRepoModule = DiBag.createBuilder()
   .withServices({

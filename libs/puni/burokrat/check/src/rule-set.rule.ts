@@ -13,6 +13,7 @@ import {
   agentsExists,
   agentsKeepRules,
   agentsNamesIndex,
+  agentsNamesMap,
   agentsWords,
   claudeLinksAgents,
   readmeExists,
@@ -23,8 +24,9 @@ import {
 import { judgeEntryKinds } from './rules/entries.rule';
 import { confineRecordsName, forbidDates } from './rules/history.rule';
 import {
+  forbidGeneratedIndex,
   limitIndexWords,
-  matchGeneratedIndex,
+  requirePurposes,
   requireReadFirst,
   requireReadWhen,
   requireScope,
@@ -46,23 +48,23 @@ import {
   forbidRecordsAddresses,
   forbidStateAddresses,
 } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate, requireIndexSync } from './rules/workspace.rule';
+import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
 
 const at =
   (level: RuleLevel) =>
   (rule: Rule): LeveledRule => ({ level, rule });
 
 /**
- * The rules for a `system-state` repository. The generated index is judged only whole; entry
- * files, the index budget, `nx.json` and the index sources (every `project.json`, which the root
- * project's check reads) are repository-level; the per-file and per-project rules are
- * project-level.
+ * The rules for a `system-state` repository. Entry files, the map (its sources, which the root
+ * project's check reads across every project, its purposes, its budget and a leftover generated
+ * index) and the CI workflow are repository-level; the per-file and per-project rules are project-level.
  */
 export const codeRules: readonly LeveledRule[] = [
   ...[
     agentsExists,
     agentsWords,
     agentsNamesIndex,
+    agentsNamesMap,
     ...agentsKeepRules,
     stateAgentsHeadings,
     claudeLinksAgents,
@@ -71,7 +73,8 @@ export const codeRules: readonly LeveledRule[] = [
     limitIndexWords,
     matchRecordsLocation,
     requireCiGate,
-    requireIndexSync,
+    requirePurposes,
+    forbidGeneratedIndex,
     requireReadWhen,
     requireReadFirst,
     requireScope,
@@ -91,7 +94,6 @@ export const codeRules: readonly LeveledRule[] = [
     judgeDocSymbols,
     judgeEntryKinds,
   ].map(at('project')),
-  at('whole')(matchGeneratedIndex),
 ];
 
 /** The rules for the `system-records` repository, which is judged whole. */
@@ -152,8 +154,9 @@ export const checkRules: CheckRules = {
 };
 
 /**
- * The rules retired with no successor, by id, at the epoch from which they no longer apply: the
- * only ids a repository's verdict may lose when it raises its pin.
+ * The rule objects ended by an `until` with no successor, by id, at that epoch: the only ids a
+ * repository's verdict may lose when it raises its pin. A deleted rule is a loosening and is not
+ * listed.
  */
 export const retiredRules: Readonly<Record<string, number>> = {};
 

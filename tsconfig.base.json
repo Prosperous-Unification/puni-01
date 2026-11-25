@@ -27,6 +27,7 @@
       "@puni/shared-ports": ["./libs/puni/shared/ports/src/index.ts"],
       "@puni/shared-adapters": ["./libs/puni/shared/adapters/src/index.ts"],
       "@puni/shared-checkout": ["./libs/puni/shared/checkout/src/index.ts"],
+      "@puni/shared-nx": ["./libs/puni/shared/nx/src/index.ts"],
       "@puni/shared-records": ["./libs/puni/shared/records/src/index.ts"],
       "@puni/shared-testing": ["./libs/puni/shared/testing/src/index.ts"],
       "@puni/burokrat-check": ["./libs/puni/burokrat/check/src/index.ts"],
@@ -48,8 +49,7 @@
       "@puni/dash-pool": ["./libs/puni/dash/pool/src/index.ts"],
       "@puni/navigator-plan": ["./libs/puni/navigator/plan/src/index.ts"],
       "@puni/navigator-research": ["./libs/puni/navigator/research/src/index.ts"],
-      "@puni/navigator-progress": ["./libs/puni/navigator/progress/src/index.ts"],
-      "@puni/nx-sync": ["./tools/nx-sync/src/wiki-index.cjs"]
+      "@puni/navigator-progress": ["./libs/puni/navigator/progress/src/index.ts"]
     }
   }
 }

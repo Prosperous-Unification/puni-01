@@ -6,7 +6,7 @@ read-when: writing documentation, or deciding where a fact, a reason or a proced
 # Documentation
 
 This documentation is for agents working in this repository: how to operate within it. Product
-documentation, for the people who use puni, serves another audience and purpose; the index does
+documentation, for the people who use puni, serves another audience and purpose; the map does
 not route to it and these rules do not shape it.
 
 ## What is worth writing
@@ -26,11 +26,17 @@ gives every export; only what spans libraries is a wiki page.
 
 Each layer is short, and names the next:
 
-1. `AGENTS.md`, read every session: the rules, the gate, and the index.
-2. `wiki/index/index.md`, generated: a "Read when" line per page, by section, and one line per
-   partition.
-3. `wiki/index/<scope>.md`, generated: a "Read when" line per library, linking its `readFirst`.
+1. `AGENTS.md`, read every session: the rules, the gate, and the map's command.
+2. The root of the map, `bun run puni burokrat wiki map`, which the `SessionStart` hook of
+   `.claude/settings.json` prints into every Claude Code session (or the error that stopped it
+   and how to fix it): a "Read when" line per page, by section, and a line per top-level partition.
+3. A section or partition, `bun run puni burokrat wiki map <name>`: a "Read when" line per page,
+   or per library placed there, linking its `readFirst`, and the partitions below.
 4. The page, or the library's `readFirst` file and the JSDoc on its exports.
+
+The map is printed, never committed: [render-map.ts](../../libs/puni/shared/checkout/src/render-map.ts)
+says how each level is laid out. A library's partition is its `metadata.index`, else its
+`scope:<name>` tag; the `map` of `puni.json` gives each partition's purpose.
 
 A "Read when" line names the task that should open the file, not what the file holds: it is the
 only text an agent weighs before choosing.
@@ -39,10 +45,9 @@ only text an agent weighs before choosing.
 
 A page answers one "Read this when …", given as `read-when` in its front matter, within
 `pageWordBudget` words. It lives directly in `wiki/` or in one of the sections `wikiSections`
-names; the index lists each section with what its pages are for.
+names; the map lists each section with what its pages are for.
 
 A page links to the symbol, test or config entry that holds a fact rather than restating it.
-`wiki/index/` is generated from the pages and every `project.json`: never edit it, never copy it.
 
 ## How it stays true
 

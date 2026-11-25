@@ -1,12 +1,12 @@
 import { DiBag } from 'di-bag';
-import { createWikiIndexCommand } from './wiki-index.command';
-import { createWikiIndexWriter } from './wiki-index.feature';
+import { createWikiMapCommand } from './wiki-map.command';
+import { createWikiMapPrinter } from './wiki-map.feature';
 
-/** `puni burokrat wiki index`; the host supplies the checkout resources and the command catalog. */
+/** `puni burokrat wiki map`; the host supplies the checkout resources and the project sources. */
 export const burokratWikiModule = DiBag.createBuilder()
-  .withServices({ wikiIndexWriter: createWikiIndexWriter })
-  .withServices({ burokratWikiIndexCommand: createWikiIndexCommand })
+  .withServices({ wikiMapPrinter: createWikiMapPrinter })
+  .withServices({ burokratWikiMapCommand: createWikiMapCommand })
   .buildModule({
-    exportedServiceKeys: ['burokratWikiIndexCommand'],
+    exportedServiceKeys: ['burokratWikiMapCommand'],
     moduleLabel: 'puni-burokrat-wiki',
   });

@@ -1,7 +1,7 @@
 import {
   agentsSections,
   countWords,
-  indexFile,
+  formatMapCommand,
   readHeadings,
   readRulesSection,
   type RepositoryType,
@@ -50,15 +50,37 @@ export const agentsExists = requireFile(
 /** `AGENTS.md` stays within {@link agentsWordBudget}; a missing file is `agents.exists`'s. */
 export const agentsWords = limitWords('agents.words', 'AGENTS.md', agentsWordBudget);
 
-/** `AGENTS.md` names the generated entry point, `wiki/index/index.md`. */
+/** The generated index file AGENTS.md named before the map was printed. */
+const indexFile = 'wiki/index/index.md';
+
+/**
+ * `AGENTS.md` names the generated entry point, `wiki/index/index.md`: the judgement up to epoch
+ * 2, which {@link agentsNamesMap} replaces.
+ */
 export const agentsNamesIndex: Rule = {
   id: 'agents.index',
   since: 1,
-  remedy: `name ${indexFile} in AGENTS.md as the map to read first`,
+  until: 2,
+  remedy: `name ${indexFile} in AGENTS.md as the map to read first, or run \`${rulesUpgradeCommand}\` to take the rules of epoch 2`,
   judge(reading) {
     const text = readOptional(reading, 'AGENTS.md');
     if (text === undefined || text.includes(indexFile)) return [];
     return [{ path: 'AGENTS.md', message: `does not name ${indexFile}` }];
+  },
+};
+
+/** The command printing the map, as `AGENTS.md` names it, run through `bun run` or not. */
+const mapCommand = formatMapCommand('puni');
+
+/** `AGENTS.md` names the command that prints the map, `puni burokrat wiki map`. */
+export const agentsNamesMap: Rule = {
+  id: 'agents.index',
+  since: 2,
+  remedy: `replace \`${indexFile}\` in AGENTS.md with \`${mapCommand}\`; where it names neither, add the line: - Unsure where something lives? \`${mapCommand}\` prints the map from a task to the file to read first.`,
+  judge(reading) {
+    const text = readOptional(reading, 'AGENTS.md');
+    if (text === undefined || text.includes(mapCommand)) return [];
+    return [{ path: 'AGENTS.md', message: `does not name ${mapCommand}` }];
   },
 };
 

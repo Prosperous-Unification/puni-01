@@ -78,6 +78,7 @@ describe('readRegistry', () => {
       thisType: 'system-state',
       rules: 1,
       repos: { 'system-state': state, 'system-records': records },
+      map: new Map(),
     });
   });
 
@@ -94,7 +95,20 @@ describe('readRegistry', () => {
       thisType: 'system-state',
       rules: 4,
       repos: { 'system-state': state, 'system-records': records },
+      map: new Map(),
     });
+  });
+
+  test('reads the purpose of each partition from map, as formatRegistry writes it', () => {
+    const map = new Map([
+      ['dash', 'operating nodes'],
+      ['dash/ops', 'reaching a node'],
+    ]);
+    writeFileSync(
+      join(pair.state, 'puni.json'),
+      formatRegistry('system-state', fixtureRemotes, 1, map),
+    );
+    expect(readRegistry(pair.state).map).toEqual(map);
   });
 
   const defects: readonly (readonly [string, unknown, string])[] = [
@@ -103,7 +117,7 @@ describe('readRegistry', () => {
     ...(['repos', 'xtra'] as const).map((key): readonly [string, unknown, string] => [
       `an unknown top-level key ${key}`,
       { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], [key]: {} },
-      `has unknown keys ${key}; it holds only this-repo-type, rules, all-repos and keys starting x- (or upgrade puni, if a newer puni wrote them)`,
+      `has unknown keys ${key}; it holds only this-repo-type, rules, all-repos, map and keys starting x- (or upgrade puni, if a newer puni wrote them)`,
     ]),
     [
       'rules missing',
@@ -202,6 +216,33 @@ describe('readRegistry', () => {
       },
       `all-repos[1].remote.url is ${JSON.stringify(url)}; expected https://github.com/<owner>/<name> with no trailing slash or .git`,
     ]),
+    [
+      'a map not an object',
+      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], map: ['dash'] },
+      'map is ["dash"]; expected an object',
+    ],
+    ...['Dash', 'dash/', '/dash', 'dash//ops', '1dash', ''].map(
+      (path): readonly [string, unknown, string] => [
+        `a map key ${JSON.stringify(path)}`,
+        {
+          'this-repo-type': 'system-state',
+          rules: 1,
+          'all-repos': [state, records],
+          map: { [path]: 'x' },
+        },
+        `map key ${JSON.stringify(path)} is no partition path; expected lower-case segments joined by /`,
+      ],
+    ),
+    [
+      'an empty purpose',
+      {
+        'this-repo-type': 'system-state',
+        rules: 1,
+        'all-repos': [state, records],
+        map: { dash: '' },
+      },
+      'map.dash is ""; expected a non-empty string',
+    ],
     [
       'this-repo-type missing',
       { 'all-repos': [state, records] },

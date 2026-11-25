@@ -8,7 +8,7 @@ const sourceExtensions = /\.(?:[cm]?[jt]s|json|ya?ml|toml|sh)$/u;
 
 /**
  * Whether `word` reads as a code symbol rather than prose: a camelCase or compound PascalCase
- * name (`renderIndex`, `CommandExitCode`) or an upper-case name with an underscore
+ * name (`renderRootMap`, `CommandExitCode`) or an upper-case name with an underscore
  * (`PUNI_FAILURE_REPORT`). A single capitalised or lower-case word is prose.
  */
 export function isSymbolName(word: string): boolean {

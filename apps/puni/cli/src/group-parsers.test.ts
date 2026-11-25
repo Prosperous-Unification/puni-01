@@ -14,6 +14,13 @@ describe('burokratParser', () => {
     });
   });
 
+  test('wiki map takes an empty argument, for the command to refuse by name', () => {
+    expect(parse(burokratParser, ['wiki', 'map', ''])).toEqual({
+      success: true,
+      value: { kind: 'wiki map', partition: '' },
+    });
+  });
+
   test.each(['repo', 'adr', 'change', 'assess', 'review', 'skills'])(
     'a bare %s asks for its help',
     (group) => {
@@ -25,7 +32,8 @@ describe('burokratParser', () => {
   );
 
   test.each([
-    ['wiki index', { kind: 'wiki index', print: false }],
+    ['wiki map', { kind: 'wiki map', partition: undefined }],
+    ['wiki map dash/ops', { kind: 'wiki map', partition: 'dash/ops' }],
     ['skills install --platform claude', { kind: 'skills install', platform: 'claude' }],
     [
       'review start --request r.json --state s.json',
@@ -124,7 +132,9 @@ describe('burokratParser', () => {
     'review submit --state s.json',
     'skills install --platform unknown',
     'wiki --bogus',
-    'wiki index --check',
+    'wiki map --check',
+    'wiki map dash ops',
+    'wiki index',
     'check --bogus',
     'check stray',
     'check --project',

@@ -1,10 +1,13 @@
 {
   "this-repo-type": "system-state",
-  "rules": 1,
+  "rules": 2,
   "all-repos": [
     {
       "type": "system-state",
-      "remote": { "type": "github", "url": "https://github.com/Prosperous-Unification/puni-01" }
+      "remote": {
+        "type": "github",
+        "url": "https://github.com/Prosperous-Unification/puni-01"
+      }
     },
     {
       "type": "system-records",
@@ -13,5 +16,12 @@
         "url": "https://github.com/Prosperous-Unification/puni-01-records"
       }
     }
-  ]
+  ],
+  "map": {
+    "app": "changing how the puni command line is parsed, composed from its libraries and dispatched to a command",
+    "burokrat": "changing how puni judges work: the repository rules, the map, repository setup, decision records and outcome assessment",
+    "dash": "changing how puni operates: nodes, worktrees, runs, releases, admission, authority, MCP credentials and agent pools",
+    "navigator": "changing how puni plans: filing plans and research, and turning progress receipts into WBS commands",
+    "shared": "changing what every command group builds on: parsing, failures, checkouts, the map, records, host adapters and test helpers"
+  }
 }

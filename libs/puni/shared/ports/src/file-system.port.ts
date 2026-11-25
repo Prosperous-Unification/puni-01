@@ -67,12 +67,6 @@ export interface FileSystem {
    */
   writeNew(path: string, text: string): void;
   /**
-   * Removes the file or the whole directory at `path`.
-   *
-   * @throws when `path` is not absolute.
-   */
-  remove(path: string): void;
-  /**
    * Creates the directory at `path` and every missing parent.
    *
    * @throws when `path` is not absolute.

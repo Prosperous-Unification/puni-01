@@ -283,3 +283,42 @@ describe('the type-checked lint rules', () => {
     expect(await lintTyped(`${check}/probe-x.test.ts`, assertion)).toEqual([]);
   });
 });
+
+/** The tags the module-boundary rule lets a file at `path` tagged `source` import. */
+async function readAllowedTags(path: string, source: string): Promise<readonly string[]> {
+  const config: unknown = await eslint.calculateConfigForFile(join(root, path));
+  const rules = (config as { rules?: Record<string, unknown> }).rules ?? {};
+  const [, options] = (rules['@nx/enforce-module-boundaries'] ?? []) as [
+    unknown,
+    { depConstraints: { sourceTag: string; onlyDependOnLibsWithTags: string[] }[] },
+  ];
+  return options.depConstraints
+    .filter(({ sourceTag }) => sourceTag === source)
+    .flatMap(({ onlyDependOnLibsWithTags }) => onlyDependOnLibsWithTags);
+}
+
+/**
+ * A plugin is the tech-specific side of a shared interface: only the app, which composes it, and
+ * tests may import it, so no core library comes to depend on a tool. The rule itself needs the
+ * Nx project graph, which `nx run <project>:lint` gives; this pins what it is configured with.
+ */
+describe('the plugin boundary', () => {
+  test('a group or shared library may not import a plugin; its tests may', async () => {
+    for (const tag of ['type:group', 'type:shared']) {
+      expect(await readAllowedTags(`${check}/x.ts`, tag)).not.toContain('type:plugin');
+      expect(await readAllowedTags(`${check}/x.test.ts`, tag)).toContain('type:plugin');
+    }
+  });
+
+  test('a plugin imports only shared libraries, and the app anything', async () => {
+    expect(await readAllowedTags('libs/puni/shared/nx/src/x.ts', 'type:plugin')).toEqual([
+      'type:shared',
+    ]);
+    expect(await readAllowedTags('apps/puni/cli/src/x.ts', 'scope:app')).toEqual(['*']);
+  });
+
+  test('the Nx project source is the plugin', async () => {
+    const project: unknown = await Bun.file(join(root, 'libs/puni/shared/nx/project.json')).json();
+    expect((project as { tags: string[] }).tags).toEqual(['scope:shared', 'type:plugin']);
+  });
+});

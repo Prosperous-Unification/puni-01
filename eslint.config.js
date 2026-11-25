@@ -135,13 +135,15 @@ const localExportList = {
 /**
  * Library boundaries by Nx tag, written on the importing side. A role library depends only on
  * shared libraries; a group or shared library imports no adapters and no app, and only a test
- * imports `type:testing`; the app composes everything. Those last are `onlyDependOnLibsWithTags` lists, which judge direct
+ * imports `type:testing`; a plugin (`type:plugin`, the tech-specific implementation of a shared
+ * interface) depends only on shared libraries and is imported only by the app, which composes
+ * it, and by tests; the app composes everything. Those last are `onlyDependOnLibsWithTags` lists, which judge direct
  * imports: `notDependOnLibsWithTags` walks the whole project graph, where a library's own tests
  * already reach the adapters through the testing library. The rule reads the Nx project graph
  * and passes silently without one, so it is proven through `nx run <project>:lint`.
  */
 function moduleBoundaries({ testing }) {
-  const testingTags = testing ? ['type:testing'] : [];
+  const testingTags = testing ? ['type:testing', 'type:plugin'] : [];
   return {
     '@nx/enforce-module-boundaries': [
       'error',
@@ -156,6 +158,7 @@ function moduleBoundaries({ testing }) {
             onlyDependOnLibsWithTags: ['type:group', 'type:shared', ...testingTags],
           },
           { sourceTag: 'type:shared', onlyDependOnLibsWithTags: ['type:shared', ...testingTags] },
+          { sourceTag: 'type:plugin', onlyDependOnLibsWithTags: ['type:shared', ...testingTags] },
           { sourceTag: 'scope:app', onlyDependOnLibsWithTags: ['*'] },
         ],
       },
@@ -276,16 +279,7 @@ export default tseslint.config(
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
-  { files: ['**/*.js', '**/*.cjs'], ...tseslint.configs.disableTypeChecked },
-  {
-    // A CommonJS file, such as the Nx sync generator Nx loads with require, imports by require.
-    files: ['**/*.cjs'],
-    rules: { '@typescript-eslint/no-require-imports': 'off' },
-    languageOptions: {
-      sourceType: 'commonjs',
-      globals: { require: 'readonly', module: 'writable', process: 'readonly' },
-    },
-  },
+  { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
   {
     plugins: { '@eslint-community/eslint-comments': comments, jsdoc },
     rules: {

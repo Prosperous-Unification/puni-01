@@ -18,7 +18,6 @@
     "checkerSource": [
       "{projectRoot}/package.json",
       "{projectRoot}/src/**/*.ts",
-      "{projectRoot}/src/**/*.cjs",
       "!{projectRoot}/**/*.test.ts",
       "!{projectRoot}/**/*.test-host.ts"
     ]
@@ -78,9 +77,6 @@
         }
       ]
     }
-  },
-  "sync": {
-    "globalGenerators": ["@puni/nx-sync:wiki-index"]
   },
   "plugins": [],
   "pluginsConfig": {

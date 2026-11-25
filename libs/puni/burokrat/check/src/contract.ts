@@ -3,9 +3,9 @@ import type {
   CheckoutFilesResource,
   LatestRules,
   ProjectScopeResource,
+  ProjectSource,
   RepositoryRegistryResource,
   RepositoryType,
-  WikiIndexResource,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
@@ -67,7 +67,7 @@ export interface CheckRequirements {
   readonly checkoutRegistry: RepositoryRegistryResource;
   readonly checkoutFiles: CheckoutFilesResource;
   readonly checkoutProjectScope: ProjectScopeResource;
-  readonly checkoutWikiIndex: WikiIndexResource;
+  readonly projectSources: readonly ProjectSource[];
   readonly recordsCatalog: RecordsCatalog;
   readonly commandCatalog: CommandCatalog;
   readonly programSource: ProgramSource;

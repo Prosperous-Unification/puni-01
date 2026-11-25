@@ -62,7 +62,6 @@ function open({
       .withInstalledModules([checkoutModule, burokratRepoModule])
       .withServices(host.services)
       .withServices({
-        commandCatalog: () => ({ list: () => [] }),
         programSource: () => ({ directory: `${source}/apps/puni/cli/src`, version: '9.8.7' }),
         latestRules: () => latestRules,
       })

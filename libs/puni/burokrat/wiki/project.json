@@ -4,8 +4,8 @@
   "projectType": "library",
   "tags": ["scope:burokrat", "type:group"],
   "metadata": {
-    "readWhen": "changing how the generated wiki index is written",
-    "readFirst": "src/wiki-index.feature.ts"
+    "readWhen": "changing what the wiki map command prints or how it refuses a partition",
+    "readFirst": "src/wiki-map.feature.ts"
   },
   "sourceRoot": "libs/puni/burokrat/wiki/src",
   "targets": {

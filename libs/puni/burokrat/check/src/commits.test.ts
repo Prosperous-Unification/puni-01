@@ -18,8 +18,8 @@ afterAll(async () => {
   await host.close();
 });
 
-beforeEach(async () => {
-  root = await makeRepository(scratchDirectories);
+beforeEach(() => {
+  root = makeRepository(scratchDirectories);
   commit('base');
 });
 

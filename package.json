@@ -15,14 +15,14 @@
     "format:check": "bun fmt --check",
     "gate": "bun run gate:checks && bun run gate:lint && bun run gate:test",
     "gate:affected": "bun run gate:checks:affected && bun run gate:lint:affected && bun run gate:test:affected",
-    "gate:checks": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t typecheck build",
-    "gate:checks:affected": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check --commits \"${NX_BASE:?set NX_BASE to the base of the range, as NX_BASE=origin/main}..HEAD\" && nx affected -t puni-bur-check puni-bur-links && nx affected -t typecheck build",
+    "gate:checks": "{ bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t typecheck build",
+    "gate:checks:affected": "{ bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check --commits \"${NX_BASE:?set NX_BASE to the base of the range, as NX_BASE=origin/main}..HEAD\" && nx affected -t puni-bur-check puni-bur-links && nx affected -t typecheck build",
     "gate:lint": "bun run gate:lint:fast && nx run workspace:lint-all",
     "gate:lint:affected": "bun run gate:lint",
     "gate:lint:fast": "if bun lint --help 2>/dev/null | grep -q 'Find and fix problems'; then bun lint --type-aware --allow-unsupported; else echo 'gate:lint:fast: this Bun has no bun lint, so ESLint judges alone' >&2; fi",
     "gate:test": "nx run-many -t test",
     "gate:test:affected": "nx affected -t test",
-    "fix": "nx sync && bun fmt"
+    "fix": "bun fmt"
   },
   "dependencies": {
     "@optique/core": "1.4.0",

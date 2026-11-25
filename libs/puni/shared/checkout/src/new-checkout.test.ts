@@ -27,16 +27,23 @@ function caught(run: () => unknown): unknown {
 }
 
 describe('checkoutFiles.create', () => {
-  test('a new system-state repository adds its entry files, its link and the index', () => {
+  test('a new system-state repository adds its entry files and its link, nothing else', () => {
     const { host, checkoutFiles } = openHost({ '/w/new/.git/HEAD': 'ref' });
     const state = checkoutFiles.create('/w/new', 'system-state', 'empty-directory');
     for (const path of ['puni.json', 'AGENTS.md', 'README.md', '.gitignore']) {
       state.write(path, path);
     }
     state.link('CLAUDE.md', 'AGENTS.md');
-    state.write('wiki/index/index.md', 'index');
+    expect(
+      caught(() => {
+        state.write('wiki/index/index.md', 'index');
+      }),
+    ).toMatchObject({
+      message:
+        'wiki/index/index.md: is not a file a new system-state repository starts with (.gitignore, AGENTS.md, README.md, puni.json)',
+    });
     expect(host.nodes.get('/w/new/CLAUDE.md')).toEqual({ symlink: 'AGENTS.md' });
-    expect(host.nodes.get('/w/new/wiki/index/index.md')).toBe('index');
+    expect(host.nodes.has('/w/new/wiki/index/index.md')).toBe(false);
     expect(host.nodes.get('/w/new/puni.json')).toBe('puni.json');
   });
 

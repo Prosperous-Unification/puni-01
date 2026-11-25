@@ -27,8 +27,7 @@ The first leaf of a group with none also adds what step 3 of
 4. `group.ts`: add `command('<leaf>', <leaf>Parser, { brief })` to the sub-group's `or(…)`, adding
    the `or` if it held one leaf; the first leaf replaces the `constant` parser with
    `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan`
-   does. The brief, one sentence in Optique's `message` template, is the leaf's line in help and
-   the index. If the new leaf makes the group's brief untrue, rewrite it; if it makes the
+   does. The brief, one sentence in Optique's `message` template, is the leaf's line in help. If the new leaf makes the group's brief untrue, rewrite it; if it makes the
    library's `readWhen` or `readFirst` untrue, rewrite them as
    [documentation](../concepts/documentation.md#how-an-agent-finds-it) says.
 5. `module.ts`: register each service and add the command key to `exportedServiceKeys`, as
@@ -56,5 +55,4 @@ Each seam as [writing a test](write-a-test.md) says:
     `apps/puni/cli/src`, through `openInProcessPuni`. Spawn the entrypoint only for what a
     process alone shows, as `ops-entrypoint.test.ts` does for a child attached to the terminal.
 
-Then `bun run fix`, which regenerates `wiki/index/` and formats, and `bun run gate`, which must
-exit 0.
+Then `bun run fix`, which formats, and `bun run gate`, which must exit 0.

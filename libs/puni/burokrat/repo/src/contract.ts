@@ -4,7 +4,7 @@ import type {
   RepositoryRegistryResource,
   RepositoryType,
 } from '@puni/shared-checkout';
-import type { Command, CommandCatalog, ProgramSource } from '@puni/shared-command';
+import type { Command, ProgramSource } from '@puni/shared-command';
 import type { Finding } from '@puni/shared-failures';
 
 /** A parsed `repo init` request: the new system's name and, if given, its GitHub owner. */
@@ -77,7 +77,6 @@ export interface RulesPinUpgrade {
 export interface RepoRequirements {
   readonly checkoutRegistry: RepositoryRegistryResource;
   readonly checkoutFiles: CheckoutFilesResource;
-  readonly commandCatalog: CommandCatalog;
   readonly programSource: ProgramSource;
   readonly latestRules: LatestRules;
 }
