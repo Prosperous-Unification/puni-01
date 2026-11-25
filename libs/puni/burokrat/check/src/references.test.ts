@@ -517,6 +517,7 @@ describe('docs.comment-links and augmentation', () => {
       'line 2 links Options.b, a member Options does not declare',
       'line 2 links Options.c, a member Options does not declare',
     ];
+    writeRepositoryFile(root, 'libs/x/src/other.ts', 'export interface Options { z: 1 }\n');
     for (const [file, text] of [
       ['augment.ts', 'export {};\n'],
       ['augment.ts', "declare module 'options' { interface Options { b: 1 } }\nexport {};\n"],

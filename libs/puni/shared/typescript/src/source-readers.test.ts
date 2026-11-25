@@ -775,17 +775,19 @@ describe('the members TypeScript resolves', () => {
       'export const conf: Conf = make();',
       'export const wide = make() as Wide;',
       'export const gen: Box<string> = make();',
+      'interface Gen<T> { v: T }',
+      'export const local: Gen<string> = make();',
       'export const ext: External = make();',
       'export const twice: FromTwice = make();',
       '/**',
       ' * {@link conf.timeout}, {@link conf.typo}, {@link wide.timeout}, {@link wide.typo},',
-      ' * {@link gen.any}, {@link ext.any}, {@link twice.any}.',
+      ' * {@link gen.any}, {@link ext.any}, {@link twice.any}, {@link local.any}.',
       ' */',
       'export const after = 1;',
     ].join('\n');
     expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
-      '12 conf.typo false',
-      '12 wide.typo false',
+      '14 conf.typo false',
+      '14 wide.typo false',
     ]);
   });
 
