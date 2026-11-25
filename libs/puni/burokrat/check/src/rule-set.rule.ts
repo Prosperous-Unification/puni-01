@@ -62,6 +62,7 @@ import {
   judgeTypedDocReferences,
   judgeTypedDocSpans,
 } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import {
   forbidPlaintextSecrets,
@@ -124,6 +125,7 @@ export const codeRules: readonly LeveledRule[] = [
     judgeDocSpans,
     judgeTypedDocSpans,
     judgeDocLinks,
+    judgeSourceReading,
     judgeEntryKinds,
     judgeStateDocTypes,
   ].map(at('project')),
@@ -170,6 +172,7 @@ export const crossProjectRules: readonly Rule[] = [
   judgeTypedDocReferences,
   judgeDocSpans,
   judgeTypedDocSpans,
+  judgeDocLinks,
   judgeEntryKinds,
 ];
 

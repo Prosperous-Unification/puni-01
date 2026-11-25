@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  declareDocType,
-  docTypeNames,
-  isMarkdown,
-  listPlacedTypes,
-  readDocType,
-} from './doc-types';
+import { declareDocType, docTypeNames, listPlacedTypes, readDocType } from './doc-types';
 
 describe('readDocType', () => {
   test.each([
@@ -60,18 +54,5 @@ describe('where each type lives', () => {
 
   test('the types are the closed set, in order', () => {
     expect(docTypeNames).toEqual(['agents', 'readme', 'wiki-page', 'product', 'record']);
-  });
-});
-
-describe('isMarkdown', () => {
-  test.each([
-    ['a.md', true],
-    ['a.mdx', true],
-    ['a.markdown', true],
-    ['A.MD', true],
-    ['a.md.tmpl', false],
-    ['md', false],
-  ] as const)('%s: %p', (path, markdown) => {
-    expect(isMarkdown(path)).toBe(markdown);
   });
 });

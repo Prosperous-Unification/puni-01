@@ -9,7 +9,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { formatRegistry, indexWordBudget } from '@puni/shared-checkout';
+import {
+  formatRegistry,
+  indexWordBudget,
+  openSourceRegistry,
+  repositoryScope,
+  type SourceRegistry,
+} from '@puni/shared-checkout';
 import { nxPlacementHint, readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
   fixtureRemotes,
@@ -74,6 +80,7 @@ import {
   judgeTypedDocReferences,
   judgeTypedDocSpans,
 } from './rules/references.rule';
+import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
@@ -188,7 +195,7 @@ function typedPage(body: string, fields = ''): string {
 /** A breach and the one finding it makes; `remedy` is given only where it is not the rule's own. */
 type Expected = Judged & { readonly remedy?: string };
 
-const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
+const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceRegistry?])[] = [
   [
     'AGENTS.md missing',
     agentsExists,
@@ -839,7 +846,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.references',
       path: 'README.md',
-      message: 'links to libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
+      message: 'line 8 links to libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
     },
   ],
   [
@@ -853,7 +860,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
       rule: 'docs.references',
       path: 'README.md',
       message:
-        'links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
+        'line 8 links to libs/x/src/b.ts#gone, but libs/x/src/b.ts declares no gone; it re-exports pkg, which this check does not follow',
     },
   ],
   [
@@ -873,8 +880,32 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.spans',
       path: 'README.md',
-      message: 'names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
+      message:
+        'line 8 names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
     },
+  ],
+  [
+    'a source file its reader cannot read',
+    judgeSourceReading,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/bad.ts', 'unreadable\n');
+    },
+    {
+      rule: 'sources.read',
+      path: 'libs/x/src/bad.ts',
+      message: 'cannot be read as source: the text is unreadable',
+    },
+    openSourceRegistry([
+      {
+        extensions: ['.ts'],
+        since: 1,
+        read(text) {
+          if (text.startsWith('unreadable')) throw new Error('the text is unreadable');
+          return { declarations: [], reexports: [], docComments: [], links: [], ambient: [] };
+        },
+        globals: () => new Set(),
+      },
+    ]),
   ],
   [
     'a doc comment linking a name out of scope',
@@ -1202,7 +1233,7 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.references',
       path: 'docs/guide.md',
-      message: 'links to ../libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
+      message: 'line 1 links to ../libs/x/src/a.ts#gone, but libs/x/src/a.ts declares no gone',
     },
   ],
   [
@@ -1215,7 +1246,8 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
     {
       rule: 'docs.spans',
       path: 'wiki/ops/one.md',
-      message: 'names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
+      message:
+        'line 1 names the symbol renderIndex, which libs/x/src/a.ts exports, without linking it',
     },
   ],
   [
@@ -1314,9 +1346,12 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected])[] = [
 ];
 
 describe('each rule finds its breach', () => {
-  test.each(negatives)('%s', (_name, rule, breach, finding) => {
+  test.each(negatives)('%s', (_name, rule, breach, finding, ...injected) => {
+    const [sources] = injected;
     breach();
-    expect(host.judge(rule, root)).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
+    expect(
+      host.judge(rule, root, root, repositoryScope, { kind: 'all' }, sources ?? undefined),
+    ).toEqual([{ ...finding, remedy: finding.remedy ?? rule.remedy }]);
   });
 
   test('the breaches cover every rule of the system-state rule set', () => {
@@ -1520,6 +1555,65 @@ describe('rule boundaries', () => {
     writeRepositoryFile(root, 'nx.json', '{}');
     expect(judge(requireCiGate)).toEqual([
       { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'is missing' },
+    ]);
+  });
+
+  test('ci.gate accepts a gate run as every bun run part its script is made of, and names a missing part', () => {
+    writeRepositoryFile(
+      root,
+      'package.json',
+      JSON.stringify({
+        name: 'demo',
+        scripts: {
+          gate: 'bun run gate:checks && bun run gate:test',
+          'gate:affected': 'bun run gate:checks:affected && bun run gate:test:affected',
+        },
+      }),
+    );
+    const runs = (scripts: readonly string[]) => {
+      writeRepositoryFile(
+        root,
+        '.github/workflows/ci.yml',
+        `jobs:\n  part:\n    steps:\n${scripts.map((script) => `      - run: bun run ${script}\n`).join('')}`,
+      );
+      return judge(requireCiGate);
+    };
+    expect(
+      runs(['gate:checks', 'gate:test', 'gate:checks:affected', 'gate:test:affected']),
+    ).toEqual([]);
+    expect(runs(['gate:checks', 'gate:checks:affected', 'gate:test:affected'])).toEqual([
+      {
+        rule: 'ci.gate',
+        path: '.github/workflows/ci.yml',
+        message: 'does not run bun run gate, nor its parts bun run gate:test',
+      },
+    ]);
+    expect(runs(['gate:test:affected-later'])).toEqual([
+      { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'does not run bun run gate' },
+      {
+        rule: 'ci.gate',
+        path: '.github/workflows/ci.yml',
+        message: 'does not run bun run gate:affected',
+      },
+    ]);
+  });
+
+  test('ci.gate takes no parts from a gate script with any step but bun run', () => {
+    writeRepositoryFile(
+      root,
+      'package.json',
+      JSON.stringify({
+        name: 'demo',
+        scripts: { gate: 'bun run gate:checks && nx run-many -t test' },
+      }),
+    );
+    writeRepositoryFile(
+      root,
+      '.github/workflows/ci.yml',
+      'jobs:\n  part:\n    steps:\n      - run: bun run gate:checks\n      - run: bun run gate:affected\n',
+    );
+    expect(judge(requireCiGate)).toEqual([
+      { rule: 'ci.gate', path: '.github/workflows/ci.yml', message: 'does not run bun run gate' },
     ]);
   });
 

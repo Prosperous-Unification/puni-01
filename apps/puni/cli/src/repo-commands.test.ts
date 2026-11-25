@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   existsSync,
   lstatSync,
@@ -12,21 +12,27 @@ import { join } from 'node:path';
 import { readRulesSection } from '@puni/shared-checkout';
 import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
+import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
 
-const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 const checkout = new URL('../../../../', import.meta.url).pathname;
 
+let puni: InProcessPuni;
+
+beforeAll(() => {
+  puni = openInProcessPuni();
+});
+
+afterAll(async () => {
+  await puni.close();
+});
+
 function runPuni(args: readonly string[], cwd: string) {
-  const child = Bun.spawnSync([process.execPath, entrypoint, ...args], {
-    cwd,
-    env: { ...process.env, CLAUDECODE: '0', AGENT: '0' },
-  });
-  return { code: child.exitCode, stdout: child.stdout.toString(), stderr: child.stderr.toString() };
+  return puni.run(args, cwd);
 }
 
-describe('burokrat repo init through the entrypoint, in an empty temporary directory', () => {
+describe('burokrat repo init in process, in an empty temporary directory', () => {
   let parent = '';
   let state = '';
   let records = '';
@@ -57,7 +63,7 @@ describe('burokrat repo init through the entrypoint, in an empty temporary direc
     runGit(records, ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 32 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({

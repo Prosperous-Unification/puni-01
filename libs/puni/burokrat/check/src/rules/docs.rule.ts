@@ -1,71 +1,111 @@
 import type { CommandBrief } from '@puni/shared-command';
+import { posix } from 'node:path';
 import {
   isRecord,
   nameProject,
   parseJson,
+  readMarkdown,
   readProjectFiles,
   repositoryScope,
 } from '@puni/shared-checkout';
 import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
-import { posix } from 'node:path';
-import { type DocSelection, listCodeLines, readPathReference, selectsDocumentation } from '../docs';
-import { isGeneratedFile } from '../generated-files';
+import {
+  type DocSelection,
+  listCode,
+  listInlineCode,
+  readPathReference,
+  selectsDocumentation,
+} from '../docs';
+import { isGeneratedFile, readAttributes } from '../generated-files';
+import { readSourceFile } from '../source-files';
 import { findMissingAnchor } from './links.rule';
 
 /**
- * A text the docs rules read, in the file at `path`: a documentation file whole, with no `line`,
- * or one doc comment of a source file, whose text's line `n` stands on line `line + n`.
+ * The code a docs rule reads in the file at `path`: the inline code spans, and, for commands,
+ * the code-block lines too, each with the line it stands on when the file is source, whose doc
+ * comment holds it.
  */
-export interface DocText {
+export interface DocCode {
   readonly path: string;
-  readonly text: string;
+  /** Whether the code stands in a doc comment of a source file, not in documentation. */
+  readonly inComment: boolean;
+  readonly spans: readonly CodePiece[];
+  readonly blocks: readonly CodePiece[];
+}
+
+/** One piece of code, and its 1-based line in a source file, if it stands in one. */
+export interface CodePiece {
+  readonly code: string;
   readonly line?: number;
 }
 
-/** How a breach names where in `doc` a piece of code at line `offset` of it stands. */
-function placeIn(doc: DocText, offset: number): string {
-  return doc.line === undefined ? '' : `line ${String(doc.line + offset)} `;
+/** How a breach names where a piece of code stands. */
+function placeIn({ line }: CodePiece): string {
+  return line === undefined ? '' : `line ${String(line)} `;
 }
 
-/** The visible documentation files the scope owns by `selection`, each whole. */
-function listDocumentation({ files, scope }: RuleReading, selection: DocSelection): DocText[] {
-  return files
-    .listVisible(scope)
-    .filter((path) => selectsDocumentation(files, path, selection))
-    .map((path) => ({ path, text: files.readText(path) }));
+/** The visible documentation files the scope owns by `selection` (see `selectsDocumentation`). */
+function listDocumentationFiles({ files, scope }: RuleReading, selection: DocSelection): string[] {
+  return files.listVisible(scope).filter((path) => selectsDocumentation(files, path, selection));
+}
+
+/**
+ * The code of the documentation the scope owns as epochs 1 and 2 read it: inline spans outside
+ * fenced blocks and, as blocks, each fenced line (see `listInlineCode`).
+ */
+function listEarlierDocumentationCode(reading: RuleReading): DocCode[] {
+  return listDocumentationFiles(reading, 'path').map((path) => {
+    const text = reading.files.readText(path);
+    const spans = listInlineCode(text).map((code) => ({ code }));
+    const blocks = listCode(text)
+      .slice(spans.length)
+      .map((code) => ({ code }));
+    return { path, inComment: false, spans, blocks };
+  });
+}
+
+/** The code of `text`, Markdown, as `readMarkdown` reads it, each line moved by `shift`. */
+function readCode(text: string, frontMatter: boolean, shift: number | undefined) {
+  const markdown = readMarkdown(text, frontMatter);
+  const at = (line: number) => (shift === undefined ? {} : { line: line + shift });
+  return {
+    spans: markdown.spans.map(({ code, line }) => ({ code, ...at(line) })),
+    blocks: markdown.codeLines.map(({ text: code, line }) => ({ code, ...at(line) })),
+  };
 }
 
 /**
  * The visible files the scope owns whose doc comments the run judges: those a source reader
- * reads at the repository's pin, but for what `.gitattributes` marks generated or vendored
- * (see `isGeneratedFile`), whose comments no one writes.
+ * reads at the repository's pin and can read, but for what `.gitattributes` marks generated or
+ * vendored (see `isGeneratedFile`), whose comments no one writes.
  */
-export function listCommentedFiles({ files, scope, sources, registry }: RuleReading): string[] {
-  const attributes = files.exists('.gitattributes') ? files.readText('.gitattributes') : '';
-  return files
-    .listVisible(scope)
+export function listCommentedFiles(reading: RuleReading): string[] {
+  const attributes = readAttributes(reading.files);
+  return reading.files
+    .listVisible(reading.scope)
     .filter(
-      (path) =>
-        sources.readerOf(path, registry.rules) !== undefined && !isGeneratedFile(attributes, path),
+      (path) => !isGeneratedFile(attributes, path) && readSourceFile(reading, path) !== undefined,
     );
 }
 
-/** Every doc comment of the files of {@link listCommentedFiles}, as its reader gives it. */
-export function listDocComments(reading: RuleReading): DocText[] {
-  return listCommentedFiles(reading).flatMap((path) => {
-    const reader = reading.sources.readerOf(path, reading.registry.rules);
-    if (reader === undefined) return [];
-    return reader.docComments(reading.files.readText(path)).map(({ line, text }) => ({
+/**
+ * The code of the documentation the scope owns by `selection`, then that of the doc comments of
+ * its sources.
+ */
+function listEveryDocCode(reading: RuleReading, selection: DocSelection): DocCode[] {
+  const documentation = listDocumentationFiles(reading, selection).map((path) => ({
+    path,
+    inComment: false,
+    ...readCode(reading.files.readText(path), true, undefined),
+  }));
+  const comments = listCommentedFiles(reading).flatMap((path) =>
+    (readSourceFile(reading, path)?.docComments ?? []).map(({ line, text }) => ({
       path,
-      text,
-      line,
-    }));
-  });
-}
-
-/** The documentation the scope owns by `selection`, then the doc comments of its source files. */
-function listEveryDocText(reading: RuleReading, selection: DocSelection): DocText[] {
-  return [...listDocumentation(reading, selection), ...listDocComments(reading)];
+      inComment: true,
+      ...readCode(text, false, line - 1),
+    })),
+  );
+  return [...documentation, ...comments];
 }
 
 /**
@@ -75,18 +115,19 @@ function listEveryDocText(reading: RuleReading, selection: DocSelection): DocTex
  * from the root when its first segment exists there, else a path of something else: another
  * repository, a URL path, a git ref.
  */
-function placeToken(files: RuleReading['files'], doc: DocText, path: string): string | undefined {
-  if (doc.line === undefined) return path;
+function placeToken(files: RuleReading['files'], doc: DocCode, path: string): string | undefined {
+  if (!doc.inComment) return path;
   if (files.isShown(posix.join(posix.dirname(doc.path), path))) return undefined;
   const [first = ''] = path.split('/');
   return files.isShown(first) ? path : undefined;
 }
 
 /** The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}). */
-function judgePaths(reading: RuleReading, docs: readonly DocText[]): Breach[] {
+function judgePaths(reading: RuleReading, docs: readonly DocCode[]): Breach[] {
   const { files, references } = reading;
   return docs.flatMap((doc) =>
-    listCodeLines(doc.text, false).flatMap(({ offset, code: span }): Breach[] => {
+    doc.spans.flatMap((piece): Breach[] => {
+      const span = piece.code;
       const reference = readPathReference(span);
       const placed = reference === undefined ? undefined : placeToken(files, doc, reference.path);
       if (
@@ -96,7 +137,7 @@ function judgePaths(reading: RuleReading, docs: readonly DocText[]): Breach[] {
       ) {
         return [];
       }
-      const at = placeIn(doc, offset);
+      const at = placeIn(piece);
       if (!files.isShown(placed)) {
         return [{ path: doc.path, message: `${at}names the missing path ${span}` }];
       }
@@ -127,7 +168,7 @@ export const judgeMarkdownPaths: Rule = {
   since: 1,
   until: 3,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listDocumentation(reading, 'path')),
+  judge: (reading) => judgePaths(reading, listEarlierDocumentationCode(reading)),
 };
 
 /**
@@ -141,7 +182,7 @@ export const judgeDocPaths: Rule = {
   since: 3,
   until: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocText(reading, 'path')),
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'path')),
 };
 
 /**
@@ -152,7 +193,7 @@ export const judgeTypedDocPaths: Rule = {
   id: 'docs.paths',
   since: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocText(reading, 'type')),
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'type')),
 };
 
 /** The scripts of the root `package.json`, or the breach of one that cannot be read. */
@@ -257,7 +298,7 @@ function listNxProjects(code: string): string[] {
 }
 
 /** The breaches of the commands of `docs` (see {@link judgeMarkdownCommands}). */
-function judgeCommands(reading: RuleReading, docs: readonly DocText[]): Breach[] {
+function judgeCommands(reading: RuleReading, docs: readonly DocCode[]): Breach[] {
   const read = readScripts(reading);
   if ('breach' in read) return [read.breach];
   const { scripts } = read;
@@ -266,9 +307,10 @@ function judgeCommands(reading: RuleReading, docs: readonly DocText[]): Breach[]
     readProjectFiles(reading.files, repositoryScope).flatMap((file) => nameProject(file) ?? []),
   );
   return docs.flatMap((doc) =>
-    listCodeLines(doc.text, true).flatMap(({ offset, code }): Breach[] => {
+    [...doc.spans, ...doc.blocks].flatMap((piece): Breach[] => {
       const { path } = doc;
-      const at = placeIn(doc, offset);
+      const { code } = piece;
+      const at = placeIn(piece);
       const breaches: Breach[] = [...code.matchAll(/\bbun run ([\w:.-]+)/gu)]
         .map((match) => match[1] ?? '')
         .filter((script) => !scripts.has(script))
@@ -315,7 +357,7 @@ export const judgeMarkdownCommands: Rule = {
   since: 1,
   until: 3,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listDocumentation(reading, 'path')),
+  judge: (reading) => judgeCommands(reading, listEarlierDocumentationCode(reading)),
 };
 
 /**
@@ -328,7 +370,7 @@ export const judgeDocCommands: Rule = {
   since: 3,
   until: 4,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listEveryDocText(reading, 'path')),
+  judge: (reading) => judgeCommands(reading, listEveryDocCode(reading, 'path')),
 };
 
 /**
@@ -339,5 +381,5 @@ export const judgeTypedDocCommands: Rule = {
   id: 'docs.commands',
   since: 4,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listEveryDocText(reading, 'type')),
+  judge: (reading) => judgeCommands(reading, listEveryDocCode(reading, 'type')),
 };

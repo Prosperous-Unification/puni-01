@@ -12,14 +12,6 @@ export const docTypeKey = 'puni-doc-type';
  */
 export const docTypesEpoch = 4;
 
-/** The extensions of a Markdown file. */
-export const markdownExtensions: readonly string[] = ['.md', '.mdx', '.markdown'];
-
-/** Whether the file at `path` is Markdown, by its extension, in any case. */
-export function isMarkdown(path: string): boolean {
-  return markdownExtensions.includes(posix.extname(path).toLowerCase());
-}
-
 /**
  * Which rules judge a document of a type: `documentation` is read by agents working in the
  * repository, so the documentation rules (its paths, commands, references, dates and budgets)

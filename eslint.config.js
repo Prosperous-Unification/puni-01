@@ -275,10 +275,13 @@ const bannedNames = ['data', 'result', 'obj', 'tmp', 'item', 'handle'];
  * the tags.
  */
 const pluginLibraries = ['libs/puni/shared/nx', 'libs/puni/shared/typescript'];
+
+/** The plugin libraries that load their tool at run time, through a repository of their own. */
+const toolLoadingPlugins = ['libs/puni/shared/typescript'];
 const compilerMessage =
   'only a type:plugin library imports the TypeScript compiler; reach it through its interface';
 const compilerImports = {
-  files: ['libs/**/*.ts', 'apps/**/*.ts'],
+  files: ['libs/**/*.ts', 'apps/**/*.ts', 'tests/**/*.ts'],
   ignores: pluginLibraries.map((library) => `${library}/**`),
   rules: {
     '@typescript-eslint/no-restricted-imports': [
@@ -386,7 +389,7 @@ export default tseslint.config(
     // tool, so their module.ts files are the ones that register them.
     files: [
       'libs/puni/shared/adapters/src/module.ts',
-      ...pluginLibraries.map((library) => `${library}/src/module.ts`),
+      ...toolLoadingPlugins.map((library) => `${library}/src/module.ts`),
     ],
     rules: {
       ...restrictImports(

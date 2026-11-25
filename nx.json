@@ -13,6 +13,7 @@
     "puniBurCheck": [
       "{workspaceRoot}/puni.json",
       "{workspaceRoot}/**/.gitignore",
+      "{workspaceRoot}/**/.gitattributes",
       "{workspaceRoot}/.bun-version"
     ],
     "checkerSource": [

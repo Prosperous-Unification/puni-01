@@ -78,6 +78,12 @@ function runIn(project?: string, repo?: RepositoryType, crossProjectLinks?: bool
 }
 
 const projectNames = ['workspace', 'one', 'two'];
+
+/**
+ * The rules no seed can break through the composed readers, which read every text: a reader's
+ * failure is proven with an injected one, in `references.test.ts`.
+ */
+const unseeded: ReadonlySet<string> = new Set(['sources.read']);
 const recordsName = ['demo', 'records'].join('-');
 
 function words(count: number): string {
@@ -263,7 +269,11 @@ describe.each([2, latestRulesEpoch])(
         ].sort(),
       );
       expect(broken).toEqual(
-        new Set(codeRules.filter(({ rule }) => appliesAt(rule, at)).map(({ rule }) => rule.id)),
+        new Set(
+          codeRules
+            .filter(({ rule }) => appliesAt(rule, at) && !unseeded.has(rule.id))
+            .map(({ rule }) => rule.id),
+        ),
       );
     });
   },

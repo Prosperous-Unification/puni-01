@@ -15,8 +15,9 @@ and names the newer ones; `puni burokrat repo upgrade` raises the pin once the r
 them. The `gate` and
 `gate:affected` scripts of [package.json](../package.json) order it all: `bun run gate` judges
 everything, and `bun run gate:affected` only what a change affects, through the cached
-`puni-bur-check` and the uncached `puni-bur-links` targets. CI runs `gate:affected` on a pull
-request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) says.
+`puni-bur-check` and the uncached `puni-bur-links` targets. Each runs three parts, `checks`, `lint` and
+`test`, which [ci.yml](../.github/workflows/ci.yml) runs as jobs; its `gate` job, the check main
+requires, passes when all three do.
 
 ## When it fails
 
@@ -26,7 +27,7 @@ request and `gate` on everything else, as [ci.yml](../.github/workflows/ci.yml) 
 - **`puni burokrat check`** prints `<rule> <path>: <message>; fix: <remedy>`. Do what the remedy
   says. The rule's JSDoc, in `libs/puni/burokrat/check/src/rules/`, says what it judges; word
   budgets and other limits are named constants in `libs/puni/burokrat/check/src/budgets.ts`,
-  but for the map's [`indexWordBudget`](../libs/puni/shared/checkout/src/render-map.ts#indexWordBudget), which its renderer obeys.
+  but for the map's [`indexWordBudget`](../libs/puni/shared/checkout/src/render-map.ts#indexWordBudget), which its renderer in the checkout library obeys.
 - **`puni burokrat check --commits <base>..<head>`** runs in `gate:affected` over a pull
   request's commits, in CI's `pushed-commits` job over every push to any branch or tag, and over
   a merge group. It prints `<rule> <commit>:<path>: <message>; fix: <remedy>`: that commit adds a

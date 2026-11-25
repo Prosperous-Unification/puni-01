@@ -25,8 +25,8 @@ prints. Four shapes:
 
 A library imports another only through its `@puni/*` alias in `tsconfig.base.json`. Groups and
 shared libraries import only shared libraries, never the adapters; the testing library is
-imported only from tests; groups meet only in the app.
-[`moduleBoundaries`](../../eslint.config.js#moduleBoundaries) states this, and the Nx `lint` target judges it.
+imported only from tests; groups meet only in the app. `moduleBoundaries` in
+[eslint.config.js](../../eslint.config.js) states this, and the Nx `lint` target judges it.
 
 How a library documents itself, and what is left for the wiki, is
 [documentation](documentation.md).

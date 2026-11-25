@@ -1,6 +1,7 @@
 import { compareBytes } from './byte-order';
 import type { CheckoutFiles, ProjectSource } from './contract';
-import { docTypes, docTypesEpoch, isMarkdown, readDocType } from './doc-types';
+import { docTypes, docTypesEpoch, readDocType } from './doc-types';
+import { isMarkdown } from './markdown';
 import { parseFrontMatter } from './front-matter';
 import { repositoryScope } from './ownership';
 import { judgeReadWhen } from './read-when';

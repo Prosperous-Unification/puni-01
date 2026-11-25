@@ -20,6 +20,7 @@ export type {
   SourceDeclaration,
   SourceRange,
   SourceReader,
+  SourceReading,
   SourceRegistry,
 } from './contract';
 export {
@@ -45,9 +46,7 @@ export {
   docTypeNames,
   docTypes,
   docTypesEpoch,
-  isMarkdown,
   listPlacedTypes,
-  markdownExtensions,
   readDocType,
 } from './doc-types';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
@@ -63,6 +62,14 @@ export {
   type SourceDefect,
 } from './map-sources';
 export { describeValue, isRecord, parseJson, type ParsedJson, requireOnlyKeys } from './json';
+export {
+  isMarkdown,
+  type MarkdownLine,
+  type MarkdownLink,
+  type MarkdownReading,
+  type MarkdownSpan,
+  readMarkdown,
+} from './markdown';
 export { checkoutModule } from './module';
 export {
   type CheckScope,

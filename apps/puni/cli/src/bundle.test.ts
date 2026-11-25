@@ -69,7 +69,7 @@ describe('the built puni.js', () => {
     ]);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 32 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
@@ -94,7 +94,7 @@ describe('the built puni.js', () => {
     const run = runPuni(['burokrat', 'check'], state);
     expect([run.code, run.stderr]).toEqual([1, '']);
     expect(run.stdout).toStartWith(
-      'docs.references wiki/box.md: links to ../libs/x/src/box.ts#gone, but libs/x/src/box.ts declares no gone; fix: ',
+      'docs.references wiki/box.md: line 7 links to ../libs/x/src/box.ts#gone, but libs/x/src/box.ts declares no gone; fix: ',
     );
   });
 });
