@@ -12,6 +12,8 @@ export type {
   CommitCheckout,
   DocComment,
   DocLink,
+  InstalledGlobals,
+  MissingTypes,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
@@ -33,7 +35,9 @@ export {
   ProjectUnknown,
   RevisionUnknown,
   RulesPinAhead,
+  SourceReaderBroken,
   SourceReadersOverlap,
+  SourceUnreadable,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export {
@@ -66,6 +70,7 @@ export {
   isMarkdown,
   type MarkdownLine,
   type MarkdownLink,
+  type MarkdownOptions,
   type MarkdownReading,
   type MarkdownSpan,
   readMarkdown,

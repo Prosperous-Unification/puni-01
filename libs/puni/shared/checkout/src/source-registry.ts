@@ -1,49 +1,46 @@
 import { posix } from 'node:path';
 import { compareBytes } from './byte-order';
-import type { SourceReader, SourceReading, SourceRegistry } from './contract';
+import type { InstalledGlobals, SourceReader, SourceReading, SourceRegistry } from './contract';
 import { SourceReadersOverlap } from './failures';
 
-/** One remembered reading: what the reader read, or what it threw. */
-type Remembered = { readonly reading: SourceReading } | { readonly failure: unknown };
+/** One remembered answer: what the reader gave, or what it threw. */
+type Remembered<Value> = { readonly value: Value } | { readonly failure: unknown };
 
-/** `reader`, remembering what it read of each text and what its globals were, or what it threw. */
+/** What `ask` gives, or throws, remembered in `known` under `key`, thrown again on every ask. */
+function recall<Value>(
+  known: Map<string, Remembered<Value>>,
+  key: string,
+  ask: () => Value,
+): Value {
+  let answer = known.get(key);
+  if (answer === undefined) {
+    try {
+      answer = { value: ask() };
+    } catch (caught) {
+      answer = { failure: caught };
+    }
+    known.set(key, answer);
+  }
+  if ('failure' in answer) throw answer.failure;
+  return answer.value;
+}
+
+/** `reader`, remembering what it read of each text and what its globals were for each root. */
 function remember(reader: SourceReader): SourceReader {
-  const readings = new Map<string, Remembered>();
-  let globals: { readonly names: ReadonlySet<string> } | { readonly failure: unknown } | undefined;
+  const readings = new Map<string, Remembered<SourceReading>>();
+  const globals = new Map<string, Remembered<InstalledGlobals>>();
   return {
     extensions: reader.extensions,
     since: reader.since,
-    read(text) {
-      let known = readings.get(text);
-      if (known === undefined) {
-        try {
-          known = { reading: reader.read(text) };
-        } catch (caught) {
-          known = { failure: caught };
-        }
-        readings.set(text, known);
-      }
-      if ('failure' in known) throw known.failure;
-      return known.reading;
-    },
-    globals() {
-      if (globals === undefined) {
-        try {
-          globals = { names: reader.globals() };
-        } catch (caught) {
-          globals = { failure: caught };
-        }
-      }
-      if ('failure' in globals) throw globals.failure;
-      return globals.names;
-    },
+    read: (text) => recall(readings, text, () => reader.read(text)),
+    globals: (root) => recall(globals, root, () => reader.globals(root)),
   };
 }
 
 /**
  * The {@link SourceRegistry} of `readers` for one run: each reader picked by the extension of a
  * path's last segment, lower-cased, while its `since` reaches the epoch asked for; each text it
- * reads, and its globals, read once, a failure thrown again on every ask.
+ * reads, and its globals for each root, read once, a failure thrown again on every ask.
  *
  * @throws SourceReadersOverlap when two readers claim one extension.
  */

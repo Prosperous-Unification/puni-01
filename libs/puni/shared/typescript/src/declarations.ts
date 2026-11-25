@@ -207,6 +207,43 @@ function ownMembersOf(compiler: Compiler, node: ts.Node): OwnMembers {
   return plain(unknownMembers);
 }
 
+/**
+ * The members the member `node` of a shape has in turn, so a link may name a member of a member:
+ * those of the type literal or object a property is given, of a nested namespace, class,
+ * interface, enum or type, and those of every function for a method. Open (see {@link Members})
+ * when no one text lists them, as a class or interface extending a base does.
+ */
+export function membersOfMember(compiler: Compiler, file: ts.SourceFile, node: ts.Node): Members {
+  if (
+    compiler.isPropertySignature(node) ||
+    compiler.isPropertyDeclaration(node) ||
+    compiler.isVariableDeclaration(node)
+  ) {
+    if (node.type !== undefined) return typeMembers(compiler, node.type);
+    const initializer = compiler.isPropertySignature(node) ? undefined : node.initializer;
+    return initializer === undefined
+      ? unknownMembers
+      : membersOfMember(compiler, file, unwrap(compiler, file, initializer));
+  }
+  if (compiler.isPropertyAssignment(node)) {
+    return membersOfMember(compiler, file, unwrap(compiler, file, node.initializer));
+  }
+  if (
+    compiler.isClassDeclaration(node) ||
+    compiler.isClassExpression(node) ||
+    compiler.isInterfaceDeclaration(node) ||
+    compiler.isEnumDeclaration(node) ||
+    compiler.isTypeAliasDeclaration(node) ||
+    compiler.isModuleDeclaration(node) ||
+    compiler.isObjectLiteralExpression(node) ||
+    compiler.isFunctionLike(node)
+  ) {
+    const { bases, ...members } = ownMembersOf(compiler, node);
+    return bases.length === 0 ? members : { ...members, closed: false };
+  }
+  return unknownMembers;
+}
+
 /** One top-level name a file declares, the node declaring it, its members and how it is declared. */
 export interface TopLevel {
   readonly name: string;

@@ -237,8 +237,9 @@ export interface DocComment {
 
 /**
  * One inline link of a doc comment, in the language's own link syntax: its target as written,
- * the line it stands on, the name it starts with, and whether the file itself declares or
- * imports that name. A link in code inside the comment is no link.
+ * the line it stands on, the name it starts with, and whether the file resolves it where the
+ * comment stands, by the scopes holding the comment and the file's top level and imports. A link
+ * in code inside the comment is no link.
  */
 export interface DocLink {
   readonly target: string;
@@ -246,7 +247,7 @@ export interface DocLink {
   readonly line: number;
   /** The name the target starts with, which a global may declare when the file does not. */
   readonly head: string;
-  /** Whether the file resolves the target itself; when not, only a global can. */
+  /** Whether the file resolves the target where the comment stands; when not, only a global can. */
   readonly resolved: boolean;
 }
 
@@ -287,15 +288,32 @@ export interface SourceReader {
   /**
    * Everything the reader reads in `text`.
    *
-   * @throws Error naming what went wrong when the text cannot be read.
+   * @throws SourceUnreadable when the text itself cannot be read, as one its parser gives up on.
+   * @throws SourceReaderBroken when the reader cannot read at all, as without its compiler: a
+   *   defect of puni's installation, never of the file.
    */
   read(text: string): SourceReading;
   /**
-   * The names the language's installed libraries declare for every file, read once.
+   * The names the language's libraries declare for every file of the repository at the absolute
+   * directory `root`: those puni installs, and those the repository installs and configures,
+   * with the packages it lists that are not installed (see {@link InstalledGlobals}).
    *
-   * @throws Error naming the declarations that cannot be read, such as types not installed.
+   * @throws SourceReaderBroken when the libraries puni installs cannot be read.
    */
-  globals(): ReadonlySet<string>;
+  globals(root: string): InstalledGlobals;
+}
+
+/** The global names a repository's files may use, and the type packages it lists but lacks. */
+export interface InstalledGlobals {
+  readonly names: ReadonlySet<string>;
+  readonly missing: readonly MissingTypes[];
+}
+
+/** One type package a repository's configuration lists that its `node_modules` does not hold. */
+export interface MissingTypes {
+  readonly name: string;
+  /** The repository-relative configuration file that lists it. */
+  readonly listedIn: string;
 }
 
 /**

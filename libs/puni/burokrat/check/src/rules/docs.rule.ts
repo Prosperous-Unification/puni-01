@@ -18,6 +18,7 @@ import {
 } from '../docs';
 import { isGeneratedFile, readAttributes } from '../generated-files';
 import { readSourceFile } from '../source-files';
+import { listReadAnchors, readAsBefore } from '../links';
 import { findMissingAnchor } from './links.rule';
 
 /**
@@ -64,9 +65,12 @@ function listEarlierDocumentationCode(reading: RuleReading): DocCode[] {
   });
 }
 
-/** The code of `text`, Markdown, as `readMarkdown` reads it, each line moved by `shift`. */
-function readCode(text: string, frontMatter: boolean, shift: number | undefined) {
-  const markdown = readMarkdown(text, frontMatter);
+/**
+ * The code of `text`, Markdown, as `readMarkdown` reads it with {@link readAsBefore}, each line
+ * moved by `shift`: its spans, and the lines of its fenced and indented code blocks.
+ */
+function readCode(text: string, shift: number | undefined) {
+  const markdown = readMarkdown(text, readAsBefore);
   const at = (line: number) => (shift === undefined ? {} : { line: line + shift });
   return {
     spans: markdown.spans.map(({ code, line }) => ({ code, ...at(line) })),
@@ -96,13 +100,13 @@ function listEveryDocCode(reading: RuleReading, selection: DocSelection): DocCod
   const documentation = listDocumentationFiles(reading, selection).map((path) => ({
     path,
     inComment: false,
-    ...readCode(reading.files.readText(path), true, undefined),
+    ...readCode(reading.files.readText(path), undefined),
   }));
   const comments = listCommentedFiles(reading).flatMap((path) =>
     (readSourceFile(reading, path)?.docComments ?? []).map(({ line, text }) => ({
       path,
       inComment: true,
-      ...readCode(text, false, line - 1),
+      ...readCode(text, line - 1),
     })),
   );
   return [...documentation, ...comments];
@@ -122,8 +126,15 @@ function placeToken(files: RuleReading['files'], doc: DocCode, path: string): st
   return files.isShown(first) ? path : undefined;
 }
 
-/** The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}). */
-function judgePaths(reading: RuleReading, docs: readonly DocCode[]): Breach[] {
+/**
+ * The breaches of the backticked paths of `docs` (see {@link judgeDocPaths}), a fragment matched
+ * against the anchors `anchors` reads.
+ */
+function judgePaths(
+  reading: RuleReading,
+  docs: readonly DocCode[],
+  anchors?: (text: string) => ReadonlySet<string>,
+): Breach[] {
   const { files, references } = reading;
   return docs.flatMap((doc) =>
     doc.spans.flatMap((piece): Breach[] => {
@@ -141,7 +152,7 @@ function judgePaths(reading: RuleReading, docs: readonly DocCode[]): Breach[] {
       if (!files.isShown(placed)) {
         return [{ path: doc.path, message: `${at}names the missing path ${span}` }];
       }
-      const missing = findMissingAnchor(files, placed, reference.fragment);
+      const missing = findMissingAnchor(files, placed, reference.fragment, anchors);
       return missing === undefined
         ? []
         : [
@@ -182,7 +193,7 @@ export const judgeDocPaths: Rule = {
   since: 3,
   until: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'path')),
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'path'), listReadAnchors),
 };
 
 /**
@@ -193,7 +204,7 @@ export const judgeTypedDocPaths: Rule = {
   id: 'docs.paths',
   since: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'type')),
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'type'), listReadAnchors),
 };
 
 /** The scripts of the root `package.json`, or the breach of one that cannot be read. */

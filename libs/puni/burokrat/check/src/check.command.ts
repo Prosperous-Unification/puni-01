@@ -2,6 +2,7 @@ import { choice, constant, message, object, option, optional, string } from '@op
 import type { Command } from '@puni/shared-command';
 import {
   FileUnreadable,
+  SourceReaderBroken,
   ProjectUnknown,
   RevisionUnknown,
   repositoryTypes,
@@ -67,7 +68,8 @@ function formatNewer({ pin, ids }: NewerRules): string {
  * judged repository is not `system-state`, two scoping options, a `--commits` that is no range or
  * names no commit, `--merged` without it, or a pin later than every rule this puni knows prints
  * one `error: ` line to `stderr` and returns 2: nothing was judged. A file the check needs that
- * cannot be read prints one `error: ` line naming it and returns 1: nothing can be judged until
+ * cannot be read, or a source reader that cannot read at all, as one without its compiler,
+ * prints one `error: ` line naming it and returns 1: nothing can be judged until
  * it can.
  */
 export function createCheckCommand({
@@ -81,7 +83,7 @@ export function createCheckCommand({
       try {
         verdict = repositoryCheck.check(request, io.cwd);
       } catch (caught) {
-        if (caught instanceof FileUnreadable) {
+        if (caught instanceof FileUnreadable || caught instanceof SourceReaderBroken) {
           io.stderr(`error: ${caught.message}\n`);
           return 1;
         }

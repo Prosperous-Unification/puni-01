@@ -35,6 +35,15 @@ export interface MarkdownReading {
   readonly prose: readonly MarkdownLine[];
 }
 
+/**
+ * How a Markdown text is read: its front matter, when it opens with `---`, and its HTML comments
+ * either skipped, holding nothing, or read as `prose`, as the rules of epochs 1 and 2 read them.
+ */
+export interface MarkdownOptions {
+  readonly frontMatter: 'skip' | 'prose';
+  readonly comments: 'skip' | 'prose';
+}
+
 /** A reference definition's label as links match it: case-folded, its spaces collapsed. */
 function foldLabel(label: string): string {
   return label.trim().replace(/\s+/gu, ' ').toUpperCase().toLowerCase();
@@ -56,6 +65,17 @@ function indentOf(line: string): number {
   return width;
 }
 
+/** `line` without its first `columns` columns of indentation, a tab counting four. */
+function dropIndent(line: string, columns: number): string {
+  let width = 0;
+  let at = 0;
+  while (at < line.length && width < columns) {
+    width += line[at] === '\t' ? 4 : 1;
+    at += 1;
+  }
+  return line.slice(at);
+}
+
 /** A paragraph: its lines of text in order, each with its line number. */
 type Paragraph = readonly MarkdownLine[];
 
@@ -66,12 +86,15 @@ type Paragraph = readonly MarkdownLine[];
  * A fence opens with three or more backticks or tildes indented at most three spaces past the
  * list item it stands in, and closes on a line of the same character, at least as many, and
  * nothing else. A line indented four spaces past that, after a blank line, is code. An HTML
- * comment opening a block runs to its `-->`. A footnote definition (`[^1]: …`) is prose.
+ * comment opening a block runs to its `-->`, unless `comments` reads it as prose. A reference
+ * definition may stand in a list item, indented as its text is. A footnote definition
+ * (`[^1]: …`) is prose.
  */
 function readBlocks(
   lines: readonly string[],
   first: number,
   definitions: Map<string, string>,
+  comments: MarkdownOptions['comments'],
 ): { readonly paragraphs: Paragraph[]; readonly codeLines: MarkdownLine[] } {
   const paragraphs: Paragraph[] = [];
   const codeLines: MarkdownLine[] = [];
@@ -126,7 +149,7 @@ function readBlocks(
       codeLines.push({ text, line });
       continue;
     }
-    if (current.length === 0 && text.trimStart().startsWith('<!--')) {
+    if (comments === 'skip' && current.length === 0 && text.trimStart().startsWith('<!--')) {
       inComment = !text.includes('-->');
       continue;
     }
@@ -134,7 +157,7 @@ function readBlocks(
       flush();
       listIndent = bullet[0].length;
     }
-    const defined = current.length === 0 ? definition.exec(text) : null;
+    const defined = current.length === 0 ? definition.exec(dropIndent(text, base)) : null;
     if (defined !== null) {
       definitions.set(foldLabel(defined[1] ?? ''), defined[2] ?? '');
       continue;
@@ -233,6 +256,7 @@ function readInline(
   definitions: ReadonlyMap<string, string>,
   link: number | undefined,
   found: Found,
+  comments: MarkdownOptions['comments'],
 ): void {
   const blank = (start: number, end: number): void => {
     for (let at = start; at < end; at += 1) {
@@ -245,7 +269,7 @@ function readInline(
       at += 1;
       continue;
     }
-    if (text.startsWith('<!--', at)) {
+    if (comments === 'skip' && text.startsWith('<!--', at)) {
       const close = text.indexOf('-->', at + 4);
       const end = close === -1 ? text.length : close + 3;
       blank(at, end);
@@ -283,30 +307,37 @@ function readInline(
       line: lineAt(offset + at),
       code: sole === null ? undefined : (sole[2] ?? '').trim(),
     });
-    readInline(inner, offset + at + 1, lineAt, definitions, found.links.length - 1, found);
+    readInline(
+      inner,
+      offset + at + 1,
+      lineAt,
+      definitions,
+      found.links.length - 1,
+      found,
+      comments,
+    );
     at = end - 1;
   }
 }
 
 /**
  * What the Markdown `text` holds (see {@link MarkdownReading}), as CommonMark reads it closely
- * enough to judge it: front matter, when `frontMatter` and the text opens with `---`, holds
- * nothing; code blocks are read as `readBlocks` says; in a paragraph, a backslash escapes a
- * punctuation character, a code span runs between equal backtick runs, an HTML comment holds
- * nothing, and a link is inline (`[text](destination "title")`), a full or collapsed reference
+ * enough to judge it: front matter and HTML comments hold nothing, unless `options` reads them
+ * as prose; code blocks are read as `readBlocks` says; in a paragraph, a backslash escapes a
+ * punctuation character, a code span runs between equal backtick runs, and a link is inline (`[text](destination "title")`), a full or collapsed reference
  * (`[text][label]`, `[label][]`) or a shortcut (`[label]`) to a definition of the text, its
  * label matched case-folded; link text may run over the lines of a paragraph, and an image is
  * read as its link.
  */
-export function readMarkdown(text: string, frontMatter: boolean): MarkdownReading {
+export function readMarkdown(text: string, options: MarkdownOptions): MarkdownReading {
   const lines = text.split('\n');
   let first = 0;
-  if (frontMatter && lines[0] === '---') {
+  if (options.frontMatter === 'skip' && lines[0] === '---') {
     const close = lines.indexOf('---', 1);
     if (close !== -1) first = close + 1;
   }
   const definitions = new Map<string, string>();
-  const { paragraphs, codeLines } = readBlocks(lines, first, definitions);
+  const { paragraphs, codeLines } = readBlocks(lines, first, definitions, options.comments);
   const spans: MarkdownSpan[] = [];
   const links: MarkdownLink[] = [];
   const prose: MarkdownLine[] = [];
@@ -324,7 +355,7 @@ export function readMarkdown(text: string, frontMatter: boolean): MarkdownReadin
       return paragraph[index]?.line ?? 0;
     };
     const found: Found = { spans, links, blanked: joined.split('') };
-    readInline(joined, 0, lineAt, definitions, undefined, found);
+    readInline(joined, 0, lineAt, definitions, undefined, found, options.comments);
     for (const [index, line] of found.blanked.join('').split('\n').entries()) {
       prose.push({ text: line, line: paragraph[index]?.line ?? 0 });
     }
