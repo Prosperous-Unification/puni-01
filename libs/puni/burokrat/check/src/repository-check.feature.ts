@@ -6,11 +6,11 @@ import {
   isRepositoryLevel,
   type LatestRules,
   openSourceRegistry,
-  replaceRulesSection,
   type RepositoryRegistry,
   type RepositoryType,
   repositoryScope,
   requirePinReached,
+  type UpgradeTexts,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import { digestRulesSection, rulesDigestAt } from './agents-rules';
@@ -298,24 +298,23 @@ export function createRepositoryCheck(services: CheckServices): RepositoryCheck 
 /**
  * The {@link LatestRules} of `checkRules`, which the module supplies as the `checkRules` of the rule set: its
  * epoch is the latest of every rule there. It judges each whole repository of the project by
- * the rules of its type that apply at that epoch, with the registry pinned there and, for the
- * system-state repository, a view of the checkout whose `AGENTS.md` rules section, when it has
- * one, is the given text. Whether a section holds an epoch's rules is judged by the digest
- * in force at that epoch.
+ * the rules of its type that apply at that epoch, with the registry pinned there and a view of
+ * the checkout in which each file the given texts name reads as that text. Whether a section
+ * holds an epoch's rules is judged by the digest in force at that epoch.
  */
 export function createLatestRules(services: CheckServices): LatestRules {
   const { checkoutRegistry, checkoutFiles, checkRules } = services;
   const epoch = latestEpoch(listEveryRule(checkRules));
-  const judgeType = (cwd: string, type: RepositoryType, rules: string): Finding[] =>
+  const judgeType = (cwd: string, type: RepositoryType, texts: UpgradeTexts): Finding[] =>
     judgeOrDefect(() => {
       const found = checkoutRegistry.locate(cwd);
       const { root, registry } = checkoutRegistry.resolve(found, type);
       const files = checkoutFiles.open(root, type);
-      const readText = (path: string): string => {
-        const text = files.readText(path);
-        if (type !== 'system-state' || path !== 'AGENTS.md') return text;
-        return replaceRulesSection(text, rules) ?? text;
-      };
+      const given = texts[type];
+      const readText = (path: string): string =>
+        Object.hasOwn(given, path) && files.exists(path)
+          ? (given[path] ?? files.readText(path))
+          : files.readText(path);
       const reading = readWhole(services, { ...files, readText }, { ...registry, rules: epoch });
       return checkRules.sets[type]
         .map(({ rule }) => rule)
@@ -324,10 +323,10 @@ export function createLatestRules(services: CheckServices): LatestRules {
     });
   return {
     epoch,
-    judge(cwd, rules) {
+    judge(cwd, texts) {
       return {
-        'system-state': sortFindings(judgeType(cwd, 'system-state', rules)),
-        'system-records': sortFindings(judgeType(cwd, 'system-records', rules)),
+        'system-state': sortFindings(judgeType(cwd, 'system-state', texts)),
+        'system-records': sortFindings(judgeType(cwd, 'system-records', texts)),
       };
     },
     holdsRulesOf(section, at) {

@@ -133,6 +133,7 @@ describe('isMarkdown', () => {
     ['a.markdown', true],
     ['a.mdx', true],
     ['A.MD', true],
+    ['a.md.tmpl', false],
     ['a.ts', false],
     ['md', false],
   ])('%s is Markdown: %p', (path, expected) => {

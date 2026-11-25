@@ -53,7 +53,8 @@ export function isRecordKey(key: string): key is RecordKey {
 
 /**
  * Why `value` is not a valid `key` of the record `file`, or `undefined` when it is. A value
- * holding a line break is never valid: front matter holds one value per line.
+ * holding a line break is never valid: front matter holds one value per line. The document type
+ * is judged by the `docs.type` rule, which knows every type, not here.
  */
 export function judgeRecordValue(
   file: RecordFile,
@@ -86,6 +87,8 @@ export function judgeRecordValue(
       const words = countWords(value);
       return words > recordSummaryWordBudget ? `has ${String(words)} words` : undefined;
     }
+    case 'puni-doc-type':
+      return undefined;
     case 'supersedes':
     case 'superseded-by': {
       const normal = posix.normalize(value);

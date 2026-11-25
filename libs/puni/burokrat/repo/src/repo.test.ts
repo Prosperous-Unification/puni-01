@@ -108,13 +108,16 @@ describe('burokrat repo init', () => {
     );
     const agents = text(`${here}/AGENTS.md`);
     expect(readRulesSection(agents)).toBe(rules);
-    expect(agents).toStartWith('# shop\n');
+    expect(agents).toStartWith('---\npuni-doc-type: agents\n---\n\n# shop\n');
     expect(agents).toContain('<https://github.com/acme/shop-records>');
     expect(agents).toContain('`../shop-records`');
     expect(agents).not.toContain('{{');
     expect(agents).toContain('`puni burokrat wiki map`');
     expect(text(`${here}/README.md`)).toContain('`puni burokrat wiki map`');
-    expect(text(`${records}/AGENTS.md`)).toStartWith('# shop-records\n\nRecords for `shop`');
+    expect(text(`${here}/README.md`)).toStartWith('---\npuni-doc-type: readme\n---\n\n# shop\n');
+    expect(text(`${records}/AGENTS.md`)).toStartWith(
+      '---\npuni-doc-type: agents\n---\n\n# shop-records\n\nRecords for `shop`',
+    );
     expect(text(`${records}/AGENTS.md`)).not.toContain('{{');
     for (const root of [here, records]) {
       expect(host.nodes.get(`${root}/CLAUDE.md`)).toEqual({ symlink: 'AGENTS.md' });

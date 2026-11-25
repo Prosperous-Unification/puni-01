@@ -1,6 +1,7 @@
 ---
 name: puni-findings
 description: Use when asked to review part of a PUNI-governed repository, discover evidence-backed improvements against explicit criteria, or run an independent findings review for another PUNI skill.
+puni-doc-type: product
 ---
 
 # PUNI findings review

@@ -43,29 +43,33 @@ function normalise(path: string): string {
 const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
- * The files a system-state checkout writes: the registry and the entry file whose rules section
- * follows its `rules` pin.
+ * The files a system-state checkout writes: the registry and the entry files raising its `rules`
+ * pin rewrites, `AGENTS.md` for its rules section and both for their document type.
  */
-const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md'];
+const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md', 'README.md'];
+
+/** The file a records checkout writes outside its kind directories: its `AGENTS.md`, for its type. */
+const recordsEntry = 'AGENTS.md';
 
 /** Where a checkout of each type writes, and how to say so. */
 const writeAreas: Readonly<
   Record<RepositoryType, { readonly description: string; holdsFile(normal: string): boolean }>
 > = {
   'system-state': {
-    description: pinnedFiles.join(' or '),
+    description: `${pinnedFiles.slice(0, -1).join(', ')} or ${pinnedFiles.at(-1) ?? ''}`,
     holdsFile: (normal) => pinnedFiles.includes(normal),
   },
   'system-records': {
-    description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
+    description: `${recordsEntry} or directly inside a kind directory (${kindDirectories.join(', ')})`,
+    holdsFile: (normal) =>
+      normal === recordsEntry || kindDirectories.includes(posix.dirname(normal)),
   },
 };
 
 /**
  * `path` normalised, refused unless a `type` checkout writes it: a system-state checkout writes
- * only the {@link pinnedFiles}; a records checkout writes only record files, directly inside a
- * kind directory.
+ * only the {@link pinnedFiles}; a records checkout writes only its {@link recordsEntry} and
+ * record files, directly inside a kind directory.
  */
 function normaliseWritten(path: string, type: RepositoryType): string {
   const normal = normalise(path);

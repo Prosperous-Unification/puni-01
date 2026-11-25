@@ -26,7 +26,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
     records = join(dirname(state), 'demo-records');
     mkdirSync(records);
-    writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+    writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
     symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
     runGit(records, ['init', '-q']);
     writeFileSync(join(state, 'body.md'), '# First plan\n\nStart with one node.\n');
@@ -56,6 +56,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     expect(readFileSync(join(records, path), 'utf8')).toBe(
       [
         '---',
+        'puni-doc-type: record',
         'kind: plan',
         'title: First plan',
         `date: ${today}`,
@@ -72,7 +73,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     );
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 13 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
     const again = runPuni(add, state);

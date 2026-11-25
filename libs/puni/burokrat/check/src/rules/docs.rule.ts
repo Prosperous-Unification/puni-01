@@ -9,7 +9,13 @@ import {
   repositoryScope,
 } from '@puni/shared-checkout';
 import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
-import { isDocumentation, listCode, listInlineCode, readPathReference } from '../docs';
+import {
+  type DocSelection,
+  listCode,
+  listInlineCode,
+  readPathReference,
+  selectsDocumentation,
+} from '../docs';
 import { isGeneratedFile, readAttributes } from '../generated-files';
 import { readSourceFile } from '../source-files';
 import { findMissingAnchor } from './links.rule';
@@ -38,9 +44,9 @@ function placeIn({ line }: CodePiece): string {
   return line === undefined ? '' : `line ${String(line)} `;
 }
 
-/** The visible documentation files the scope owns (see `isDocumentation`). */
-function listDocumentationFiles({ files, scope }: RuleReading): string[] {
-  return files.listVisible(scope).filter(isDocumentation);
+/** The visible documentation files the scope owns by `selection` (see `selectsDocumentation`). */
+function listDocumentationFiles({ files, scope }: RuleReading, selection: DocSelection): string[] {
+  return files.listVisible(scope).filter((path) => selectsDocumentation(files, path, selection));
 }
 
 /**
@@ -48,7 +54,7 @@ function listDocumentationFiles({ files, scope }: RuleReading): string[] {
  * fenced blocks and, as blocks, each fenced line (see `listInlineCode`).
  */
 function listEarlierDocumentationCode(reading: RuleReading): DocCode[] {
-  return listDocumentationFiles(reading).map((path) => {
+  return listDocumentationFiles(reading, 'path').map((path) => {
     const text = reading.files.readText(path);
     const spans = listInlineCode(text).map((code) => ({ code }));
     const blocks = listCode(text)
@@ -82,9 +88,12 @@ export function listCommentedFiles(reading: RuleReading): string[] {
     );
 }
 
-/** The code of the documentation the scope owns, then that of the doc comments of its sources. */
-function listEveryDocCode(reading: RuleReading): DocCode[] {
-  const documentation = listDocumentationFiles(reading).map((path) => ({
+/**
+ * The code of the documentation the scope owns by `selection`, then that of the doc comments of
+ * its sources.
+ */
+function listEveryDocCode(reading: RuleReading, selection: DocSelection): DocCode[] {
+  const documentation = listDocumentationFiles(reading, selection).map((path) => ({
     path,
     inComment: false,
     ...readCode(reading.files.readText(path), true, undefined),
@@ -165,13 +174,26 @@ export const judgeMarkdownPaths: Rule = {
 /**
  * {@link judgeMarkdownPaths} over the documentation the scope owns and the doc comments of the
  * files of {@link listCommentedFiles}, a token in a comment placed by `placeToken` and a breach
- * naming the line it stands on.
+ * naming the line it stands on. Epoch 3; {@link judgeTypedDocPaths} chooses the documentation
+ * by its declared type.
  */
 export const judgeDocPaths: Rule = {
   id: 'docs.paths',
   since: 3,
+  until: 4,
   remedy: pathsRemedy,
-  judge: (reading) => judgePaths(reading, listEveryDocCode(reading)),
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'path')),
+};
+
+/**
+ * {@link judgeDocPaths} over the Markdown whose declared type the documentation rules judge,
+ * wherever it lies, and every doc comment.
+ */
+export const judgeTypedDocPaths: Rule = {
+  id: 'docs.paths',
+  since: 4,
+  remedy: pathsRemedy,
+  judge: (reading) => judgePaths(reading, listEveryDocCode(reading, 'type')),
 };
 
 /** The scripts of the root `package.json`, or the breach of one that cannot be read. */
@@ -340,11 +362,24 @@ export const judgeMarkdownCommands: Rule = {
 
 /**
  * {@link judgeMarkdownCommands} over the documentation the scope owns and the doc comments of
- * the files of {@link listCommentedFiles}, a breach naming the line it stands on.
+ * the files of {@link listCommentedFiles}, a breach naming the line it stands on. Epoch 3;
+ * {@link judgeTypedDocCommands} chooses the documentation by its declared type.
  */
 export const judgeDocCommands: Rule = {
   id: 'docs.commands',
   since: 3,
+  until: 4,
   remedy: commandsRemedy,
-  judge: (reading) => judgeCommands(reading, listEveryDocCode(reading)),
+  judge: (reading) => judgeCommands(reading, listEveryDocCode(reading, 'path')),
+};
+
+/**
+ * {@link judgeDocCommands} over the Markdown whose declared type the documentation rules judge,
+ * wherever it lies, and every doc comment.
+ */
+export const judgeTypedDocCommands: Rule = {
+  id: 'docs.commands',
+  since: 4,
+  remedy: commandsRemedy,
+  judge: (reading) => judgeCommands(reading, listEveryDocCode(reading, 'type')),
 };

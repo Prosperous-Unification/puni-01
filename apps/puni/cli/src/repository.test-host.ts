@@ -10,7 +10,7 @@ import {
 
 /**
  * A fresh system-state git repository `demo` in a directory `scratchDirectories` creates, nothing
- * staged: `puni.json` pinned at rules epoch 3 giving the partition `app` the purpose "changing the
+ * staged: `puni.json` pinned at rules epoch 4 giving the partition `app` the purpose "changing the
  * app", one project `one` under `apps/` whose map line reads "changing one", and an empty
  * `libs/`. `scratchDirectories` removes it and anything built beside it.
  */
@@ -20,7 +20,7 @@ export function makeStateRepository(scratchDirectories: ScratchDirectoryOwner): 
   writeRepositoryFile(
     root,
     'puni.json',
-    formatRegistry('system-state', fixtureRemotes, 3, purposes),
+    formatRegistry('system-state', fixtureRemotes, 4, purposes),
   );
   writeProject(root, 'apps/one', 'one', { readWhen: 'changing one', readFirst: 'src/index.ts' });
   writeRepositoryFile(root, 'libs/.gitkeep', '');

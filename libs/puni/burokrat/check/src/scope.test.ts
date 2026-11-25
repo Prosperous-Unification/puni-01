@@ -2,7 +2,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { throws } from 'node:assert/strict';
 import { rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findOwner, formatRegistry, ownsPath, type RepositoryType } from '@puni/shared-checkout';
+import {
+  declareDocType,
+  docTypesEpoch,
+  findOwner,
+  formatRegistry,
+  ownsPath,
+  type RepositoryType,
+} from '@puni/shared-checkout';
 import {
   FixtureGitFailed,
   fixtureRemotes,
@@ -83,6 +90,11 @@ function words(count: number): string {
   return `${'word '.repeat(count)}\n`;
 }
 
+/** `text` as a wiki page of the fixture's pin: declaring its type from the epoch that added types. */
+function page(text: string): string {
+  return pin >= docTypesEpoch ? declareDocType(text, 'wiki-page') : text;
+}
+
 /** Defects for every code rule, spread over the root and both projects, in two compatible sets. */
 const seeds: readonly (readonly [string, () => void])[] = [
   [
@@ -93,7 +105,7 @@ const seeds: readonly (readonly [string, () => void])[] = [
       symlinkSync('package.json', join(root, 'CLAUDE.md'));
       rmSync(join(root, 'README.md'));
       writeRepositoryFile(root, 'notes.txt', `see ${recordsName}\n`);
-      writeRepositoryFile(root, 'wiki/ops/page.md', 'On 2031-04-05, see [gone](gone.md).\n');
+      writeRepositoryFile(root, 'wiki/ops/page.md', page('On 2031-04-05, see [gone](gone.md).\n'));
       writeRepositoryFile(
         root,
         'apps/one/NOTES.md',
@@ -131,12 +143,16 @@ const seeds: readonly (readonly [string, () => void])[] = [
       writeRepositoryFile(
         root,
         'wiki/ops/tools.md',
-        'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`, [`home`](../../libs/two/src/index.ts#gone) and [options](../../apps/one/tsconfig.json#strict).\n',
+        page(
+          'Use `apps/one/gone.ts`, `wiki/gone.md`, `bun run nope`, `demo burokrat nope` and `goneSymbol`, [`home`](../../libs/two/src/index.ts#gone) and [options](../../apps/one/tsconfig.json#strict).\n',
+        ),
       );
       writeRepositoryFile(
         root,
         'wiki/how-to/long.md',
-        `---\ntitle: Long\nread-when: reading long\n---\n\n${'word '.repeat(pageWordBudget)}\n`,
+        page(
+          `---\ntitle: Long\nread-when: reading long\n---\n\n${'word '.repeat(pageWordBudget)}\n`,
+        ),
       );
       rmSync(join(root, '.github'), { recursive: true });
       symlinkSync('/nowhere/absolute', join(root, 'libs/two/far'));
@@ -232,7 +248,7 @@ describe.each([2, latestRulesEpoch])(
           'index.read-first',
           'index.read-when',
           'index.scope',
-          'index.section',
+          ...(at < docTypesEpoch ? ['index.section'] : ['docs.type']),
           'index.words',
           'links.resolve',
           'readme.exists',
@@ -362,10 +378,14 @@ describe('check --project', () => {
   });
 
   test('a link from one project to a missing file of another fails only the cross-project check', () => {
-    writeRepositoryFile(root, 'libs/two/README.md', 'See [one](../../apps/one/gone.md).\n');
+    writeRepositoryFile(
+      root,
+      'libs/two/guide.md',
+      '---\npuni-doc-type: product\n---\n\nSee [one](../../apps/one/gone.md).\n',
+    );
     expect(runIn('two').code).toBe(0);
     expect(runIn(undefined, undefined, true).findings).toEqual([
-      'links.resolve libs/two/README.md: links to missing ../../apps/one/gone.md; fix: point the link at a path that exists, or remove it',
+      'links.resolve libs/two/guide.md: links to missing ../../apps/one/gone.md; fix: point the link at a path that exists, or remove it',
     ]);
   });
 

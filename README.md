@@ -1,3 +1,7 @@
+---
+puni-doc-type: readme
+---
+
 # PUNI
 
 **AI agents can write anything. This is what makes them finish it.**

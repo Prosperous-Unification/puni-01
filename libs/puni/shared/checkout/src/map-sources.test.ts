@@ -50,6 +50,34 @@ function openMemory(tree: MemoryTree, options: Parameters<typeof memoryHost>[1] 
   return container.resolve('checkoutFiles').open('/r', 'system-state');
 }
 
+describe('readMapSources from rules epoch 4', () => {
+  test('a page is a Markdown file declaring wiki-page where that type lives, nothing else', () => {
+    const page = (title: string) =>
+      `---\npuni-doc-type: wiki-page\ntitle: ${title}\nread-when: reading ${title}\n---\n`;
+    const files = openMemory({
+      '/r/wiki/typed.md': page('typed'),
+      '/r/wiki/how-to/typed.mdx': page('mdx'),
+      '/r/wiki/untyped.md': '---\ntitle: Untyped\nread-when: reading untyped\n---\n',
+      '/r/wiki/product.md': '---\npuni-doc-type: product\n---\n',
+      '/r/wiki/ops/misplaced.md': page('misplaced'),
+      '/r/docs/elsewhere.md': page('elsewhere'),
+    });
+    const sources = readMapSources(files, [], 4);
+    expect([sources.pages.map(({ path }) => path), sources.defects]).toEqual([
+      ['wiki/how-to/typed.mdx', 'wiki/typed.md'],
+      [],
+    ]);
+    const before = readMapSources(files, [], 3);
+    expect([
+      before.pages.map(({ path }) => path),
+      before.defects.map(({ path, topic }) => `${topic} ${path}`),
+    ]).toEqual([
+      ['wiki/typed.md', 'wiki/untyped.md'],
+      ['section wiki/ops/misplaced.md', 'read-when wiki/product.md'],
+    ]);
+  });
+});
+
 describe('readMapSources', () => {
   test('reads every page and the projects of every source in order, defects sorted by path', () => {
     const files = openMemory({

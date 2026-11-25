@@ -1,5 +1,5 @@
 import { agentsTemplates } from '@puni/shared-checkout';
-import stateReadme from './templates/state-readme.md' with { type: 'text' };
+import stateReadme from './templates/state-readme.md.tmpl' with { type: 'text' };
 import { TemplatePlaceholderUnfilled } from './failures';
 
 /**

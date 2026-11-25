@@ -29,7 +29,7 @@ beforeEach(() => {
   records = join(dirname(root), 'demo-records');
   state = join(dirname(root), 'review.json');
   mkdirSync(records);
-  writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+  writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
   symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
   runGit(records, ['init', '-q']);
 });
