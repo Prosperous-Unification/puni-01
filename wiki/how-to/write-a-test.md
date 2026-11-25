@@ -19,9 +19,13 @@ own tests are the model.
 - **A graph test**, in `apps/puni/cli/src`: `composition.test.ts` resolves every exported key,
   swapping host services with `createIndependentContainer`; `root-parser.test.ts` and
   `main.test.ts` pin the command tree and its dispatch.
-- **A spawned run**, as in `apps/puni/cli/src/ops-entrypoint.test.ts`, for the real streams and
-  exit code of the entrypoint. Spawn with `CLAUDECODE` and `AGENT` set to `0`, because Bun changes
-  its output under agents. `bundle.test.ts` does the same for the built bundle.
+- **An in-process run**, as in `apps/puni/cli/src/resources-commands.test.ts`: a command line
+  through `runPuni` and the real container of `openInProcessPuni`, over real repositories, its
+  output collected. It costs no process start, so every leaf has one.
+- **A spawned run**, as in `apps/puni/cli/src/ops-entrypoint.test.ts`, only for what a process
+  alone shows: the entrypoint's streams and exit codes, a child attached to the terminal, the
+  environment. Spawn with `CLAUDECODE` and `AGENT` set to `0`, because Bun changes its output under
+  agents. `bundle.test.ts` does the same for the built bundle.
 - **A real repository pair**, when the behaviour needs a git that a memory host cannot model:
   `writeProject`, `writeRepositoryFile` and `runGit` of `@puni/shared-testing`, in a directory
   from `removeScratchDirectoriesAfterEach`, which removes only what it created.

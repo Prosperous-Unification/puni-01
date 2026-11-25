@@ -41,10 +41,31 @@ export const matchRecordsLocation: Rule = {
 
 const workflow = '.github/workflows/ci.yml';
 
-const gateRuns: readonly (readonly [string, RegExp])[] = [
-  ['bun run gate', /\bbun run gate(?![\w:-])/u],
-  ['bun run gate:affected', /\bbun run gate:affected(?![\w:-])/u],
-];
+/** The gate scripts of the root `package.json`: the whole gate, and the gate of what a change affects. */
+const gateScripts = ['gate', 'gate:affected'] as const;
+
+/**
+ * Whether `text` runs the package script `script`, a name of word characters, `:` and `-`, and not
+ * one whose name only starts with it.
+ */
+function runsScript(text: string, script: string): boolean {
+  return new RegExp(`\\bbun run ${script}(?![\\w:-])`, 'u').test(text);
+}
+
+/**
+ * The parts `script` is made of when the root `package.json` gives it as `bun run <part>` steps
+ * joined by `&&`, which CI may run as separate jobs; none for any other script, or none at all.
+ */
+function readGateParts(files: CheckoutFiles, script: string): readonly string[] {
+  if (!files.exists('package.json')) return [];
+  const read = parseJson(files.readText('package.json'));
+  if ('problem' in read) return [];
+  const scripts = isRecord(read.value) ? read.value['scripts'] : undefined;
+  const body = isRecord(scripts) ? scripts[script] : undefined;
+  if (typeof body !== 'string') return [];
+  const parts = body.split('&&').map((step) => /^\s*bun run ([\w:-]+)\s*$/u.exec(step)?.[1]);
+  return parts.every((part): part is string => part !== undefined) ? parts : [];
+}
 
 /**
  * Whether the repository is an Nx workspace, which holds code and its gate scripts: it has an
@@ -56,20 +77,30 @@ function isWorkspace(files: CheckoutFiles): boolean {
 }
 
 /**
- * The CI workflow of an Nx workspace ({@link isWorkspace}) runs both gate scripts: `bun run gate`
- * and `bun run gate:affected`. A repository without `nx.json` has no gate scripts to run.
+ * The CI workflow of an Nx workspace ({@link isWorkspace}) runs both gate scripts, `bun run gate`
+ * and `bun run gate:affected`: each whole, or every part it is made of ({@link readGateParts}), so
+ * that CI may run the parts as parallel jobs. A repository without `nx.json` has no gate scripts
+ * to run.
  */
 export const requireCiGate: Rule = {
   id: 'ci.gate',
   since: 1,
-  remedy: `run \`bun run gate\` on pushes and \`bun run gate:affected\` on pull requests in ${workflow}`,
+  remedy: `run \`bun run gate\` on pushes and \`bun run gate:affected\` on pull requests in ${workflow}, each whole or every \`bun run\` part of it`,
   judge({ files }) {
     if (!isWorkspace(files)) return [];
     if (!files.exists(workflow)) return [{ path: workflow, message: 'is missing' }];
     const text = files.readText(workflow);
-    return gateRuns
-      .filter(([, pattern]) => !pattern.test(text))
-      .map(([script]) => ({ path: workflow, message: `does not run ${script}` }));
+    return gateScripts.flatMap((script) => {
+      if (runsScript(text, script)) return [];
+      const parts = readGateParts(files, script);
+      const missing = parts.filter((part) => !runsScript(text, part));
+      if (parts.length > 0 && missing.length === 0) return [];
+      const message =
+        missing.length < parts.length
+          ? `does not run bun run ${script}, nor its parts ${missing.map((part) => `bun run ${part}`).join(', ')}`
+          : `does not run bun run ${script}`;
+      return [{ path: workflow, message }];
+    });
   },
 };
 
