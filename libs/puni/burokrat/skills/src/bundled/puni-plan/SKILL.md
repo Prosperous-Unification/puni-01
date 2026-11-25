@@ -1,6 +1,7 @@
 ---
 name: puni-plan
 description: Use when asked to plan work in a PUNI-governed repository, to stress-test or grill a goal or draft plan before work starts, or to replace a filed plan whose goal, scope or evidence changed.
+puni-doc-type: product
 ---
 
 # PUNI plan

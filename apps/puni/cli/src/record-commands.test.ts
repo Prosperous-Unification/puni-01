@@ -94,7 +94,7 @@ describe('navigator plan add --supersedes in process, demo beside demo-records',
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
     const records = join(dirname(state), 'demo-records');
     mkdirSync(records);
-    writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+    writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
     symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
     runGit(records, ['init', '-q']);
     const today = new Date().toISOString().slice(0, 10);
@@ -117,7 +117,7 @@ describe('navigator plan add --supersedes in process, demo beside demo-records',
     );
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 13 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(add('Third note', first), state)).toEqual({
