@@ -118,7 +118,7 @@ describe('docs.references', () => {
   test('refuses what the file and its re-exports do not declare, naming the line and what it did not follow', () => {
     writePage(
       'gone',
-      '[a](../src/cart.ts#default)\nand [b](../src/UP.TS#Bar), [c](../src/cart.ts#Remote.inherited), [d](../src/cart.ts#default.inside).',
+      '[a](../src/cart.ts#default)\nand [b](../src/UP.TS#Bar), [c](../src/cart.ts#Remote.inherited), [d](../src/cart.ts#default.inside), [e](../src/UP.TS?raw#Baz).',
     );
     const unfollowed = '; it re-exports some-package, which this check does not follow';
     expect(messages(judgeDocReferences)).toEqual([
@@ -126,6 +126,7 @@ describe('docs.references', () => {
       'line 9 links to ../src/UP.TS#Bar, but src/UP.TS declares no Bar',
       `line 9 links to ../src/cart.ts#Remote.inherited, but src/cart.ts declares no Remote.inherited${unfollowed}`,
       `line 9 links to ../src/cart.ts#default.inside, but src/cart.ts declares no default.inside${unfollowed}`,
+      'line 9 links to ../src/UP.TS#Baz, but src/UP.TS declares no Baz',
     ]);
   });
 
