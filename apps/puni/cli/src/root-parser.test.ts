@@ -112,7 +112,14 @@ describe('readInvocation', () => {
     [
       'n plan add --title T --topics a --summary S',
       'navigator',
-      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
   ] as const)('%s selects %s %j', (line, group, request) => {
     const invocation: unknown = readInvocation(line.split(' '), () => undefined);
@@ -312,7 +319,7 @@ describe('listCommands', () => {
       { path: 'puni burokrat skills', brief: "Manage PUNI's repository skills." },
       {
         path: 'puni burokrat skills install',
-        brief: 'Install the PUNI review skills in this checkout.',
+        brief: 'Install the PUNI skills in this checkout.',
       },
       {
         path: 'puni burokrat review',

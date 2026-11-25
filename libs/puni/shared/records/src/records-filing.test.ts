@@ -14,6 +14,7 @@ import {
   RecordExists,
   RecordTitleUnsluggable,
   RecordValueRefused,
+  SupersededRecordRefused,
 } from './failures';
 import { judgeRecordValue } from './record-values';
 import { recordKeyForms } from './record-values';
@@ -235,5 +236,55 @@ describe('recordsCatalog.file', () => {
         caught instanceof FileUnreadable &&
         caught.message === 'cannot read /notes/dir: EISDIR: /notes/dir',
     );
+  });
+
+  const old = '/r/nav/plans/2031-04-01-old-plan.md';
+  const oldText =
+    '---\nkind: plan\ntitle: Old plan\ndate: 2031-04-01\ncommit: abc1234\ntopics: ops\nsummary: The old plan.\n---\n\n# Old plan\n';
+
+  test('superseding a record links both: the new one names the old, the old names the new', () => {
+    const { host, file } = open({ [old]: oldText });
+    const path = file({ supersedes: 'nav/plans/2031-04-01-old-plan.md' });
+    expect(host.nodes.get(`/r/${path}`)).toContain(
+      'summary: How the first node gets its cluster.\nsupersedes: nav/plans/2031-04-01-old-plan.md\n---\n',
+    );
+    expect(host.nodes.get(old)).toBe(
+      oldText.replace('\n---\n\n', `\nsuperseded-by: ${path}\n---\n\n`),
+    );
+  });
+
+  test.each([
+    ['../outside.md', `supersedes is "../outside.md"; expected ${recordKeyForms.supersedes}`],
+    [
+      'nav/plans/2031-04-02-missing.md',
+      'supersedes nav/plans/2031-04-02-missing.md is not a record in a kind directory',
+    ],
+    ['nav/notes.md', 'supersedes nav/notes.md is not a record in a kind directory'],
+    [
+      'nav/plans/2031-04-03-bad.md',
+      'supersedes nav/plans/2031-04-03-bad.md has front matter that cannot be read',
+    ],
+    [
+      'nav/plans/2031-04-04-done.md',
+      'supersedes nav/plans/2031-04-04-done.md is already superseded by nav/plans/2031-04-04-next.md',
+    ],
+  ] as const)('superseding %s is refused and writes nothing', (supersedes, message) => {
+    const tree: MemoryTree = {
+      [old]: oldText,
+      '/r/nav/notes.md': oldText,
+      '/r/nav/plans/2031-04-03-bad.md': 'no front matter\n',
+      '/r/nav/plans/2031-04-04-done.md': oldText.replace(
+        '\n---\n\n',
+        '\nsuperseded-by: nav/plans/2031-04-04-next.md\n---\n\n',
+      ),
+    };
+    const { host, file } = open(tree);
+    throws(
+      () => file({ supersedes }),
+      (caught) =>
+        (caught instanceof SupersededRecordRefused || caught instanceof RecordValueRefused) &&
+        caught.message === message,
+    );
+    expect(Object.fromEntries(host.nodes)).toEqual(tree);
   });
 });

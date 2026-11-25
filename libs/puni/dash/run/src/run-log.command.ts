@@ -12,7 +12,7 @@ const runLog: RecordAddLeaf<'run log'> = {
   summarises: 'What the run measured',
 };
 
-/** `log --title TEXT --topics LIST --summary TEXT [--body-file PATH]`: one run to record. */
+/** `log`: one run to record, with the options of `recordAddParser`. */
 export const runLogParser = recordAddParser(runLog);
 
 /**

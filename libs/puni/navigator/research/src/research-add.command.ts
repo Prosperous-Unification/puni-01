@@ -9,7 +9,7 @@ const researchAdd: RecordAddLeaf<'research add'> = {
   summarises: 'What the research found',
 };
 
-/** `add --title TEXT --topics LIST --summary TEXT [--body-file PATH]`: one research to file. */
+/** One research to file, with the options of `recordAddParser`. */
 export const researchAddParser = recordAddParser(researchAdd);
 
 /**

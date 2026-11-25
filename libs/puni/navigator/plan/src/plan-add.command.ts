@@ -9,7 +9,7 @@ const planAdd: RecordAddLeaf<'plan add'> = {
   summarises: 'What the plan decides',
 };
 
-/** `add --title TEXT --topics LIST --summary TEXT [--body-file PATH]`: one plan to file. */
+/** One plan to file, with the options of `recordAddParser`. */
 export const planAddParser = recordAddParser(planAdd);
 
 /**
