@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
+import { join } from 'node:path';
 import {
   openSourceRegistry,
   repositoryScope,
@@ -12,6 +13,7 @@ import {
 } from '@puni/shared-checkout';
 import {
   removeScratchDirectoriesAfterEach,
+  removeScratchPath,
   runGit,
   writeRepositoryFile,
 } from '@puni/shared-testing';
@@ -499,7 +501,7 @@ describe('docs.comment-links', () => {
 });
 
 describe('docs.comment-links and augmentation', () => {
-  test('accepts a member another file adds by declare module, and refuses one no file adds', () => {
+  test('accepts a member a module adds by a declare module resolving to the file, and none other', () => {
     writeRepositoryFile(
       root,
       'libs/x/src/options.ts',
@@ -511,11 +513,21 @@ describe('docs.comment-links and augmentation', () => {
       "declare module './options' { interface Options { b: 1 } }\nexport {};\n",
     );
     expect(messages(judgeDocLinks)).toEqual([]);
-    writeRepositoryFile(root, 'libs/x/src/augment.ts', 'export {};\n');
-    expect(messages(judgeDocLinks)).toEqual([
+    const refused = [
       'line 2 links Options.b, a member Options does not declare',
       'line 2 links Options.c, a member Options does not declare',
-    ]);
+    ];
+    for (const [file, text] of [
+      ['augment.ts', 'export {};\n'],
+      ['augment.ts', "declare module 'options' { interface Options { b: 1 } }\nexport {};\n"],
+      ['augment.d.ts', "declare module './options' { interface Options { b: 1 } }\n"],
+      ['augment.ts', "declare module './other' { interface Options { b: 1 } }\nexport {};\n"],
+    ] as const) {
+      removeScratchPath(join(root, 'libs/x/src/augment.ts'));
+      writeRepositoryFile(root, `libs/x/src/${file}`, text);
+      expect([file, text, messages(judgeDocLinks)]).toEqual([file, text, refused]);
+      removeScratchPath(join(root, `libs/x/src/${file}`));
+    }
   });
 });
 

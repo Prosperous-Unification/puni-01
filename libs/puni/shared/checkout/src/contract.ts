@@ -274,8 +274,19 @@ export interface SourceReading {
   readonly links: readonly DocLink[];
   /** The names the text declares for every file: those of a script, or of a global block. */
   readonly ambient: readonly string[];
-  /** The names the text adds members to in another module, as `declare module` does. */
-  readonly augmented: readonly string[];
+  /**
+   * The names the text, a module, adds members to in another module of the repository, by a
+   * `declare module './other' { … }` naming it relative to the text's file (see
+   * {@link Augmentation}).
+   */
+  readonly augmented: readonly Augmentation[];
+}
+
+/** One name a module augments: the module as the augmentation names it, and the name. */
+export interface Augmentation {
+  /** The relative specifier the `declare module` names, as written. */
+  readonly module: string;
+  readonly name: string;
 }
 
 /**

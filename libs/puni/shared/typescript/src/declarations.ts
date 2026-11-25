@@ -152,10 +152,15 @@ function classMembers(compiler: Compiler, node: ts.ClassLikeDeclaration): OwnMem
   };
 }
 
-/** The members of a type: those of each type literal it is, unites or intersects. */
-function typeMembers(compiler: Compiler, type: ts.TypeNode): Members {
+/**
+ * The members of a type: those of each type literal it is, unites or intersects, and, for a
+ * reference by a plain name without type arguments, those of what that name declares at the
+ * top level of the file, as a base it inherits (see `inherit`); a generic or qualified reference
+ * names members no one text lists.
+ */
+function typeMembers(compiler: Compiler, type: ts.TypeNode): OwnMembers {
   if (compiler.isTypeLiteralNode(type)) {
-    return { listed: named(compiler, type.members), closed: true, callable: false };
+    return { listed: named(compiler, type.members), closed: true, callable: false, bases: [] };
   }
   if (compiler.isUnionTypeNode(type) || compiler.isIntersectionTypeNode(type)) {
     const parts = type.types.map((part) => typeMembers(compiler, part));
@@ -163,9 +168,22 @@ function typeMembers(compiler: Compiler, type: ts.TypeNode): Members {
       listed: parts.flatMap(({ listed }) => listed),
       closed: parts.every(({ closed }) => closed),
       callable: false,
+      bases: parts.flatMap(({ bases }) => bases),
     };
   }
-  return unknownMembers;
+  if (
+    compiler.isTypeReferenceNode(type) &&
+    type.typeArguments === undefined &&
+    compiler.isIdentifier(type.typeName)
+  ) {
+    return { listed: [], closed: true, callable: false, bases: [type.typeName.text] };
+  }
+  return { ...unknownMembers, bases: [] };
+}
+
+/** `shape`'s members as one text lists them: open when it has a base, which no one text resolves. */
+function withoutBases({ bases, ...members }: OwnMembers): Members {
+  return bases.length === 0 ? members : { ...members, closed: false };
 }
 
 /** The names a namespace body exports, as members. */
@@ -187,7 +205,7 @@ function namespaceMembers(compiler: Compiler, node: ts.ModuleDeclaration): Membe
 
 /** The own members of the shape `node` declares (see {@link Members}). */
 function ownMembersOf(compiler: Compiler, node: ts.Node): OwnMembers {
-  if (compiler.isTypeNode(node)) return { ...typeMembers(compiler, node), bases: [] };
+  if (compiler.isTypeNode(node)) return typeMembers(compiler, node);
   if (compiler.isClassDeclaration(node) || compiler.isClassExpression(node)) {
     return classMembers(compiler, node);
   }
@@ -203,7 +221,7 @@ function ownMembersOf(compiler: Compiler, node: ts.Node): OwnMembers {
   if (compiler.isEnumDeclaration(node)) {
     return plain({ listed: named(compiler, node.members), closed: true, callable: false });
   }
-  if (compiler.isTypeAliasDeclaration(node)) return plain(typeMembers(compiler, node.type));
+  if (compiler.isTypeAliasDeclaration(node)) return typeMembers(compiler, node.type);
   if (compiler.isModuleDeclaration(node)) return plain(namespaceMembers(compiler, node));
   if (compiler.isObjectLiteralExpression(node)) {
     return plain({
@@ -228,7 +246,7 @@ export function membersOfMember(compiler: Compiler, file: ts.SourceFile, node: t
     compiler.isPropertyDeclaration(node) ||
     compiler.isVariableDeclaration(node)
   ) {
-    if (node.type !== undefined) return typeMembers(compiler, node.type);
+    if (node.type !== undefined) return withoutBases(typeMembers(compiler, node.type));
     const initializer = compiler.isPropertySignature(node) ? undefined : node.initializer;
     return initializer === undefined
       ? unknownMembers
@@ -237,7 +255,7 @@ export function membersOfMember(compiler: Compiler, file: ts.SourceFile, node: t
   if (compiler.isPropertyAssignment(node)) {
     return membersOfMember(compiler, file, unwrap(compiler, file, node.initializer));
   }
-  if (compiler.isTypeNode(node)) return typeMembers(compiler, node);
+  if (compiler.isTypeNode(node)) return withoutBases(typeMembers(compiler, node));
   if (
     compiler.isClassDeclaration(node) ||
     compiler.isClassExpression(node) ||
@@ -248,8 +266,7 @@ export function membersOfMember(compiler: Compiler, file: ts.SourceFile, node: t
     compiler.isObjectLiteralExpression(node) ||
     compiler.isFunctionLike(node)
   ) {
-    const { bases, ...members } = ownMembersOf(compiler, node);
-    return bases.length === 0 ? members : { ...members, closed: false };
+    return withoutBases(ownMembersOf(compiler, node));
   }
   return unknownMembers;
 }

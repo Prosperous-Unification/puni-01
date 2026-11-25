@@ -690,8 +690,9 @@ describe('the members TypeScript resolves', () => {
 
   test('mark a link whose name the file declares but not its member, and name what a file augments', () => {
     const reading = readerOf('.ts').read(
-      "export interface Options { a: 1 }\n/** {@link Options.b} and {@link Gone.b}. */\nexport const after = 1;\ndeclare module './other' { interface Extra { x: 1 } global { interface NotAugmented {} } }",
+      "export interface Options { a: 1 }\n/** {@link Options.b} and {@link Gone.b}. */\nexport const after = 1;\ndeclare module './other' { interface Extra { x: 1 } global { interface NotAugmented {} } }\ndeclare module 'pkg' { interface FromPackage {} }",
     );
+    const script = readerOf('.ts').read("declare module './other' { interface InScript {} }");
     expect([
       reading.links.map(({ target, resolved, memberMissing }) => [target, resolved, memberMissing]),
       reading.augmented,
@@ -700,7 +701,109 @@ describe('the members TypeScript resolves', () => {
         ['Options.b', false, true],
         ['Gone.b', false, false],
       ],
-      ['Extra'],
+      [{ module: './other', name: 'Extra' }],
+    ]);
+    expect(script.augmented).toEqual([]);
+  });
+
+  test('add the members a file assigns to its own top-level names, opening none but by a computed key', () => {
+    const text = [
+      'export class Store {',
+      '  items: string[] = [];',
+      '  constructor() {',
+      '    this.items = [];',
+      '    this.extra = 1;',
+      '  }',
+      '}',
+      'export const state = { count: 0 };',
+      'state.count = 1;',
+      'state.added = 2;',
+      'state.counter += 1;',
+      'export const tree = { a: { x: 1 } };',
+      'tree.a.b = 2;',
+      'export const dict = {};',
+      'dict[key] = 1;',
+      'export const lit = {};',
+      "lit['k'] = 1;",
+      'export const shadowed = { a: 1 };',
+      'function local(shadowed) { shadowed.inner = 1; }',
+      '/**',
+      ' * {@link Store.items}, {@link Store.extra}, {@link Store.typo}, {@link state.added},',
+      ' * {@link state.counter}, {@link state.typo}, {@link tree.a.b}, {@link tree.a.typo},',
+      ' * {@link tree.typo}, {@link dict.anything}, {@link lit.k}, {@link lit.typo},',
+      ' * {@link shadowed.inner}.',
+      ' */',
+      'export const after = local;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '21 Store.typo false',
+      '22 state.typo false',
+      '22 tree.a.typo false',
+      '23 tree.typo false',
+      '23 lit.typo false',
+      '24 shadowed.inner false',
+    ]);
+  });
+
+  test("take this as a class's only in its own members and arrow functions", () => {
+    const text = [
+      'export class Outer {',
+      '  m() {',
+      '    function inner() { this.typo = 1; }',
+      '    const o = { n() { this.other = 1; } };',
+      '    const arrow = () => { this.viaArrow = 1; };',
+      '    return [inner, o, arrow];',
+      '  }',
+      '}',
+      '/** {@link Outer.typo}, {@link Outer.other}, {@link Outer.viaArrow}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text)).toEqual([
+      '9 Outer.typo false',
+      '9 Outer.other false',
+      '9 Outer.viaArrow true',
+    ]);
+  });
+
+  test('give an annotated or cast value the members of a type the file declares, inherited ones too', () => {
+    const text = [
+      'interface Conf { timeout: number }',
+      'interface Wide extends Conf { retries: number }',
+      'interface Twice { a: 1 }',
+      'interface Twice extends Far {}',
+      'interface FromTwice extends Twice {}',
+      'export const conf: Conf = make();',
+      'export const wide = make() as Wide;',
+      'export const gen: Box<string> = make();',
+      'export const ext: External = make();',
+      'export const twice: FromTwice = make();',
+      '/**',
+      ' * {@link conf.timeout}, {@link conf.typo}, {@link wide.timeout}, {@link wide.typo},',
+      ' * {@link gen.any}, {@link ext.any}, {@link twice.any}.',
+      ' */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '12 conf.typo false',
+      '12 wide.typo false',
+    ]);
+  });
+
+  test('keep the members a JavaScript file adds after declaring them', () => {
+    const text = [
+      'export class Js { constructor() { this.count = 0; } }',
+      'Js.prototype.proto = function () {};',
+      'export const obj = {};',
+      'obj.added = 1;',
+      '/** {@link Js.count}, {@link Js.proto}, {@link obj.added}, {@link Js.typo}, {@link obj.typo}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual([
+      '5 Js.count true',
+      '5 Js.proto true',
+      '5 obj.added true',
+      '5 Js.typo false',
+      '5 obj.typo false',
     ]);
   });
 

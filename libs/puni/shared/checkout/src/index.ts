@@ -6,6 +6,7 @@ export {
 } from './agents-headings';
 export { compareBytes } from './byte-order';
 export type {
+  Augmentation,
   CheckoutEntry,
   CheckoutFiles,
   CheckoutFilesResource,

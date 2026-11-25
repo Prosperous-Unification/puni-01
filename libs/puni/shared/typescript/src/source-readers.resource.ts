@@ -9,13 +9,14 @@ import type ts from 'typescript';
 import type { TypescriptCompiler } from './contract';
 import { type Compiler, declare, listReexports, listTopLevel } from './declarations';
 import { findDocComments, listLinkTags, listNodes } from './doc-comments';
+import { listExpandos } from './expandos';
 import { listTemplateNames } from './jsdoc-tags';
 import {
   headOf,
   isJudgedTarget,
   listAmbientNames,
-  listAugmentedNames,
-  listExpandedNames,
+  listAugmentations,
+  isShadowed,
   listTopNames,
   resolvesInFile,
   usesCommonJs,
@@ -35,6 +36,7 @@ const languages = [
 /** Everything a reader reads in the parsed `file`, in one walk of its nodes. */
 function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean): SourceReading {
   const { nodes, parents } = listNodes(compiler, file);
+  const isModule = compiler.isExternalModule(file) || usesCommonJs(compiler, nodes);
   const hosted = findDocComments(compiler, file, nodes);
   const docComments = hosted.map(({ comment }) => comment);
   const topLevel = listTopLevel(
@@ -58,7 +60,9 @@ function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean):
     topLevel,
     tagged: new Set(topLevel.filter(({ node }) => node === file).map(({ name }) => name)),
     templates,
-    expanded: listExpandedNames(compiler, nodes, parents),
+    expandos: listExpandos(compiler, nodes, parents, (node, name) =>
+      isShadowed({ compiler, file, parents }, node, name),
+    ),
   };
   return {
     declarations: declare(compiler, file, topLevel),
@@ -78,12 +82,8 @@ function readFile(compiler: Compiler, file: ts.SourceFile, javascript: boolean):
           };
         }),
     ),
-    ambient: listAmbientNames(
-      compiler,
-      file,
-      compiler.isExternalModule(file) || usesCommonJs(compiler, nodes),
-    ),
-    augmented: listAugmentedNames(compiler, file),
+    ambient: listAmbientNames(compiler, file, isModule),
+    augmented: listAugmentations(compiler, file, isModule),
   };
 }
 

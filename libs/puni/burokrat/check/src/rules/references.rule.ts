@@ -310,6 +310,7 @@ export const judgeTypedDocSpans: Rule = {
 /** The names the source files of the repository read at the pin declare for every file, and augment in another module. */
 function collectRepositoryNames(reading: RuleReading): {
   readonly ambient: ReadonlySet<string>;
+  /** Each name a module augments, as `<the augmented file>#<name>`. */
   readonly augmented: ReadonlySet<string>;
 } {
   const ambient = new Set<string>();
@@ -317,7 +318,10 @@ function collectRepositoryNames(reading: RuleReading): {
   for (const path of reading.files.listVisible(repositoryScope)) {
     const read = readSourceFile(reading, path);
     for (const name of read?.ambient ?? []) ambient.add(name);
-    for (const name of read?.augmented ?? []) augmented.add(name);
+    for (const { module, name } of read?.augmented ?? []) {
+      const target = resolveModule(reading, path, module);
+      if (target !== undefined) augmented.add(`${target}#${name}`);
+    }
   }
   return { ambient, augmented };
 }
@@ -325,8 +329,8 @@ function collectRepositoryNames(reading: RuleReading): {
 /**
  * Every inline link of a doc comment of the files of `listCommentedFiles` names something: the
  * file itself resolves it where the comment stands (see `DocLink.resolved`); or the file
- * declares its first name but not the member after it, and another file augments that name by
- * `declare module`; or its first name is a global of the libraries puni or the repository installs (see `SourceReader.globals`), or
+ * declares its first name but not the member after it, and another module augments that name
+ * of this file by a `declare module` whose relative specifier resolves to it; or its first name is a global of the libraries puni or the repository installs (see `SourceReader.globals`), or
  * one some source file of the repository declares for every file. A type package the
  * repository's configuration lists but does not install is one finding of the file listing it,
  * when the globals are first needed. Globals puni's own installation cannot give stop the check,
@@ -351,7 +355,7 @@ export const judgeDocLinks: Rule = {
         if (resolved) continue;
         repository ??= collectRepositoryNames(reading);
         if (memberMissing) {
-          if (!repository.augmented.has(head)) {
+          if (!repository.augmented.has(`${path}#${head}`)) {
             breaches.push({
               path,
               message: `line ${String(line)} links ${target}, a member ${head} does not declare`,

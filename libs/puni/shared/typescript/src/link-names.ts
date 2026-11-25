@@ -1,4 +1,6 @@
 import type ts from 'typescript';
+import type { Augmentation } from '@puni/shared-checkout';
+import type { Expandos } from './expandos';
 import {
   bindingNames,
   type Compiler,
@@ -225,8 +227,21 @@ export interface LinkContext {
   readonly tagged: ReadonlySet<string>;
   /** The names a `@template` tag of a JavaScript doc comment declares, by the node it leads. */
   readonly templates: ReadonlyMap<ts.Node, readonly string[]>;
-  /** The names given members after their declaration (see {@link listExpandedNames}). */
-  readonly expanded: ReadonlySet<string>;
+  /** The members the file gives its top-level names after declaring them (see `listExpandos`). */
+  readonly expandos: Expandos;
+}
+
+/** Whether a scope holding `node`, below the file's top level, declares `name`. */
+export function isShadowed(
+  context: Pick<LinkContext, 'compiler' | 'file' | 'parents'>,
+  node: ts.Node,
+  name: string,
+): boolean {
+  const { compiler, file, parents } = context;
+  for (let at = parents.get(node); at !== undefined && at !== file; at = parents.get(at)) {
+    if (scopeNames(compiler, at).includes(name)) return true;
+  }
+  return false;
 }
 
 /** Whether a scope a doc comment leading `host` sees declares `name`, the top level aside. */
@@ -267,13 +282,12 @@ function isEnclosingMember(context: LinkContext, host: ts.Node, name: string): b
 
 /**
  * The members the top-level name `head` has, when the file pins them down: declared at the top
- * level outside a global block, as shapes whose members are all listed, and given none after
- * (see {@link listExpandedNames}). A name a global block declares may be merged into by any file.
+ * level outside a global block, as shapes whose members are all listed. A name a global block
+ * declares may be merged into by any file.
  */
 function closedMembersOf(context: LinkContext, head: string): Members | undefined {
   const parts = context.topLevel.filter(({ name }) => name === head);
   if (parts.length === 0 || parts.some(({ global }) => global)) return undefined;
-  if (context.expanded.has(head)) return undefined;
   if (!parts.every(({ members }) => members.closed)) return undefined;
   return {
     listed: parts.flatMap(({ members }) => members.listed),
@@ -284,20 +298,28 @@ function closedMembersOf(context: LinkContext, head: string): Members | undefine
 
 /**
  * Whether each of `segments`, a member path below a shape with the members `members`, names a
- * member: of a shape the file lists whole, a listed member, one every object has from
+ * member: of a shape the file lists whole, a listed member, one the file adds after (see
+ * `listExpandos`), whose own members are then those added, one every object has from
  * `Object.prototype` or, for a class or function, one every function has; below a shape it does
  * not list whole, anything.
  */
 function resolvesMembers(
   context: LinkContext,
+  head: string,
   members: Members | undefined,
   segments: readonly string[],
 ): boolean {
   let current = members;
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     if (current === undefined || !current.closed || segment === '') return true;
+    const path = segments.slice(0, index).join('.');
+    if (context.expandos.isOpen(head, path)) return true;
     const found = current.listed.filter(({ name }) => name === segment);
     if (found.length === 0) {
+      if (context.expandos.added(head, path)?.has(segment) === true) {
+        current = { listed: [], closed: true, callable: false };
+        continue;
+      }
       return objectMembers.has(segment) || (current.callable && functionMembers.has(segment));
     }
     const inner = found.map(({ node }) => membersOfMember(context.compiler, context.file, node));
@@ -337,7 +359,7 @@ export function resolvesInFile(context: LinkContext, host: ts.Node, target: stri
   }
   if (inScope(context, host, head)) return 'resolved';
   if (context.topNames.has(head)) {
-    return resolvesMembers(context, closedMembersOf(context, head), segments)
+    return resolvesMembers(context, head, closedMembersOf(context, head), segments)
       ? 'resolved'
       : 'member-missing';
   }
@@ -349,70 +371,6 @@ export function resolvesInFile(context: LinkContext, host: ts.Node, target: stri
  * the members after it, or does not declare that name.
  */
 export type LinkVerdict = 'resolved' | 'member-missing' | 'unresolved';
-
-/** The identifier a property access or element access chain starts from, if one does. */
-function rootName(compiler: Compiler, expression: ts.Expression): string | undefined {
-  let inner = expression;
-  while (compiler.isPropertyAccessExpression(inner) || compiler.isElementAccessExpression(inner)) {
-    inner = inner.expression;
-  }
-  return compiler.isIdentifier(inner) ? inner.text : undefined;
-}
-
-/** The name of the class `node` stands in, if it stands in a named one. */
-function enclosingClassName(
-  compiler: Compiler,
-  node: ts.Node,
-  parents: ReadonlyMap<ts.Node, ts.Node>,
-): string | undefined {
-  for (let at = parents.get(node); at !== undefined; at = parents.get(at)) {
-    if (compiler.isClassLike(at)) return at.name?.text;
-  }
-  return undefined;
-}
-
-/**
- * The names `nodes`, a file's, give members after declaring them, so no one declaration lists
- * them all: one assigned a member anywhere (`Head.x = …`, `Head.a.b = …`, a function's
- * expandos among them), one passed first to `Object.assign`, and a class whose methods assign
- * `this.<member>`.
- */
-export function listExpandedNames(
-  compiler: Compiler,
-  nodes: readonly ts.Node[],
-  parents: ReadonlyMap<ts.Node, ts.Node>,
-): ReadonlySet<string> {
-  const names = new Set<string>();
-  const add = (name: string | undefined): void => {
-    if (name !== undefined) names.add(name);
-  };
-  for (const node of nodes) {
-    if (
-      compiler.isBinaryExpression(node) &&
-      node.operatorToken.kind >= compiler.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= compiler.SyntaxKind.LastAssignment &&
-      (compiler.isPropertyAccessExpression(node.left) ||
-        compiler.isElementAccessExpression(node.left))
-    ) {
-      add(
-        node.left.expression.kind === compiler.SyntaxKind.ThisKeyword
-          ? enclosingClassName(compiler, node, parents)
-          : rootName(compiler, node.left),
-      );
-    }
-    if (
-      compiler.isCallExpression(node) &&
-      compiler.isPropertyAccessExpression(node.expression) &&
-      compiler.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === 'Object' &&
-      node.expression.name.text === 'assign'
-    ) {
-      const [first] = node.arguments;
-      add(first === undefined ? undefined : rootName(compiler, first));
-    }
-  }
-  return names;
-}
 
 /** The name a link target starts with. */
 export function headOf(target: string): string {
@@ -502,19 +460,27 @@ export function usesCommonJs(compiler: Compiler, nodes: readonly ts.Node[]): boo
 }
 
 /**
- * The names `file` augments in another module: each a `declare module '<module>' { … }` block
- * declares, outside its global blocks, whose members another file's declaration then lacks.
+ * The names `file` augments in another module of the repository: each a `declare module
+ * './other' { … }` block declares outside its global blocks, the specifier relative, in a file
+ * that is a module. An ambient `declare module 'pkg'`, or one in a script, declares a module of
+ * its own rather than augmenting one, and augments nothing.
  */
-export function listAugmentedNames(compiler: Compiler, file: ts.SourceFile): string[] {
+export function listAugmentations(
+  compiler: Compiler,
+  file: ts.SourceFile,
+  isModule: boolean,
+): Augmentation[] {
+  if (!isModule) return [];
   return file.statements.flatMap((statement) =>
     compiler.isModuleDeclaration(statement) &&
     compiler.isStringLiteral(statement.name) &&
+    /^\.\.?\//u.test(statement.name.text) &&
     statement.body !== undefined &&
     compiler.isModuleBlock(statement.body)
       ? blockNames(
           compiler,
           statement.body.statements.filter((inner) => !isGlobalBlock(compiler, inner)),
-        )
+        ).map((name) => ({ module: statement.name.text, name }))
       : [],
   );
 }
