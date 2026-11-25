@@ -28,7 +28,7 @@ The first leaf of a group with none also adds what step 3 of
    the `or` if it held one leaf; the first leaf replaces the `constant` parser with
    `map(optional(command(…)), (leaf) => leaf ?? helpRequest)`, as `libs/puni/navigator/plan`
    does. The brief, one sentence in Optique's `message` template, is the leaf's line in help. If the new leaf makes the group's brief untrue, rewrite it; if it makes the
-   library's `metadata.readWhen` or `metadata.readFirst` untrue, rewrite them as
+   library's `readWhen` or `readFirst` untrue, rewrite them as
    [documentation](../concepts/documentation.md#how-an-agent-finds-it) says.
 5. `module.ts`: register each service and add the command key to `exportedServiceKeys`, as
    [dependency injection](../concepts/dependency-injection.md) says. `module.check.ts`: supply
@@ -48,12 +48,11 @@ Each seam as [writing a test](write-a-test.md) says:
 
 8. The library test, beside the group's existing one, covering every outcome of the leaf.
 9. `apps/puni/cli/src/group-parsers.test.ts`: the leaf's lines parse; bad ones are refused.
-10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`,
-    [`listCommands`](../../libs/puni/shared/command/src/command-catalog.ts#listCommands)),
-    `composition.test.ts` ([`exportedKeys`](../../apps/puni/cli/src/composition.test.ts#exportedKeys), sorted) and `main.test.ts` (the `failing` container,
+10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`, [`listCommands`](../../libs/puni/shared/command/src/command-catalog.ts#listCommands)),
+    `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
     which provides every command key).
 11. A run of the leaf over real repositories, in process: its group's `*-commands.test.ts` in
-    `apps/puni/cli/src`, through `openInProcessPuni`. Spawn the entrypoint only for what a
+    `apps/puni/cli/src`, through [`openInProcessPuni`](../../apps/puni/cli/src/in-process.test-host.ts#openInProcessPuni). Spawn the entrypoint only for what a
     process alone shows, as `ops-entrypoint.test.ts` does for a child attached to the terminal.
 
 Then `bun run fix`, which formats, and `bun run gate`, which must exit 0.

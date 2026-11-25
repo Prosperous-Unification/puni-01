@@ -101,8 +101,13 @@ function readBlocks(
       continue;
     }
     const indent = indentOf(text);
-    const item = listItem.exec(text);
-    if (listIndent !== undefined && indent < listIndent && item === null && current.length === 0) {
+    const bullet = listItem.exec(text);
+    if (
+      listIndent !== undefined &&
+      indent < listIndent &&
+      bullet === null &&
+      current.length === 0
+    ) {
       listIndent = undefined;
     }
     const base = listIndent !== undefined && indent >= listIndent ? listIndent : 0;
@@ -125,9 +130,9 @@ function readBlocks(
       inComment = !text.includes('-->');
       continue;
     }
-    if (item !== null) {
+    if (bullet !== null) {
       flush();
-      listIndent = item[0].length;
+      listIndent = bullet[0].length;
     }
     const defined = current.length === 0 ? definition.exec(text) : null;
     if (defined !== null) {

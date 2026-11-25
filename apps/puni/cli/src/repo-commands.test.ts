@@ -63,7 +63,7 @@ describe('burokrat repo init in process, in an empty temporary directory', () =>
     runGit(records, ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 32 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
