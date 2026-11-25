@@ -864,6 +864,24 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
     },
   ],
   [
+    'a broken link in a product-typed .mdx file, its typed references not judged',
+    judgeTypedDocReferences,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const parse = 1;\n');
+      writeRepositoryFile(
+        root,
+        'docs/guide.mdx',
+        '---\npuni-doc-type: product\n---\n\nSee [`gone`](../libs/x/src/a.ts#gone) and [setup](setup.mdx).\n',
+      );
+    },
+    {
+      rule: 'docs.references',
+      path: 'docs/guide.mdx',
+      message: 'line 5 links to missing setup.mdx',
+      remedy: 'point the link at a path that exists, or remove it',
+    },
+  ],
+  [
     'a symbol in backticks outside a link',
     judgeTypedDocSpans,
     () => {

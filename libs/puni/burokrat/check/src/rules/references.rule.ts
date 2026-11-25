@@ -115,12 +115,16 @@ function readDeclared(
   return { names, unfollowed };
 }
 
-/** The breaches of the links of the Markdown files `isJudged` chooses (see {@link judgeDocReferences}). */
-function judgeReferences(reading: RuleReading, isJudged: (path: string) => boolean): Breach[] {
+/**
+ * The breaches of the links of every Markdown file the scope owns (see
+ * {@link judgeDocReferences}): a missing path in any of them, a typed reference only in those
+ * `judgesTyped` chooses.
+ */
+function judgeReferences(reading: RuleReading, judgesTyped: (path: string) => boolean): Breach[] {
   const { files, scope, references } = reading;
   return files
     .listVisible(scope)
-    .filter(isJudged)
+    .filter(isMarkdown)
     .flatMap((path) =>
       readMarkdown(files.readText(path), true).links.flatMap((link): Breach[] => {
         const { target } = splitDestination(link.destination);
@@ -135,6 +139,7 @@ function judgeReferences(reading: RuleReading, isJudged: (path: string) => boole
             },
           ];
         }
+        if (!judgesTyped(path)) return [];
         const typed = readTypedLink(reading, path, link);
         if (typed === undefined) return [];
         const { names, unfollowed } = readDeclared(reading, typed.resolved);
@@ -173,12 +178,14 @@ export const judgeDocReferences: Rule = {
   since: 3,
   until: 4,
   remedy: referencesRemedy,
-  judge: (reading) => judgeReferences(reading, isMarkdown),
+  judge: (reading) => judgeReferences(reading, () => true),
 };
 
 /**
- * {@link judgeDocReferences} over the Markdown whose declared type the documentation rules
- * judge, so product documentation names no symbol it must keep true.
+ * {@link judgeDocReferences}, its typed references judged only in the Markdown whose declared
+ * type the documentation rules judge, so product documentation names no symbol it must keep
+ * true; a missing path is refused in every Markdown file `links.resolve` does not read, typed or
+ * not, as at epoch 3.
  */
 export const judgeTypedDocReferences: Rule = {
   id: 'docs.references',
