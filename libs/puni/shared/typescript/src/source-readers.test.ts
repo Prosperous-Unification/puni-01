@@ -1,12 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import type { SourceReader } from '@puni/shared-checkout';
-import { closeAfterEach } from '@puni/shared-testing';
+import { readFileSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  type SourceReader,
+  SourceReaderBroken,
+  SourceReaderFailed,
+  SourceUnreadable,
+} from '@puni/shared-checkout';
+import {
+  closeAfterEach,
+  removeScratchDirectoriesAfterEach,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { typescriptModule } from './module';
-import { typescriptReadersSince } from './source-readers.resource';
-import { GlobalTypesMissing } from './failures';
+import type { TypescriptCompiler } from './contract';
+import { createTypescriptSourceReaders, typescriptReadersSince } from './source-readers.resource';
 import {
   createTypescriptCompiler,
   globalTypePackages,
@@ -14,6 +24,7 @@ import {
 } from './typescript-compiler.repository';
 
 const track = closeAfterEach();
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 function readers(): readonly SourceReader[] {
   const container = track(
@@ -225,6 +236,19 @@ describe('the TypeScript source readers', () => {
     expect(readerOf('.ts').read(source).reexports).toEqual(['./everything']);
   });
 
+  test('mark a name passed on from another module as re-exported, and no local one', () => {
+    const { declarations } = readerOf('.ts').read(
+      "export { a, b as c } from './m';\nexport * as all from './n';\nconst own = 1;\nexport { own };",
+    );
+    expect(declarations.map(({ name, reexported }) => `${name} ${String(reexported)}`)).toEqual([
+      'own false',
+      'a true',
+      'c true',
+      'all true',
+      'own false',
+    ]);
+  });
+
   test('list every doc comment with the line of its first text, markers stripped, and no other comment', () => {
     const text = [
       '/**',
@@ -276,17 +300,20 @@ describe('the TypeScript source readers', () => {
   });
 });
 
+/** A repository root that installs nothing, so the globals are puni's own. */
+const bareRoot = '/no-such-repository';
+
 /**
  * The links of `text` as a file of `extension`, each as `<line> <target> <resolves>`, a link the
- * file does not resolve resolving when its head is a global.
+ * file does not resolve resolving when its head is a global of a repository at `root`.
  */
-function links(text: string, extension = '.ts'): string[] {
+function links(text: string, extension = '.ts', root = bareRoot): string[] {
   const reader = readerOf(extension);
   return reader
     .read(text)
     .links.map(
       ({ target, line, head, resolved }) =>
-        `${String(line)} ${target} ${String(resolved || reader.globals().has(head))}`,
+        `${String(line)} ${target} ${String(resolved || reader.globals(root).names.has(head))}`,
     );
 }
 
@@ -381,7 +408,52 @@ describe('the links of the TypeScript readers', () => {
     ).toEqual(['2 A true', '3 B true']);
   });
 
-  test('resolve a name declared anywhere in the file, at any depth', () => {
+  test('resolve a name where a scope holding the comment declares it, in nine forms', () => {
+    const text = [
+      'export namespace Outer {',
+      '  export namespace Ns {',
+      '    /** {@link Ns}, {@link Ns.anything}. */',
+      '    export const v = 1;',
+      '  }',
+      '}',
+      'export const run = (arrowParam: number) => {',
+      '  /** {@link arrowParam}, {@link run.name}, {@link run.call}. */',
+      '  for (const loopVar of [1]) {',
+      '    /** {@link loopVar}. */',
+      '    void loopVar;',
+      '  }',
+      '  try {',
+      '    void 0;',
+      '  } catch (caughtErr) {',
+      '    /** {@link caughtErr}. */',
+      '    void caughtErr;',
+      '  }',
+      '  return {',
+      '    /** {@link objectParam}. */',
+      '    method(objectParam: number) {',
+      '      return objectParam;',
+      '    },',
+      '  };',
+      '};',
+      'export interface Typed {',
+      '  /** {@link signatureParam}. */',
+      '  handler: (signatureParam: string) => void;',
+      '}',
+    ].join('\n');
+    expect(links(text)).toEqual([
+      '3 Ns true',
+      '3 Ns.anything true',
+      '8 arrowParam true',
+      '8 run.name true',
+      '8 run.call true',
+      '10 loopVar true',
+      '16 caughtErr true',
+      '20 objectParam true',
+      '27 signatureParam true',
+    ]);
+  });
+
+  test('refuse a name declared only in a scope that does not hold the comment', () => {
     const text = [
       'export namespace Outer { export namespace Ns { export const v = 1; } }',
       'export const run = (arrowParam: number) => {',
@@ -390,13 +462,79 @@ describe('the links of the TypeScript readers', () => {
       '  return { method(objectParam: number) { return objectParam; } };',
       '};',
       'export interface Typed { handler: (signatureParam: string) => void }',
+      'export class Klass { member = 1; }',
+      'export enum Colour { Red }',
+      'export const shape = { prop: 1 };',
+      'export function pick({ bound }: { bound: number }) { return bound; }',
       '/**',
       ' * {@link arrowParam}, {@link loopVar}, {@link caughtErr}, {@link objectParam},',
-      ' * {@link signatureParam}, {@link Ns}, {@link Ns.anything}, {@link run.name}, {@link run.call}.',
+      ' * {@link signatureParam}, {@link Ns}, {@link member}, {@link Red}, {@link prop}, {@link bound}.',
       ' */',
       'export const after = 1;',
     ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' true'))).toEqual([]);
+  });
+
+  test('resolve the members, enum members, properties and bound parameters of what the comment stands in', () => {
+    const text = [
+      'export class Klass {',
+      '  member = 1;',
+      '  constructor(private readonly held: number) {}',
+      '  /** {@link member}, {@link held}, {@link this.member}, {@link this.held}. */',
+      '  open(): void {}',
+      '}',
+      'export enum Colour {',
+      '  /** {@link Blue}. */',
+      '  Red,',
+      '  Blue,',
+      '}',
+      'export const shape = {',
+      '  /** {@link other}. */',
+      '  prop: 1,',
+      '  other: 2,',
+      '};',
+      '/** {@link bound}, {@link rest}. */',
+      'export function pick({ bound, ...rest }: { bound: number }) { return [bound, rest]; }',
+      '/** {@link inner}. */',
+      'export const made = (inner: number) => inner;',
+    ].join('\n');
     expect(links(text).filter((line) => !line.endsWith(' true'))).toEqual([]);
+  });
+
+  test('take the statement a comment opening the file leads for its host, not the file', () => {
+    expect(
+      links('/** {@link value}. */\nexport function first(value: number) { return value; }'),
+    ).toEqual(['1 value true']);
+  });
+
+  test('judge the name before a call or an index, and take an import type for no name', () => {
+    expect(
+      links(
+        '/** {@link gone()}, {@link gone[0]}, {@link a()}, {@link import(x)}. */\nexport const a = 1;',
+      ),
+    ).toEqual(['1 gone() false', '1 gone[0] false', '1 a() true']);
+  });
+
+  test('declare a JavaScript @template name for its comment, and no TypeScript one', () => {
+    const text = [
+      '/**',
+      ' * @template T, U',
+      ' * @param {T} value {@link T} and {@link U}',
+      ' */',
+      'export function same(value) { return value; }',
+      '/** {@link T}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect([links(text, '.js'), links(text, '.ts')]).toEqual([
+      ['3 T true', '3 U true', '6 T false'],
+      ['3 T false', '3 U false', '6 T false'],
+    ]);
+  });
+
+  test('take a JavaScript typedef for a name of the whole file', () => {
+    expect(
+      links('/** @typedef {Object} Opts */\n/** {@link Opts}. */\nexport const a = 1;', '.js'),
+    ).toEqual(['2 Opts true']);
   });
 
   test('take no URL, module path, file path or anchor for a name', () => {
@@ -407,23 +545,33 @@ describe('the links of the TypeScript readers', () => {
     ).toEqual([]);
   });
 
-  test('check members only of a top-level shape the file closes, a function or class having those of every function', () => {
+  test('check every member of a top-level shape the file closes, though the name is declared elsewhere too, a function or class having those of every function', () => {
     const text = [
       'export function Fn() {}',
       'export class Klass { m() {} }',
       'export type Open = { a: 1 } | Other;',
       'export type Shut = { a: 1 } | { b: 2 };',
       'export const shadowed = { a: 1 };',
-      'function local(shadowed: { z: 1 }) { return shadowed; }',
+      'function local(shadowed: { z: 1 }) {',
+      '  /** {@link shadowed.z}, an inner declaration, whose members are not judged. */',
+      '  return shadowed;',
+      '}',
+      'export const nested = { inner: { deep: 1 }, method() {} };',
+      'export interface Deep { a: { b: { c: 1 } }; open: Elsewhere }',
       '/**',
       ' * {@link Fn.call}, {@link Klass.prototype}, {@link Klass.name}, {@link Open.any},',
-      ' * {@link Shut.b}, {@link Shut.c}, {@link shadowed.z}, {@link Fn.nope}.',
+      ' * {@link Shut.b}, {@link Shut.c}, {@link shadowed.z}, {@link Fn.nope}, {@link nested.inner.deep},',
+      ' * {@link nested.inner.gone}, {@link nested.method.call}, {@link Deep.a.b.c}, {@link Deep.a.b.x},',
+      ' * {@link Deep.open.any}, {@link Klass.m.call}.',
       ' */',
       'export const after = local;',
     ].join('\n');
     expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
-      '9 Shut.c false',
-      '9 Fn.nope false',
+      '14 Shut.c false',
+      '14 shadowed.z false',
+      '14 Fn.nope false',
+      '15 nested.inner.gone false',
+      '15 Deep.a.b.x false',
     ]);
   });
 
@@ -443,9 +591,16 @@ describe('the links of the TypeScript readers', () => {
       '3 ReadableStream true',
       '3 NotGlobalAnywhere false',
     ]);
-    const module = readerOf('.ts').read('export interface Exported {}\ninterface Local {}');
-    const script = readerOf('.ts').read('interface Scripted {}\ndeclare const value: number;');
-    expect([module.ambient, script.ambient]).toEqual([[], ['Scripted', 'value']]);
+    const ambient = (text: string, extension = '.ts') => readerOf(extension).read(text).ambient;
+    expect([
+      ambient('export interface Exported {}\ninterface Local {}'),
+      ambient('interface Scripted {}\ndeclare const value: number;'),
+      ambient("declare module 'shop' { global { interface Nested {} } }\ninterface Beside {}"),
+      ambient("declare module 'shop' {}\ndeclare namespace Space {}"),
+      ambient("const fs = require('node:fs');\nfunction helper() {}", '.js'),
+      ambient('module.exports = {};\nfunction helper() {}', '.cjs'),
+      ambient('function helper() {}', '.js'),
+    ]).toEqual([[], ['Scripted', 'value'], ['Nested', 'Beside'], ['Space'], [], [], ['helper']]);
   });
 
   test('accept any member of a shape the file cannot list whole', () => {
@@ -461,6 +616,547 @@ describe('the links of the TypeScript readers', () => {
         ].join('\n'),
       ),
     ).toEqual(['2 Sub.base true', '2 Spread.any true', '2 Typed.any true', '2 Shut.any false']);
+  });
+
+  test('take a shape open whose base is open, of another file or of a global block', () => {
+    expect(
+      links(
+        [
+          'class Far extends Elsewhere { own = 1; }',
+          'class Near extends Far {}',
+          'declare global { interface Merged { m: 1 } }',
+          'interface FromGlobal extends Merged { own: 1 }',
+          'declare global { interface Augmented { a: 1 } }',
+          'class Shut { own = 1; }',
+          '/**',
+          ' * {@link Far.any}, {@link Near.any}, {@link FromGlobal.any}, {@link Augmented.any},',
+          ' * {@link Shut.any}.',
+          ' */',
+          'export const a = [Far, Near, Shut];',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      '8 Far.any true',
+      '8 Near.any true',
+      '8 FromGlobal.any true',
+      '8 Augmented.any true',
+      '9 Shut.any false',
+    ]);
+  });
+});
+
+describe('the members TypeScript resolves', () => {
+  test('are open for what an expression, annotation or later assignment gives, and every object has', () => {
+    const text = [
+      'export const nest = { inner: { deep: 1 }, typed: {} as { a: 1; b: 2 } };',
+      'export class Reference { static READ = 1; }',
+      'Reference.RW = 3;',
+      'export const config: Partial<{ timeout: number }> = {};',
+      'export const bag = { a: 1 };',
+      'export function handler() {}',
+      "handler.displayName = 'h';",
+      'export class Thing {}',
+      'export const cast = make() as Shape;',
+      'export const annotated: { a: 1 } = make();',
+      'export const target = { a: 1 };',
+      'Object.assign(target, { b: 2 });',
+      'export const generic = <T,>(value: T) => value as T;',
+      '/**',
+      ' * {@link nest.inner.hasOwnProperty}, {@link nest.typed.b}, {@link Reference.RW},',
+      ' * {@link config.timeout}, {@link bag.toString}, {@link handler.displayName},',
+      ' * {@link Thing.constructor}, {@link cast.any}, {@link target.b}, {@link annotated.a},',
+      ' * {@link annotated.valueOf}. Refused: {@link annotated.zz}, {@link nest.typed.c},',
+      ' * {@link bag.nope}, {@link nest.inner.gone}.',
+      ' */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '18 annotated.zz false',
+      '18 nest.typed.c false',
+      '19 bag.nope false',
+      '19 nest.inner.gone false',
+    ]);
+  });
+
+  test('open a JavaScript class whose methods assign this.<member>', () => {
+    const text = [
+      'export class Grown { constructor() { this.later = 1; } }',
+      'export class Fixed { constructor() { void 0; } }',
+      '/** {@link Grown.later}, {@link Fixed.later}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual(['3 Grown.later true', '3 Fixed.later false']);
+  });
+
+  test('mark a link whose name the file declares but not its member, and name what a file augments', () => {
+    const reading = readerOf('.ts').read(
+      "export interface Options { a: 1 }\n/** {@link Options.b} and {@link Gone.b}. */\nexport const after = 1;\ndeclare module './other' { interface Extra { x: 1 } global { interface NotAugmented {} } }\ndeclare module 'pkg' { interface FromPackage {} }",
+    );
+    const script = readerOf('.ts').read("declare module './other' { interface InScript {} }");
+    expect([
+      reading.links.map(({ target, resolved, memberMissing }) => [target, resolved, memberMissing]),
+      reading.augmented,
+    ]).toEqual([
+      [
+        ['Options.b', false, true],
+        ['Gone.b', false, false],
+      ],
+      [{ module: './other', name: 'Extra' }],
+    ]);
+    expect(script.augmented).toEqual([]);
+  });
+
+  test('add the members a file assigns to its own top-level names, opening none but by a computed key', () => {
+    const text = [
+      'export class Store {',
+      '  items: string[] = [];',
+      '  constructor() {',
+      '    this.items = [];',
+      '    this.extra = 1;',
+      '  }',
+      '}',
+      'export const state = { count: 0 };',
+      'state.count = 1;',
+      'state.added = 2;',
+      'state.counter += 1;',
+      'export const tree = { a: { x: 1 } };',
+      'tree.a.b = 2;',
+      'export const dict = {};',
+      'dict[key] = 1;',
+      'export const lit = {};',
+      "lit['k'] = 1;",
+      'export const shadowed = { a: 1 };',
+      'function local(shadowed) { shadowed.inner = 1; }',
+      '/**',
+      ' * {@link Store.items}, {@link Store.extra}, {@link Store.typo}, {@link state.added},',
+      ' * {@link state.counter}, {@link state.typo}, {@link tree.a.b}, {@link tree.a.typo},',
+      ' * {@link tree.typo}, {@link dict.anything}, {@link lit.k}, {@link lit.typo},',
+      ' * {@link shadowed.inner}.',
+      ' */',
+      'export const after = local;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '21 Store.typo false',
+      '22 state.typo false',
+      '22 tree.a.typo false',
+      '23 tree.typo false',
+      '23 lit.typo false',
+      '24 shadowed.inner false',
+    ]);
+  });
+
+  test("take this as a class's only in its own members and arrow functions", () => {
+    const text = [
+      'export class Outer {',
+      '  m() {',
+      '    function inner() { this.typo = 1; }',
+      '    const o = { n() { this.other = 1; } };',
+      '    const arrow = () => { this.viaArrow = 1; };',
+      '    return [inner, o, arrow];',
+      '  }',
+      '}',
+      '/** {@link Outer.typo}, {@link Outer.other}, {@link Outer.viaArrow}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text)).toEqual([
+      '9 Outer.typo false',
+      '9 Outer.other false',
+      '9 Outer.viaArrow true',
+    ]);
+  });
+
+  test('give an annotated or cast value the members of a type the file declares, inherited ones too', () => {
+    const text = [
+      'interface Conf { timeout: number }',
+      'interface Wide extends Conf { retries: number }',
+      'interface Twice { a: 1 }',
+      'interface Twice extends Far {}',
+      'interface FromTwice extends Twice {}',
+      'export const conf: Conf = make();',
+      'export const wide = make() as Wide;',
+      'export const gen: Box<string> = make();',
+      'interface Gen<T> { v: T }',
+      'export const local: Gen<string> = make();',
+      'export const ext: External = make();',
+      'export const twice: FromTwice = make();',
+      '/**',
+      ' * {@link conf.timeout}, {@link conf.typo}, {@link wide.timeout}, {@link wide.typo},',
+      ' * {@link gen.any}, {@link ext.any}, {@link twice.any}, {@link local.any}.',
+      ' */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text).filter((line) => line.endsWith(' false'))).toEqual([
+      '14 conf.typo false',
+      '14 wide.typo false',
+    ]);
+  });
+
+  test('keep the members a JavaScript file adds after declaring them', () => {
+    const text = [
+      'export class Js { constructor() { this.count = 0; } }',
+      'Js.prototype.proto = function () {};',
+      'export const obj = {};',
+      'obj.added = 1;',
+      '/** {@link Js.count}, {@link Js.proto}, {@link obj.added}, {@link Js.typo}, {@link obj.typo}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual([
+      '5 Js.count true',
+      '5 Js.proto true',
+      '5 obj.added true',
+      '5 Js.typo false',
+      '5 obj.typo false',
+    ]);
+  });
+
+  test('resolve a diamond of 22 levels of bases quickly', () => {
+    const lines = ['interface L0 { m0: 1 }'];
+    for (let level = 1; level <= 22; level += 1) {
+      lines.push(
+        `interface A${String(level)} extends L${String(level - 1)} { a${String(level)}: 1 }`,
+      );
+      lines.push(
+        `interface B${String(level)} extends L${String(level - 1)} { b${String(level)}: 1 }`,
+      );
+      lines.push(`interface L${String(level)} extends A${String(level)}, B${String(level)} {}`);
+    }
+    lines.push('/** {@link L22.m0}, {@link L22.zz}. */', 'export const after = 1;');
+    const started = performance.now();
+    expect(links(lines.join('\n'))).toEqual([
+      `${String(lines.length - 1)} L22.m0 true`,
+      `${String(lines.length - 1)} L22.zz false`,
+    ]);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('each scope and member form, one by one', () => {
+  /** The links of `lines` as a file of `extension`. */
+  const linked = (lines: readonly string[], extension = '.ts') =>
+    links(lines.join('\n'), extension);
+
+  test('an interface member sees its siblings', () => {
+    expect(
+      linked(['export interface I {', '  /** {@link other}. */', '  a: 1;', '  other: 2;', '}']),
+    ).toEqual(['2 other true']);
+  });
+
+  test('a type literal member sees its siblings', () => {
+    expect(
+      linked(['export type T = {', '  /** {@link sib}. */', '  a: 1;', '  sib: 2;', '};']),
+    ).toEqual(['2 sib true']);
+  });
+
+  test('a function expression sees its own name', () => {
+    expect(
+      linked([
+        'export const f = function named() {',
+        '  /** {@link named}. */',
+        '  return 1;',
+        '};',
+      ]),
+    ).toEqual(['2 named true']);
+  });
+
+  test('a class expression sees its own name', () => {
+    expect(
+      linked(['export const K = class Named {', '  /** {@link Named}. */', '  m() {}', '};']),
+    ).toEqual(['2 Named true']);
+  });
+
+  test('a case clause sees its locals', () => {
+    expect(
+      linked([
+        'export function f(x: number) {',
+        '  switch (x) {',
+        '    case 1:',
+        '      const inCase = 1;',
+        '      /** {@link inCase}. */',
+        '      void inCase;',
+        '  }',
+        '}',
+      ]),
+    ).toEqual(['5 inCase true']);
+  });
+
+  test('a comment on a cast value documents the value inside', () => {
+    expect(
+      linked(['/** {@link p}. */', 'export const f = ((p: number) => p) as unknown;']),
+    ).toEqual(['1 p true']);
+  });
+
+  test('a comment on an assignment documents the value assigned', () => {
+    expect(
+      linked(['/** {@link q}. */', 'module.exports.g = function (q) { return q; };'], '.js'),
+    ).toEqual(['1 q true']);
+  });
+
+  test('a comment on export default documents the value exported', () => {
+    expect(linked(['/** {@link r}. */', 'export default (r: number) => r;'])).toEqual(['1 r true']);
+  });
+
+  test('this.<member> in an object literal names a member of that literal', () => {
+    expect(
+      linked([
+        'export const o = {',
+        '  a: 1,',
+        '  /** {@link this.a}, {@link this.zz}. */',
+        '  m() {},',
+        '};',
+      ]),
+    ).toEqual(['3 this.a true', '3 this.zz false']);
+  });
+
+  test('a name declared once open and once closed is open', () => {
+    expect(
+      linked([
+        'export interface M { a: 1 }',
+        'export declare const M: Open;',
+        '/** {@link M.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 M.zz true']);
+  });
+
+  test('a function merged with a namespace has the members of both and of every function', () => {
+    expect(
+      linked([
+        'export function Fn() {}',
+        'export namespace Fn { export const x = 1; }',
+        '/** {@link Fn.name}, {@link Fn.x}, {@link Fn.nope}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 Fn.name true', '3 Fn.x true', '3 Fn.nope false']);
+  });
+
+  test('a member declared once open and once closed is open', () => {
+    expect(
+      linked([
+        'export interface I { a: { x: 1 } }',
+        'export interface I { a: Open }',
+        'export interface J { a: { x: 1 } }',
+        '/** {@link I.a.zz}, {@link J.a.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['4 I.a.zz true', '4 J.a.zz false']);
+  });
+
+  test('an index after a name is cut before the name is judged', () => {
+    expect(
+      linked(['export const a = [1];', '/** {@link a[0]}. */', 'export const after = 1;']),
+    ).toEqual(['2 a[0] true']);
+  });
+
+  test('a file assigning exports.<name> is a module, declaring nothing for every file', () => {
+    expect(readerOf('.js').read('exports.a = 1;\nfunction helper() {}').ambient).toEqual([]);
+  });
+
+  test('a module file sees the names of its own declare global block', () => {
+    expect(
+      linked([
+        'declare global { interface G { a: 1 } }',
+        'export {};',
+        '/** {@link G}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 G true']);
+  });
+
+  test('a nested class with a base is open, one without closed', () => {
+    expect(
+      linked([
+        'export namespace N { export class C extends Base {} }',
+        'export namespace M { export class C {} }',
+        '/** {@link N.C.zz}, {@link M.C.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['3 N.C.zz true', '3 M.C.zz false']);
+  });
+
+  test("a property assigned a parenthesized object has that object's members", () => {
+    expect(
+      linked([
+        'export const o = { p: ({ a: 1 }) };',
+        '/** {@link o.p.a}, {@link o.p.zz}. */',
+        'export const after = 1;',
+      ]),
+    ).toEqual(['2 o.p.a true', '2 o.p.zz false']);
+  });
+});
+
+describe('the JSDoc tags of JavaScript', () => {
+  test('declare the names of @import tags, and of typedefs and templates whose types nest braces', () => {
+    const text = [
+      '/** @import Default from "./a" */',
+      '/** @import { first, second as renamed } from "./b" */',
+      '/** @import * as space from "./c" */',
+      '/** @typedef {{ a: number, b: { c: 1 } }} Thing */',
+      '/**',
+      ' * @template {Record<string, {a:number}>} K',
+      ' * @template [D=Thing]',
+      ' * @param {K} key {@link K}, {@link D}',
+      ' */',
+      'export function pick(key) { return key; }',
+      '/** {@link Default}, {@link first}, {@link renamed}, {@link second}, {@link space}, {@link Thing}. */',
+      'export const after = 1;',
+    ].join('\n');
+    expect(links(text, '.js')).toEqual([
+      '8 K true',
+      '8 D true',
+      '11 Default true',
+      '11 first true',
+      '11 renamed true',
+      '11 second false',
+      '11 space true',
+      '11 Thing true',
+    ]);
+  });
+});
+
+describe('the failures of the TypeScript readers', () => {
+  test('a text nested past what the parser can follow is unreadable, naming why', () => {
+    throws(
+      () => readerOf('.ts').read(`export const x = ${'['.repeat(20000)};`),
+      (caught) =>
+        caught instanceof SourceUnreadable &&
+        caught.message.startsWith('the text nests deeper than the parser can follow: '),
+    );
+  });
+
+  test('a compiler that cannot be loaded breaks the reader, and one failing otherwise fails it, never the file', () => {
+    const broken = new SourceReaderBroken({
+      details: {
+        reader: 'TypeScript',
+        problem: 'the typescript package is not installed beside puni',
+      },
+    });
+    const compilerOf = (load: () => never): TypescriptCompiler => ({
+      load,
+      globalDeclarationTexts: () => [],
+      repositoryDeclarations: () => ({ texts: [], missing: [] }),
+    });
+    const [missing] = createTypescriptSourceReaders({
+      typescriptCompiler: compilerOf(() => {
+        throw broken;
+      }),
+    });
+    throws(
+      () => missing?.read('export const a = 1;'),
+      (caught) => caught === broken,
+    );
+    const [faulty] = createTypescriptSourceReaders({
+      typescriptCompiler: compilerOf(
+        () =>
+          ({
+            createSourceFile: () => {
+              throw new TypeError('not a function');
+            },
+            ScriptTarget: {},
+            ScriptKind: {},
+          }) as never,
+      ),
+    });
+    throws(
+      () => faulty?.read('export const a = 1;'),
+      (caught) =>
+        caught instanceof SourceReaderFailed &&
+        caught.message === 'the TypeScript source reader failed: not a function',
+    );
+  });
+});
+
+describe('the globals a repository installs', () => {
+  test('are those of its @types packages and the types its root tsconfig lists, a missing one named', () => {
+    const root = scratchDirectories.createDirectory('puni-types-');
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/jest/index.d.ts',
+      'declare namespace jest {}\ndeclare var beforeAll: () => void;\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/chrome/package.json',
+      '{ "types": "chrome.d.ts" }\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/chrome/chrome.d.ts',
+      'declare namespace chrome.tabs { function query(): void; }\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/react/index.d.ts',
+      'export {};\ndeclare global { namespace JSX { interface Element {} } }\nexport declare const notGlobal: number;\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/listed-only/package.json',
+      '{ "typings": "main.d.ts" }\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/listed-only/main.d.ts',
+      '/// <reference path="more.d.ts" />\ndeclare const listedGlobal: number;\n',
+    );
+    writeRepositoryFile(
+      root,
+      'node_modules/listed-only/more.d.ts',
+      'declare const reachedGlobal: number;\n',
+    );
+    writeRepositoryFile(
+      root,
+      'tsconfig.json',
+      '{\n  // the base lists the types\n  "extends": "./tsconfig.base.json"\n}\n',
+    );
+    writeRepositoryFile(
+      root,
+      'tsconfig.base.json',
+      '{ "compilerOptions": { "types": ["listed-only", "absent-types"] } }\n',
+    );
+    const text =
+      '/** {@link JSX.Element}, {@link jest}, {@link beforeAll}, {@link chrome.tabs}, {@link listedGlobal}, {@link reachedGlobal}, {@link notGlobal}. */\nexport const a = 1;';
+    expect(links(text, '.ts', root).filter((line) => !line.endsWith(' true'))).toEqual([
+      '1 notGlobal false',
+    ]);
+    expect(links(text).filter((line) => line.endsWith(' true'))).toEqual([]);
+    expect(readerOf('.ts').globals(root).missing).toEqual([
+      { name: 'absent-types', listedIn: 'tsconfig.json' },
+    ]);
+  });
+});
+
+describe('the UMD globals a repository installs', () => {
+  test('take the name export as namespace gives, linked from TSX', () => {
+    const root = scratchDirectories.createDirectory('puni-umd-');
+    writeRepositoryFile(
+      root,
+      'node_modules/@types/react/index.d.ts',
+      'export = React;\nexport as namespace React;\ndeclare namespace React { class Component {} }\n',
+    );
+    const text =
+      '/** {@link React.Component} and {@link Preact}. */\nexport const View = () => <p />;';
+    expect([links(text, '.tsx', root), links(text, '.tsx')]).toEqual([
+      ['1 React.Component true', '1 Preact false'],
+      ['1 React.Component false', '1 Preact false'],
+    ]);
+  });
+
+  test('take @types packages installed as symlinks, and the types tsconfig.base.json lists', () => {
+    const root = scratchDirectories.createDirectory('puni-linked-');
+    const elsewhere = scratchDirectories.createDirectory('puni-store-');
+    writeRepositoryFile(elsewhere, 'index.d.ts', 'declare const linkedGlobal: number;\n');
+    writeRepositoryFile(root, 'node_modules/@types/.keep', '');
+    symlinkSync(elsewhere, join(root, 'node_modules/@types/linked'));
+    writeRepositoryFile(
+      root,
+      'tsconfig.base.json',
+      '{ "compilerOptions": { "types": ["absent-base"] } }\n',
+    );
+    const globals = readerOf('.ts').globals(root);
+    expect([globals.names.has('linkedGlobal'), globals.missing]).toEqual([
+      true,
+      [{ name: 'absent-base', listedIn: 'tsconfig.base.json' }],
+    ]);
   });
 });
 
@@ -479,9 +1175,9 @@ describe('the TypeScript compiler', () => {
     throws(
       () => openTypescriptCompiler(['no-such-global-types']).globalDeclarationTexts(),
       (caught) =>
-        caught instanceof GlobalTypesMissing &&
+        caught instanceof SourceReaderBroken &&
         caught.message ===
-          'the global types of no-such-global-types are not installed beside puni; reinstall puni with its dependencies',
+          'the TypeScript source reader cannot read: the global types of no-such-global-types are not installed beside puni; reinstall puni with its dependencies',
     );
     expect(globalTypePackages).toEqual(['bun-types']);
   });

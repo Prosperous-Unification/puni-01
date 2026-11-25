@@ -35,11 +35,12 @@ import {
 } from './rules/index.rule';
 import {
   judgeDocSymbols,
+  judgeReadDocSymbols,
   judgeTypedDocSymbols,
   limitPageWords,
   limitTypedPageWords,
 } from './rules/wiki.rule';
-import { resolveAgentsLinks, resolveLinks } from './rules/links.rule';
+import { resolveAgentsLinks, resolveLinks, resolveReadLinks } from './rules/links.rule';
 import {
   judgeRecordFrontMatter,
   judgeRecordNames,
@@ -69,7 +70,11 @@ import {
   forbidRecordsAddresses,
   forbidStateAddresses,
 } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
+import {
+  matchReadRecordsLocation,
+  matchRecordsLocation,
+  requireCiGate,
+} from './rules/workspace.rule';
 
 const at =
   (level: RuleLevel) =>
@@ -93,6 +98,7 @@ export const codeRules: readonly LeveledRule[] = [
     readmeWords,
     limitIndexWords,
     matchRecordsLocation,
+    matchReadRecordsLocation,
     requireCiGate,
     requirePurposes,
     forbidGeneratedIndex,
@@ -106,6 +112,7 @@ export const codeRules: readonly LeveledRule[] = [
     forbidTypedDates,
     confineRecordsName,
     resolveLinks,
+    resolveReadLinks,
     forbidPlaintextSecrets,
     forbidStateAddresses,
     forbidFileHeaders,
@@ -119,6 +126,7 @@ export const codeRules: readonly LeveledRule[] = [
     limitPageWords,
     limitTypedPageWords,
     judgeDocSymbols,
+    judgeReadDocSymbols,
     judgeTypedDocSymbols,
     judgeDocReferences,
     judgeTypedDocReferences,
@@ -163,10 +171,12 @@ export const ruleSets: Readonly<Record<RepositoryType, readonly LeveledRule[]>> 
  */
 export const crossProjectRules: readonly Rule[] = [
   resolveLinks,
+  resolveReadLinks,
   judgeMarkdownPaths,
   judgeDocPaths,
   judgeTypedDocPaths,
   judgeDocSymbols,
+  judgeReadDocSymbols,
   judgeTypedDocSymbols,
   judgeDocReferences,
   judgeTypedDocReferences,

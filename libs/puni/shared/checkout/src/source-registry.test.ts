@@ -29,11 +29,12 @@ function wordReader(
         docComments: [],
         links: [],
         ambient: words,
+        augmented: [],
       };
     },
-    globals() {
-      reads.push('globals');
-      return new Set(['Global']);
+    globals(root) {
+      reads.push(`globals ${root}`);
+      return { names: new Set([`Global${root}`]), missing: [] };
     },
   };
 }
@@ -63,15 +64,16 @@ describe('openSourceRegistry', () => {
     ]);
   });
 
-  test('reads each text once, and the globals once, however often it is asked', () => {
+  test('reads each text once, and the globals once for each root, however often it is asked', () => {
     const script = wordReader(['.ts']);
     const reader = openSourceRegistry([script]).readerOf('a.ts', 1);
     for (let round = 0; round < 3; round += 1) {
       expect(reader?.read('a b').ambient).toEqual(['a', 'b']);
       expect(reader?.read('c').ambient).toEqual(['c']);
-      expect(reader?.globals()).toEqual(new Set(['Global']));
+      expect(reader?.globals('/r')).toEqual({ names: new Set(['Global/r']), missing: [] });
+      expect(reader?.globals('/s').names).toEqual(new Set(['Global/s']));
     }
-    expect(script.reads).toEqual(['a b', 'c', 'globals']);
+    expect(script.reads).toEqual(['a b', 'c', 'globals /r', 'globals /s']);
   });
 
   test('a text that cannot be read throws again on every ask, read once', () => {

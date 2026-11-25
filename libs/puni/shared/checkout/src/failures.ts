@@ -189,6 +189,45 @@ export const FileUnreadable = defineException({
 });
 
 /**
+ * A source file's text that its reader cannot read, as one nested past what its parser can
+ * follow: a fault of the file, which `reason` names.
+ */
+export const SourceUnreadable = defineException({
+  tag: 'puni/shared-checkout/SourceUnreadable',
+  message: ({ reason }: { reason: string }) => reason,
+});
+
+/**
+ * A source reader that cannot read any file, as one whose compiler or library types are not
+ * installed or not what it expects: a defect of puni's installation, never of the file read.
+ */
+export const SourceReaderBroken = defineException({
+  tag: 'puni/shared-checkout/SourceReaderBroken',
+  message: ({ reader, problem }: { reader: string; problem: string }) =>
+    `the ${reader} source reader cannot read: ${problem}; reinstall puni with its dependencies`,
+});
+
+/**
+ * A source reader that failed while reading one text, for no fault of the text: a defect of the
+ * reader. The rules name the file it was reading (see {@link SourceReadingFailed}).
+ */
+export const SourceReaderFailed = defineException({
+  tag: 'puni/shared-checkout/SourceReaderFailed',
+  message: ({ reader, problem }: { reader: string; problem: string }) =>
+    `the ${reader} source reader failed: ${problem}`,
+});
+
+/**
+ * A source reader's {@link SourceReaderFailed} while reading the file at `path`: a defect of
+ * puni, which its user reports with the file.
+ */
+export const SourceReadingFailed = defineException({
+  tag: 'puni/shared-checkout/SourceReadingFailed',
+  message: ({ path, reader, problem }: { path: string; reader: string; problem: string }) =>
+    `the ${reader} source reader failed reading ${path}: ${problem}; this is a defect of puni: report it with that file`,
+});
+
+/**
  * Two composed source readers claiming one file extension, so no one reader reads its files: a
  * defect of the composition.
  */

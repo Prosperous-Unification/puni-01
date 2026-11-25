@@ -6,12 +6,15 @@ export {
 } from './agents-headings';
 export { compareBytes } from './byte-order';
 export type {
+  Augmentation,
   CheckoutEntry,
   CheckoutFiles,
   CheckoutFilesResource,
   CommitCheckout,
   DocComment,
   DocLink,
+  InstalledGlobals,
+  MissingTypes,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
@@ -33,7 +36,11 @@ export {
   ProjectUnknown,
   RevisionUnknown,
   RulesPinAhead,
+  SourceReaderBroken,
+  SourceReaderFailed,
+  SourceReadingFailed,
   SourceReadersOverlap,
+  SourceUnreadable,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export {
@@ -66,6 +73,7 @@ export {
   isMarkdown,
   type MarkdownLine,
   type MarkdownLink,
+  type MarkdownOptions,
   type MarkdownReading,
   type MarkdownSpan,
   readMarkdown,

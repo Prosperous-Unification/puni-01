@@ -50,6 +50,8 @@ export interface RepositoryCheck {
    * checkout is the one `repository.git` finding at `.`.
    *
    * @throws FileUnreadable when a file the check needs exists but cannot be read.
+   * @throws SourceReaderBroken when a source reader cannot read at all, as without its compiler.
+   * @throws SourceReadingFailed when a source reader fails on a file, a defect of puni.
    * @throws RulesPinAhead when `puni.json` pins a rules epoch later than the latest of the rules.
    * @throws ProjectUnknown when `project` names no project.
    * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository

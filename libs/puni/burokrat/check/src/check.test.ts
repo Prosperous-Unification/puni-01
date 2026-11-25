@@ -15,6 +15,7 @@ import {
   openSourceRegistry,
   repositoryScope,
   type SourceRegistry,
+  SourceUnreadable,
 } from '@puni/shared-checkout';
 import { nxPlacementHint, readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import {
@@ -58,9 +59,10 @@ import {
   requireScope,
   requireSection,
 } from './rules/index.rule';
-import { resolveLinks } from './rules/links.rule';
+import { resolveLinks, resolveReadLinks } from './rules/links.rule';
 import {
   judgeDocSymbols,
+  judgeReadDocSymbols,
   judgeTypedDocSymbols,
   limitPageWords,
   limitTypedPageWords,
@@ -84,7 +86,11 @@ import { judgeSourceReading } from './rules/sources.rule';
 import { requireProjectTargets } from './rules/project.rule';
 import { forbidFileHeaders } from './rules/code.rule';
 import { forbidPlaintextSecrets, forbidStateAddresses } from './rules/secrets.rule';
-import { matchRecordsLocation, requireCiGate } from './rules/workspace.rule';
+import {
+  matchReadRecordsLocation,
+  matchRecordsLocation,
+  requireCiGate,
+} from './rules/workspace.rule';
 import { credentialLookalikes, credentialSamples, forbiddenAddress } from './secrets.test-host';
 import { fixtureAgentsRules, makeRepository, writeEpochFiles } from './repository-pair.test-host';
 
@@ -414,6 +420,22 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
     },
   ],
   [
+    'a broken link by reference, from epoch 3',
+    resolveReadLinks,
+    () => {
+      writeRepositoryFile(
+        root,
+        'wiki/ops/deploy.md',
+        'See [the runbook][runbook].\n\n    [ok](../indented-code.md)\n\n[runbook]: ../runbook.md\n',
+      );
+    },
+    {
+      rule: 'links.resolve',
+      path: 'wiki/ops/deploy.md',
+      message: 'links to missing ../runbook.md',
+    },
+  ],
+  [
     'a broken link',
     resolveLinks,
     () => {
@@ -642,7 +664,24 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
     },
   ],
   [
-    'a page naming a symbol no source file holds, up to epoch 3',
+    'a page naming a symbol no source file holds in an HTML comment, at epoch 3',
+    judgeReadDocSymbols,
+    () => {
+      writeRepositoryFile(root, 'libs/x/src/a.ts', 'export const renderNew = 1;\n');
+      writeRepositoryFile(
+        root,
+        'wiki/ops/one.md',
+        '<!-- Call `renderPages(pages)`. -->\n\n[`renderOld`](../../libs/x/src/a.ts#renderOld)\n',
+      );
+    },
+    {
+      rule: 'docs.symbols',
+      path: 'wiki/ops/one.md',
+      message: 'names renderPages, which no source file holds',
+    },
+  ],
+  [
+    'a page naming a symbol no source file holds, up to epoch 2',
     judgeDocSymbols,
     () => {
       writeRepositoryFile(root, 'wiki/ops/one.md', 'Call `renderPages(pages)`.\n');
@@ -918,10 +957,19 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
         extensions: ['.ts'],
         since: 1,
         read(text) {
-          if (text.startsWith('unreadable')) throw new Error('the text is unreadable');
-          return { declarations: [], reexports: [], docComments: [], links: [], ambient: [] };
+          if (text.startsWith('unreadable')) {
+            throw new SourceUnreadable({ details: { reason: 'the text is unreadable' } });
+          }
+          return {
+            declarations: [],
+            reexports: [],
+            docComments: [],
+            links: [],
+            ambient: [],
+            augmented: [],
+          };
         },
-        globals: () => new Set(),
+        globals: () => ({ names: new Set(), missing: [] }),
       },
     ]),
   ],
@@ -1021,6 +1069,21 @@ const negatives: readonly (readonly [string, Rule, () => void, Expected, SourceR
       rule: 'docs.commands',
       path: 'wiki/ops/run.md',
       message: 'names no command demo burokrat audit',
+    },
+  ],
+  [
+    'AGENTS.md giving another records checkout in an HTML comment, from epoch 3',
+    matchReadRecordsLocation,
+    () => {
+      const path = join(root, 'AGENTS.md');
+      writeFileSync(path, `${readFileSync(path, 'utf8')}\n<!-- or \`../demo-notes\` -->\n`);
+    },
+    {
+      rule: 'agents.records',
+      path: 'AGENTS.md',
+      message: 'gives the records checkout ../demo-notes, not ../demo-records',
+      remedy:
+        'write the records repository as https://github.com/acme/demo-records, checked out as `../demo-records`',
     },
   ],
   [
