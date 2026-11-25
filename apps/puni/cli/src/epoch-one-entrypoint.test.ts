@@ -53,12 +53,13 @@ describe('a repository as repo init made it at rules epoch 1', () => {
     });
   });
 
-  test('upgrades to the latest epoch, 3, once its findings are fixed as their remedies say', () => {
+  test('upgrades to the latest epoch, 4, once its findings are fixed as their remedies say', () => {
     const state = makeEpochOnePair(scratchDirectories, readRules());
     const refused = runPuni(['burokrat', 'repo', 'upgrade'], state);
     expect(refused.code).toBe(1);
     const remedies = readRemedies(refused.stdout);
-    expect([...remedies.keys()]).toEqual(['agents.index', 'index.leftover']);
+    expect([...remedies.keys()]).toEqual(['agents.index', 'docs.type', 'index.leftover']);
+    expect(refused.stdout).not.toMatch(/^docs\.type (?!wiki\/index\/)/mu);
     expect(remedies.get('index.leftover')).toBe(
       'run `git rm -r wiki/index`, then replace each `wiki/index/index.md` in AGENTS.md and README.md with `puni burokrat wiki map`',
     );
@@ -75,7 +76,7 @@ describe('a repository as repo init made it at rules epoch 1', () => {
     }
     expect(runPuni(['burokrat', 'repo', 'upgrade'], state)).toEqual({
       code: 0,
-      stdout: 'upgraded: rules epoch 1 -> 3\n',
+      stdout: 'upgraded: rules epoch 1 -> 4\n',
       stderr: '',
     });
     const check = runPuni(['burokrat', 'check'], state);

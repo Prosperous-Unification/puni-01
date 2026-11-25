@@ -80,13 +80,14 @@ describe('slugifyTitle', () => {
 });
 
 describe('recordsCatalog.file', () => {
-  test('files the record dated today in UTC with the front matter the rules require', () => {
+  test('files the record dated today in UTC with the front matter the rules require, its document type first', () => {
     const { host, file } = open();
     expect(file()).toBe('nav/plans/2031-04-05-run-k3s-first-steps.md');
     const text = host.nodes.get('/r/nav/plans/2031-04-05-run-k3s-first-steps.md');
     expect(text).toBe(
       [
         '---',
+        'puni-doc-type: record',
         'kind: plan',
         'title: Run k3s: first steps!',
         'date: 2031-04-05',

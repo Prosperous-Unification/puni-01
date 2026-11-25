@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Libraries
 read-when: deciding which library new code belongs in, or what one library may import of another
 ---

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repositoryScope } from '@puni/shared-checkout';
+import { repositoryScope, type UpgradeTexts } from '@puni/shared-checkout';
 import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { digestRulesSection, rulesDigestAt } from './agents-rules';
 import {
@@ -169,6 +169,13 @@ function pin(rules: number): void {
   writeFileSync(agents, readFileSync(agents, 'utf8').replace(fixtureAgentsRules, secondRules));
 }
 
+/** The texts of an upgrade giving the fixture's `AGENTS.md` the rules section `section`. */
+function withRules(section: string): UpgradeTexts {
+  const agents = readFileSync(join(state, 'AGENTS.md'), 'utf8');
+  const [head] = agents.split('## Rules');
+  return { 'system-state': { 'AGENTS.md': `${head ?? ''}${section}` }, 'system-records': {} };
+}
+
 /** The production counts each mode applies at pin 1, before the later rules here. */
 /** How many system-state rules apply at the pin `epoch`, of every level or of `level`. */
 const cappedCode = capLeveled(codeRules);
@@ -176,7 +183,7 @@ const stateAt = (epoch: number) => cappedCode.filter(({ rule }) => appliesAt(rul
 const projectAt = (epoch: number) =>
   cappedCode.filter(({ level, rule }) => level === 'project' && appliesAt(rule, epoch)).length;
 const crossCount = capRules(crossProjectRules).length;
-const recordsCount = recordsRules.length;
+const recordsCount = capLeveled(recordsRules).length;
 const n = String;
 
 const newer = (ids: string) =>
@@ -290,9 +297,9 @@ describe('the latest rules', () => {
     expect(latestEpoch([finds('a.b', 'x', 1, 4)])).toBe(4);
   });
 
-  test('judge every repository at the latest epoch as if the rules section were the given text', () => {
+  test('judge every repository at the latest epoch as if each file named held the given text', () => {
     writeEpochFiles(state, 2);
-    const judged = host.container.resolve('latestRules').judge(state, secondRules);
+    const judged = host.container.resolve('latestRules').judge(state, withRules(secondRules));
     expect(dropRemedies(judged['system-state'])).toEqual([
       { rule: 'demo.also', path: 'later.md', message: 'exists' },
       { rule: 'demo.later', path: 'later.md', message: 'exists' },
@@ -303,7 +310,7 @@ describe('the latest rules', () => {
     expect(
       host.container
         .resolve('latestRules')
-        .judge(state, fixtureAgentsRules)
+        .judge(state, withRules(fixtureAgentsRules))
         ['system-state'].map(({ rule }) => rule),
     ).toEqual(['agents.rules', 'demo.also', 'demo.later']);
   });
@@ -311,7 +318,7 @@ describe('the latest rules', () => {
   test('a records checkout that is not beside the state one is its one finding', () => {
     writeEpochFiles(state, 2);
     rmSync(records, { recursive: true });
-    const judged = host.container.resolve('latestRules').judge(state, secondRules);
+    const judged = host.container.resolve('latestRules').judge(state, withRules(secondRules));
     expect(judged['system-records'].map(({ rule, path }) => `${rule} ${path}`)).toEqual([
       'repository.checkout .',
     ]);

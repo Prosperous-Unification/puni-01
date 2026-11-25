@@ -1,4 +1,4 @@
-import type { RecordKind } from '@puni/shared-checkout';
+import { docTypeKey, type RecordKind } from '@puni/shared-checkout';
 
 /**
  * The file-name slug of a record titled `title`: lower-cased, every run of anything but ASCII
@@ -27,9 +27,12 @@ export interface RecordFields {
 /** The keys of {@link RecordFields} in the order a record writes and judges them. */
 export const fieldOrder = ['kind', 'title', 'date', 'commit', 'topics', 'summary'] as const;
 
-/** The text of a record: its front matter between `---` lines, a blank line, then `body`. */
+/**
+ * The text of a record: its front matter between `---` lines, its document type `record` first,
+ * then `fields`, a blank line, then `body`.
+ */
 export function formatRecord(fields: RecordFields, body: string): string {
-  const lines = fieldOrder.map((key) => `${key}: ${fields[key]}`);
+  const lines = [`${docTypeKey}: record`, ...fieldOrder.map((key) => `${key}: ${fields[key]}`)];
   if (fields.supersedes !== undefined) lines.push(`supersedes: ${fields.supersedes}`);
   const ending = body.endsWith('\n') ? '' : '\n';
   return ['---', ...lines, '---', '', `${body}${ending}`].join('\n');

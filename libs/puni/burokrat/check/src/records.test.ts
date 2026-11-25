@@ -22,7 +22,7 @@ import {
 } from '@puni/shared-testing';
 import { type CheckHost, dropRemedies, type Judged, openCheckHost } from './check.test-host';
 import type { CheckRequest } from './contract';
-import type { Rule } from './finding';
+import { appliesAt, type Rule } from './finding';
 import { recordsRules } from './rule-set.rule';
 import {
   agentsExists,
@@ -30,6 +30,7 @@ import {
   claudeLinksAgents,
   recordsAgentsHeadings,
 } from './rules/entry.rule';
+import { judgeRecordsDocTypes } from './rules/doc-types.rule';
 import { judgeEntryKinds } from './rules/entries.rule';
 import { resolveAgentsLinks } from './rules/links.rule';
 import {
@@ -50,6 +51,13 @@ import { forbidPlaintextSecrets, forbidRecordsAddresses } from './rules/secrets.
 import { credentialSamples, forbiddenAddress } from './secrets.test-host';
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
+
+/** How many records rules apply at the fixture's pin, epoch 1. */
+const recordsAtPin = recordsRules.filter(({ rule }) => appliesAt(rule, 1)).length;
+
+/** The line naming the records rules of later epochs than the fixture's pin. */
+const newerRecords =
+  'newer: puni.json pins rules epoch 1; later epochs add or change: docs.type; run puni burokrat repo upgrade\n';
 
 let root = '';
 let host: CheckHost;
@@ -121,6 +129,59 @@ describe('the fixture records repository passes every records rule', () => {
     writeRepositoryFile(root, 'nav/research/2031-04-07-notes.md', 'no front matter\n');
     expect(judge(judgeRecordFrontMatter).map((finding) => finding.path)).toEqual([
       'nav/research/2031-04-07-notes.md',
+    ]);
+  });
+});
+
+describe('document types in a records repository', () => {
+  const docType = (path: string, text: string): Judged[] => {
+    writeRepositoryFile(root, path, text);
+    return judge(judgeRecordsDocTypes);
+  };
+
+  test('a record filed before records declared their type is a record by its place', () => {
+    writeAdr();
+    expect(judge(judgeRecordsDocTypes)).toEqual([]);
+    expect(judge(judgeRecordFrontMatter)).toEqual([]);
+  });
+
+  test('a record declaring record passes the front-matter schema and its type', () => {
+    writeAdr({ 'puni-doc-type': 'record' });
+    expect([judge(judgeRecordsDocTypes), judge(judgeRecordFrontMatter)]).toEqual([[], []]);
+  });
+
+  test('a record declaring another type, or none that exists, is a docs.type finding alone', () => {
+    writeAdr({ 'puni-doc-type': 'product' });
+    expect(judge(judgeRecordFrontMatter)).toEqual([]);
+    expect(judge(judgeRecordsDocTypes)).toEqual([
+      {
+        rule: 'docs.type',
+        path: record,
+        message:
+          "declares puni-doc-type product, which lives outside wiki/ and the records' kind directories, under a name other than AGENTS.md, CLAUDE.md, README.md",
+      },
+    ]);
+  });
+
+  test('record is the type of the kind directories only', () => {
+    expect(docType('.github/notes.md', '---\npuni-doc-type: record\n---\n')).toEqual([
+      {
+        rule: 'docs.type',
+        path: '.github/notes.md',
+        message:
+          'declares puni-doc-type record, which lives only directly in a kind directory of the records repository (nav/plans, nav/research, bur/adr, bur/assessments, bur/findings, bur/assessment-reviews, bur/archive)',
+      },
+    ]);
+  });
+
+  test('AGENTS.md declaring no type is a finding; dash/, which the layout does not inspect, is not judged', () => {
+    writeRepositoryFile(root, 'dash/notes.md', '# Notes\n');
+    expect(docType('AGENTS.md', '# demo records\n')).toEqual([
+      {
+        rule: 'docs.type',
+        path: 'AGENTS.md',
+        message: 'declares no puni-doc-type in its front matter',
+      },
     ]);
   });
 });
@@ -454,7 +515,7 @@ describe('the check command on a records repository', () => {
   test('--repo system-records from the system-state repository applies the records rule set', () => {
     expect(runIn(join(stateRoot(), 'apps'))).toEqual({
       code: 0,
-      printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,
+      printed: `ok: system-records, ${String(recordsAtPin)} rules, no findings.\n${newerRecords}`,
     });
   });
 
@@ -462,7 +523,7 @@ describe('the check command on a records repository', () => {
     writeRepositoryFile(root, 'puni.json', formatRegistry('system-records', fixtureRemotes, 1));
     expect(runIn(join(root, 'nav/plans'), {})).toEqual({
       code: 0,
-      printed: `ok: system-records, ${String(recordsRules.length)} rules, no findings.\n`,
+      printed: `ok: system-records, ${String(recordsAtPin)} rules, no findings.\n${newerRecords}`,
     });
   });
 
@@ -504,7 +565,7 @@ describe('the check command on a records repository', () => {
     writeRepositoryFile(root, 'AGENTS.md', 'See [gone](bur/gone.md).\n');
     expect(runIn(stateRoot())).toEqual({
       code: 1,
-      printed: `links.resolve AGENTS.md: links to missing bur/gone.md; fix: point the link at a path that exists, or remove it\nfail: system-records, ${String(recordsRules.length)} rules, 1 finding.\n`,
+      printed: `links.resolve AGENTS.md: links to missing bur/gone.md; fix: point the link at a path that exists, or remove it\nfail: system-records, ${String(recordsAtPin)} rules, 1 finding.\n${newerRecords}`,
     });
   });
 });
@@ -572,6 +633,12 @@ const breaches: readonly (readonly [Rule, () => void])[] = [
     judgeSupersession,
     () => {
       writeAdr({ supersedes: record });
+    },
+  ],
+  [
+    judgeRecordsDocTypes,
+    () => {
+      writeRepositoryFile(root, 'AGENTS.md', '# demo records\n');
     },
   ],
   [

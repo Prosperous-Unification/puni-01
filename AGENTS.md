@@ -1,3 +1,7 @@
+---
+puni-doc-type: agents
+---
+
 # puni-01
 
 The PUNI platform: the `puni` CLI and the rules it enforces on every
@@ -6,8 +10,8 @@ repository it governs.
 ## Working here
 
 - The gate is `bun run gate`; `bun run fix` repairs what a tool can. Bun and Nx only.
-- Unsure where something lives? `bun run puni burokrat wiki map` prints the
-  map from a task to the file to read first.
+- Unsure where something lives? `bun run puni burokrat wiki map` maps a
+  task to the file to read first.
 - Every commit, commit message and pull request here is public: no
   credentials, hostnames, addresses, personal data or record content.
 - Records live in <https://github.com/Prosperous-Unification/puni-01-records>,

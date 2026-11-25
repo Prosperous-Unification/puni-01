@@ -1,7 +1,7 @@
 import { rulesSectionTitle } from './rules-section';
 import type { RepositoryType } from './registry';
-import recordsAgents from './templates/records-agents.md' with { type: 'text' };
-import stateAgents from './templates/state-agents.md' with { type: 'text' };
+import recordsAgents from './templates/records-agents.md.tmpl' with { type: 'text' };
+import stateAgents from './templates/state-agents.md.tmpl' with { type: 'text' };
 
 /**
  * The `AGENTS.md` each repository type starts with, as a template of the `{{placeholder}}`s
@@ -54,15 +54,27 @@ function listFencedLines(lines: readonly string[]): ReadonlySet<number> {
 }
 
 /**
+ * How many lines the front matter opening `lines` takes, its two `---` lines included: 0 when the
+ * first line is not `---` or no later line closes it.
+ */
+function countFrontMatterLines(lines: readonly string[]): number {
+  if (lines[0]?.trimEnd() !== '---') return 0;
+  const end = lines.findIndex((line, index) => index > 0 && line.trimEnd() === '---');
+  return end < 0 ? 0 : end + 1;
+}
+
+/**
  * The headings of level 1 and 2 in the Markdown `text`, in order: ATX (`# `, `## `) and setext
- * (a paragraph line underlined with `=` or `-`), outside closed fenced code blocks.
+ * (a paragraph line underlined with `=` or `-`), outside closed fenced code blocks and the front
+ * matter that opens the text, whose closing `---` underlines no heading.
  */
 export function readHeadings(text: string): MarkdownHeading[] {
   const lines = text.split('\n');
   const fenced = listFencedLines(lines);
+  const skipped = countFrontMatterLines(lines);
   const headings: MarkdownHeading[] = [];
   lines.forEach((line, index) => {
-    if (fenced.has(index)) return;
+    if (fenced.has(index) || index < skipped) return;
     const atx = atxHeading.exec(line);
     if (atx !== null) {
       headings.push({
@@ -75,6 +87,7 @@ export function readHeadings(text: string): MarkdownHeading[] {
     const underline = setextUnderline.exec(line)?.[1];
     const above = lines[index - 1];
     if (underline === undefined || above === undefined || fenced.has(index - 1)) return;
+    if (index - 1 < skipped) return;
     if (notParagraph.test(above)) return;
     headings.push({ level: underline.startsWith('=') ? 1 : 2, text: above.trim(), line: index });
   });

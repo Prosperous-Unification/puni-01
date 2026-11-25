@@ -5,7 +5,7 @@ import {
   readMarkdown,
   repositoryScope,
 } from '@puni/shared-checkout';
-import { isDocumentation } from '../docs';
+import { type DocSelection, isTypedDocumentation, selectsDocumentation } from '../docs';
 import { type Breach, reachesReference, type Rule, type RuleReading } from '../finding';
 import { isGeneratedFile, readAttributes } from '../generated-files';
 import { resolveTarget } from '../links';
@@ -116,6 +116,52 @@ function readDeclared(
 }
 
 /**
+ * The breaches of the links of every Markdown file the scope owns (see
+ * {@link judgeDocReferences}): a missing path in any of them, a typed reference only in those
+ * `judgesTyped` chooses.
+ */
+function judgeReferences(reading: RuleReading, judgesTyped: (path: string) => boolean): Breach[] {
+  const { files, scope, references } = reading;
+  return files
+    .listVisible(scope)
+    .filter(isMarkdown)
+    .flatMap((path) =>
+      readMarkdown(files.readText(path), true).links.flatMap((link): Breach[] => {
+        const { target } = splitDestination(link.destination);
+        const resolved = target === '' ? undefined : resolveTarget(path, target);
+        if (resolved === undefined || !reachesReference(references, path, resolved)) return [];
+        if (!path.endsWith('.md') && !files.isShown(resolved)) {
+          return [
+            {
+              path,
+              message: `line ${String(link.line)} links to missing ${target}`,
+              remedy: 'point the link at a path that exists, or remove it',
+            },
+          ];
+        }
+        if (!judgesTyped(path)) return [];
+        const typed = readTypedLink(reading, path, link);
+        if (typed === undefined) return [];
+        const { names, unfollowed } = readDeclared(reading, typed.resolved);
+        if (names.has(typed.fragment)) return [];
+        const passed =
+          unfollowed.length === 0
+            ? ''
+            : `; it re-exports ${unfollowed.join(', ')}, which this check does not follow`;
+        return [
+          {
+            path,
+            message: `line ${String(link.line)} links to ${typed.written}, but ${typed.resolved} declares no ${typed.fragment}${passed}`,
+          },
+        ];
+      }),
+    );
+}
+
+const referencesRemedy =
+  'point the #fragment at a symbol the file declares, as Name or Name.member';
+
+/**
  * Every link of a Markdown file the scope owns (see `isMarkdown`) that is a typed reference
  * (see `readTypedLink`) names in its fragment a symbol the file declares, as the source reader
  * of its extension reads it at the repository's pin (`render-map.ts#renderRootMap`,
@@ -124,48 +170,28 @@ function readDeclared(
  * interface inherits from a base the same file declares is one of its own; one inherited from
  * another file's is not. In a Markdown file `links.resolve` does not read (`.markdown`, `.mdx`,
  * an upper-case `.MD`), a relative link to a missing path is refused too. Links are judged among
- * those the run's reach judges.
+ * those the run's reach judges. Epoch 3, over every Markdown file; {@link judgeTypedDocReferences}
+ * judges the documentation by its declared type.
  */
 export const judgeDocReferences: Rule = {
   id: 'docs.references',
   since: 3,
-  remedy: 'point the #fragment at a symbol the file declares, as Name or Name.member',
-  judge(reading) {
-    const { files, scope, references } = reading;
-    return files
-      .listVisible(scope)
-      .filter(isMarkdown)
-      .flatMap((path) =>
-        readMarkdown(files.readText(path), true).links.flatMap((link): Breach[] => {
-          const { target } = splitDestination(link.destination);
-          const resolved = target === '' ? undefined : resolveTarget(path, target);
-          if (resolved === undefined || !reachesReference(references, path, resolved)) return [];
-          if (!path.endsWith('.md') && !files.isShown(resolved)) {
-            return [
-              {
-                path,
-                message: `line ${String(link.line)} links to missing ${target}`,
-                remedy: 'point the link at a path that exists, or remove it',
-              },
-            ];
-          }
-          const typed = readTypedLink(reading, path, link);
-          if (typed === undefined) return [];
-          const { names, unfollowed } = readDeclared(reading, typed.resolved);
-          if (names.has(typed.fragment)) return [];
-          const passed =
-            unfollowed.length === 0
-              ? ''
-              : `; it re-exports ${unfollowed.join(', ')}, which this check does not follow`;
-          return [
-            {
-              path,
-              message: `line ${String(link.line)} links to ${typed.written}, but ${typed.resolved} declares no ${typed.fragment}${passed}`,
-            },
-          ];
-        }),
-      );
-  },
+  until: 4,
+  remedy: referencesRemedy,
+  judge: (reading) => judgeReferences(reading, () => true),
+};
+
+/**
+ * {@link judgeDocReferences}, its typed references judged only in the Markdown whose declared
+ * type the documentation rules judge, so product documentation names no symbol it must keep
+ * true; a missing path is refused in every Markdown file `links.resolve` does not read, typed or
+ * not, as at epoch 3.
+ */
+export const judgeTypedDocReferences: Rule = {
+  id: 'docs.references',
+  since: 4,
+  remedy: referencesRemedy,
+  judge: (reading) => judgeReferences(reading, (path) => isTypedDocumentation(reading.files, path)),
 };
 
 /**
@@ -192,61 +218,76 @@ const symbolOf = (code: string): string => code.replace(/\(\)$/u, '');
 /** A plain lower-case word (`main`, `build`), which reads as prose whatever a file exports. */
 const plainWord = /^[a-z][a-z0-9]*$/u;
 
+/** The breaches of the documentation `selection` chooses (see {@link judgeDocSpans}). */
+function judgeSpans(reading: RuleReading, selection: DocSelection): Breach[] {
+  const { files, scope, references } = reading;
+  if (references.kind === 'within-project') return [];
+  const declaring = indexExports(reading);
+  return files
+    .listVisible(scope)
+    .filter((path) => selectsDocumentation(files, path, selection))
+    .flatMap((path) => {
+      const markdown = readMarkdown(files.readText(path), true);
+      const typed = markdown.links.map((link) => readTypedLink(reading, path, link));
+      const judged = new Set<number>();
+      const breaches: Breach[] = [];
+      for (const { code, line, link } of markdown.spans) {
+        const symbol = symbolOf(code);
+        const owner = plainWord.test(symbol) ? undefined : declaring.get(symbol);
+        if (owner === undefined || (link !== undefined && judged.has(link))) continue;
+        if (link !== undefined && typed[link]?.fragment === symbol) continue;
+        if (link !== undefined) judged.add(link);
+        const where =
+          link === undefined
+            ? 'without linking it'
+            : `in a link to ${markdown.links[link]?.destination ?? ''}`;
+        breaches.push({
+          path,
+          message: `line ${String(line)} names the symbol ${symbol}, which ${owner} exports, ${where}`,
+        });
+      }
+      for (const [index, link] of markdown.links.entries()) {
+        const fragment = typed[index]?.fragment;
+        if (judged.has(index) || link.code === undefined || fragment === undefined) continue;
+        if (symbolOf(link.code) === fragment) continue;
+        breaches.push({
+          path,
+          message: `line ${String(link.line)} links ${symbolOf(link.code)} to ${link.destination}, a fragment naming another symbol`,
+          remedy: 'make the link text the symbol its fragment names',
+        });
+      }
+      return breaches;
+    });
+}
+
+const spansRemedy =
+  'link the symbol to the file that declares it, as [`name`](path#name), its text the fragment';
+
 /**
- * Every inline code span in the documentation the scope owns (see `isDocumentation`) that is a
+ * Every inline code span in the documentation the scope owns (see `selectsDocumentation`) that is a
  * name some source file exports (see `indexExports`), `()` after it allowed, is the text of a
  * typed reference whose fragment is that name: `[name](path#name)`, whether the span is the
  * link's whole text or part of it. A plain lower-case word is not judged. And a link whose text
  * is one code span agrees with its typed reference's fragment, so a link whose symbol was
  * renamed under its text fails too. One link gives at most one finding. Any project's source may
  * export a name, so a project check, whose reach is `within-project`, judges none; the
- * cross-project run and the whole check judge them all.
+ * cross-project run and the whole check judge them all. Epoch 3; {@link judgeTypedDocSpans}
+ * chooses the documentation by its declared type.
  */
 export const judgeDocSpans: Rule = {
   id: 'docs.spans',
   since: 3,
-  remedy:
-    'link the symbol to the file that declares it, as [`name`](path#name), its text the fragment',
-  judge(reading) {
-    const { files, scope, references } = reading;
-    if (references.kind === 'within-project') return [];
-    const declaring = indexExports(reading);
-    return files
-      .listVisible(scope)
-      .filter(isDocumentation)
-      .flatMap((path) => {
-        const markdown = readMarkdown(files.readText(path), true);
-        const typed = markdown.links.map((link) => readTypedLink(reading, path, link));
-        const judged = new Set<number>();
-        const breaches: Breach[] = [];
-        for (const { code, line, link } of markdown.spans) {
-          const symbol = symbolOf(code);
-          const owner = plainWord.test(symbol) ? undefined : declaring.get(symbol);
-          if (owner === undefined || (link !== undefined && judged.has(link))) continue;
-          if (link !== undefined && typed[link]?.fragment === symbol) continue;
-          if (link !== undefined) judged.add(link);
-          const where =
-            link === undefined
-              ? 'without linking it'
-              : `in a link to ${markdown.links[link]?.destination ?? ''}`;
-          breaches.push({
-            path,
-            message: `line ${String(line)} names the symbol ${symbol}, which ${owner} exports, ${where}`,
-          });
-        }
-        for (const [index, link] of markdown.links.entries()) {
-          const fragment = typed[index]?.fragment;
-          if (judged.has(index) || link.code === undefined || fragment === undefined) continue;
-          if (symbolOf(link.code) === fragment) continue;
-          breaches.push({
-            path,
-            message: `line ${String(link.line)} links ${symbolOf(link.code)} to ${link.destination}, a fragment naming another symbol`,
-            remedy: 'make the link text the symbol its fragment names',
-          });
-        }
-        return breaches;
-      });
-  },
+  until: 4,
+  remedy: spansRemedy,
+  judge: (reading) => judgeSpans(reading, 'path'),
+};
+
+/** {@link judgeDocSpans} over the Markdown whose declared type the documentation rules judge. */
+export const judgeTypedDocSpans: Rule = {
+  id: 'docs.spans',
+  since: 4,
+  remedy: spansRemedy,
+  judge: (reading) => judgeSpans(reading, 'type'),
 };
 
 /** The names every source file of the repository read at the pin declares for every file. */

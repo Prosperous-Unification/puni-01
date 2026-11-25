@@ -66,7 +66,7 @@ describe('navigator plan add', () => {
     const { host, run } = open();
     expect(run()).toEqual({ code: 0, stdout: `${filed}\n`, stderr: '' });
     expect(host.nodes.get(`${records}/${filed}`)).toBe(
-      '---\nkind: plan\ntitle: First plan\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first plan.\n---\n\n# First plan\n',
+      '---\npuni-doc-type: record\nkind: plan\ntitle: First plan\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first plan.\n---\n\n# First plan\n',
     );
   });
 

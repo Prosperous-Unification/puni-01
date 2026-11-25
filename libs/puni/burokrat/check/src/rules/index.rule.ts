@@ -172,11 +172,14 @@ export const requireScope: Rule = {
 
 /**
  * Every authored page lies directly in `wiki/` or in one of the sections `wikiSections` names, so
- * the map can list it under its section and a reader knows what kind of page it is.
+ * the map can list it under its section and a reader knows what kind of page it is. Retired at
+ * rules epoch 4, where a page is a file declaring the type `wiki-page`, and `docs.type` judges
+ * that it lies where that type lives.
  */
 export const requireSection: Rule = {
   id: 'index.section',
   since: 1,
+  until: 4,
   remedy: sectionRemedy,
   judge: judgeSources('section'),
 };

@@ -4,6 +4,7 @@ import {
   formatRegistry,
   type LatestRules,
   type RepositoryType,
+  type UpgradeTexts,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
@@ -30,27 +31,38 @@ const later = (rule: string): Finding => ({
 
 type Judged = Readonly<Record<RepositoryType, readonly Finding[]>>;
 
+/** The records checkout beside `/w/shop`, as its registry names it. */
+const records = '/w/demo-records';
+
 /**
  * A repository at `/w/shop` pinned at `pin`, its `AGENTS.md` holding `target`, upgraded by
- * latest rules of epoch 2 that find `findings` and whose rules text is `latestText`.
+ * latest rules of `epoch` (2 unless given) that find `findings` and whose rules text is
+ * `latestText`.
  */
 function open({
   pin = 1,
+  epoch = 2,
   findings = { 'system-state': [], 'system-records': [] },
   target = agents(oldText),
   tree = {},
-}: { pin?: number; findings?: Judged; target?: string; tree?: MemoryTree } = {}) {
-  const judged: { cwd: string; rules: string }[] = [];
+}: {
+  pin?: number;
+  epoch?: number;
+  findings?: Judged;
+  target?: string;
+  tree?: MemoryTree;
+} = {}) {
+  const judged: { cwd: string; texts: UpgradeTexts }[] = [];
   const latestRules: LatestRules = {
-    epoch: 2,
-    judge(cwd, rules) {
-      judged.push({ cwd, rules });
+    epoch,
+    judge(cwd, texts) {
+      judged.push({ cwd, texts });
       return findings;
     },
-    holdsRulesOf: (section, epoch) => section === latestText && epoch === 2,
+    holdsRulesOf: (section, at) => section === latestText && at === epoch,
   };
   const host = memoryHost({
-    [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 2),
+    [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes, epoch),
     [`${source}/AGENTS.md`]: agents(latestText),
     [`${here}/puni.json`]: registry(pin),
     [`${here}/AGENTS.md`]: target,
@@ -84,7 +96,7 @@ function open({
     );
     return { code, stdout, stderr };
   };
-  const file = (path: string) => host.nodes.get(`${here}/${path}`);
+  const file = (path: string, root = here) => host.nodes.get(`${root}/${path}`);
   return { host, run, file, judged };
 }
 
@@ -92,7 +104,12 @@ describe('burokrat repo upgrade', () => {
   test('with no findings at the latest epoch it rewrites the rules, repins puni.json and says so', () => {
     const { run, file, judged } = open();
     expect(run()).toEqual({ code: 0, stdout: 'upgraded: rules epoch 1 -> 2\n', stderr: '' });
-    expect(judged).toEqual([{ cwd: `${here}/deep`, rules: latestText }]);
+    expect(judged).toEqual([
+      {
+        cwd: `${here}/deep`,
+        texts: { 'system-state': { 'AGENTS.md': agents(latestText) }, 'system-records': {} },
+      },
+    ]);
     expect(file('puni.json')).toBe(registry(2));
     expect(file('AGENTS.md')).toBe(agents(latestText));
   });
@@ -186,6 +203,70 @@ describe('burokrat repo upgrade', () => {
       expect([judged, host.nodes]).toEqual([[], before]);
     },
   );
+
+  test('raised to epoch 4 it opens each entry file declaring no type with its front matter', () => {
+    const readme = '---\ntitle: Shop\n---\n\n# shop\n';
+    const { run, file, judged } = open({
+      pin: 3,
+      epoch: 4,
+      tree: {
+        [`${here}/README.md`]: readme,
+        [`${records}/AGENTS.md`]: '# demo-records\n',
+        [`${records}/.git`]: { directory: true },
+      },
+    });
+    expect(run()).toEqual({ code: 0, stdout: 'upgraded: rules epoch 3 -> 4\n', stderr: '' });
+    const declared = {
+      'system-state': {
+        'AGENTS.md': `---\npuni-doc-type: agents\n---\n\n${agents(latestText)}`,
+        'README.md': '---\npuni-doc-type: readme\ntitle: Shop\n---\n\n# shop\n',
+      },
+      'system-records': { 'AGENTS.md': '---\npuni-doc-type: agents\n---\n\n# demo-records\n' },
+    };
+    expect(judged.map(({ texts }) => texts)).toEqual([declared]);
+    expect([file('AGENTS.md'), file('README.md'), file('AGENTS.md', records)]).toEqual([
+      declared['system-state']['AGENTS.md'],
+      declared['system-state']['README.md'],
+      declared['system-records']['AGENTS.md'],
+    ]);
+  });
+
+  test('raised to epoch 4 it leaves an entry file that declares a type, and a missing one, alone', () => {
+    const typed = `---\npuni-doc-type: agents\n---\n\n${agents(oldText)}`;
+    const { run, file, judged } = open({
+      pin: 3,
+      epoch: 4,
+      target: typed,
+      tree: { [`${records}/AGENTS.md`]: '---\npuni-doc-type: agents\n---\n\n# r\n' },
+    });
+    expect(run().code).toBe(0);
+    expect(judged.map(({ texts }) => texts)).toEqual([
+      {
+        'system-state': { 'AGENTS.md': `---\npuni-doc-type: agents\n---\n\n${agents(latestText)}` },
+        'system-records': {},
+      },
+    ]);
+    expect([file('README.md'), file('AGENTS.md', records)]).toEqual([
+      undefined,
+      '---\npuni-doc-type: agents\n---\n\n# r\n',
+    ]);
+  });
+
+  test('raised to epoch 4 with no records checkout beside it, it declares the state files and judges', () => {
+    const { run, judged } = open({
+      pin: 3,
+      epoch: 4,
+      findings: { 'system-state': [], 'system-records': [later('repository.checkout')] },
+    });
+    expect(run().code).toBe(1);
+    expect(judged.map(({ texts }) => texts['system-records'])).toEqual([{}]);
+  });
+
+  test('raised from 1 to 2 it declares no type: types start at epoch 4', () => {
+    const { run, file } = open({ tree: { [`${here}/README.md`]: '# shop\n' } });
+    expect(run().code).toBe(0);
+    expect(file('README.md')).toBe('# shop\n');
+  });
 
   test('no puni.json above the directory is defective: exit 1', () => {
     const { host, run } = open();

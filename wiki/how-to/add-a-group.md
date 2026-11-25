@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Adding a group
 read-when: adding a command group that has no library yet
 ---
