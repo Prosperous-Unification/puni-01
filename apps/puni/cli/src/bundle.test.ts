@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
+import {
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
 
 const scratchDirectories = removeScratchDirectoriesAfterEach();
@@ -57,7 +61,7 @@ describe('the built puni.js', () => {
     runGit(join(parent, 'shop-records'), ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 29 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
@@ -65,5 +69,24 @@ describe('the built puni.js', () => {
       stdout: 'ok: system-records, 13 rules, no findings.\n',
       stderr: '',
     });
+  });
+
+  test('reads source files with the TypeScript compiler, a package left to node_modules', () => {
+    const state = join(parent, 'shop');
+    mkdirSync(state);
+    runPuni(['burokrat', 'repo', 'init', '--name', 'shop', '--owner', 'acme'], state);
+    runGit(state, ['init', '-q']);
+    runGit(join(parent, 'shop-records'), ['init', '-q']);
+    writeRepositoryFile(state, 'libs/x/src/box.ts', 'export const size = 1;\n');
+    writeRepositoryFile(
+      state,
+      'wiki/box.md',
+      '---\ntitle: Box\nread-when: changing the box\n---\n\n[`size`](../libs/x/src/box.ts#size), [`gone`](../libs/x/src/box.ts#gone)\n',
+    );
+    const run = runPuni(['burokrat', 'check'], state);
+    expect([run.code, run.stderr]).toEqual([1, '']);
+    expect(run.stdout).toStartWith(
+      'docs.references wiki/box.md: line 6 links to ../libs/x/src/box.ts#gone, but libs/x/src/box.ts declares no gone; fix: ',
+    );
   });
 });

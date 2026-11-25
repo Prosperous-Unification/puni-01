@@ -60,7 +60,7 @@ export interface CheckoutFiles {
   /** Whether something exists at `path`, a symlink followed to its target. Never throws. */
   exists(path: string): boolean;
   /**
-   * Whether `path` is a file git shows, or a directory holding one. Unlike {@link exists}, a path
+   * Whether `path` is a file git shows, or a directory holding one. Unlike {@link CheckoutFiles.exists}, a path
    * git ignores (a build output, an editor directory) is not shown, so a judgement over it is the
    * same in every checkout of the same commit.
    */
@@ -202,6 +202,113 @@ export interface ProjectSource {
    * that places it, in words a reader of the source's files knows.
    */
   readonly placementHint: string;
+}
+
+/** A half-open range `[start, end)` of character offsets into a source text. */
+export interface SourceRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * A symbol a source file declares, by the name a typed reference gives it: a top-level name, or
+ * a member of an exported type, object or namespace as `<Name>.<member>`.
+ */
+export interface SourceDeclaration {
+  readonly name: string;
+  /** Whether the file exports it, under this name or another, so other files may name it. */
+  readonly exported: boolean;
+  /** Whether the file only passes it on from another module, as a re-export does. */
+  readonly reexported: boolean;
+  /** Where the declaration stands in the text, its doc comment excluded. */
+  readonly range: SourceRange;
+}
+
+/**
+ * One doc comment of a source file: its text without the comment markers, and the line its
+ * first line of text stands on, so line `n` of the text stands on line `line + n`.
+ */
+export interface DocComment {
+  /** The 1-based line of the first line of `text`. */
+  readonly line: number;
+  readonly text: string;
+}
+
+/**
+ * One inline link of a doc comment, in the language's own link syntax: its target as written,
+ * the line it stands on, the name it starts with, and whether the file itself declares or
+ * imports that name. A link in code inside the comment is no link.
+ */
+export interface DocLink {
+  readonly target: string;
+  /** The 1-based line of the link. */
+  readonly line: number;
+  /** The name the target starts with, which a global may declare when the file does not. */
+  readonly head: string;
+  /** Whether the file resolves the target itself; when not, only a global can. */
+  readonly resolved: boolean;
+}
+
+/** Everything a source reader reads in one text, read in one pass. */
+export interface SourceReading {
+  /**
+   * The symbols the text declares: its top-level declarations, every name it exports, named
+   * re-exports included, and the members of what it exports as `<Name>.<member>`.
+   */
+  readonly declarations: readonly SourceDeclaration[];
+  /**
+   * The modules the text re-exports whole, as it names them, relative to its own file: their
+   * names are its declarations too, which one text cannot list.
+   */
+  readonly reexports: readonly string[];
+  /** The doc comments of the text, in order. */
+  readonly docComments: readonly DocComment[];
+  /** The inline links of its doc comments, in order (see {@link DocLink}). */
+  readonly links: readonly DocLink[];
+  /** The names the text declares for every file: those of a script, or of a global block. */
+  readonly ambient: readonly string[];
+}
+
+/**
+ * A plugin that reads the source files of one language: what a file declares, its doc comments
+ * and their links, from the file's text alone, in one pass. The host composes the readers a
+ * repository is read with as the `sourceReaders` list, and a {@link SourceRegistry} picks one by
+ * a file's extension.
+ */
+export interface SourceReader {
+  /** The file extensions this reader reads, each lower-case with its dot, as `.md` is written. */
+  readonly extensions: readonly string[];
+  /**
+   * The rules epoch from which a rule may read this reader's files: a reader added later
+   * changes no verdict of a repository pinned before it.
+   */
+  readonly since: number;
+  /**
+   * Everything the reader reads in `text`.
+   *
+   * @throws Error naming what went wrong when the text cannot be read.
+   */
+  read(text: string): SourceReading;
+  /**
+   * The names the language's installed libraries declare for every file, read once.
+   *
+   * @throws Error naming the declarations that cannot be read, such as types not installed.
+   */
+  globals(): ReadonlySet<string>;
+}
+
+/**
+ * The source readers of one run by extension, each text read once however often a rule asks
+ * for it.
+ */
+export interface SourceRegistry {
+  /** The extensions some reader reads from the rules epoch `epoch`, sorted. */
+  extensions(epoch: number): readonly string[];
+  /**
+   * The reader of the file at `path`, by its extension in any case, that a rule may read from
+   * the rules epoch `epoch` (see {@link SourceReader.since}); `undefined` when there is none.
+   */
+  readerOf(path: string, epoch: number): SourceReader | undefined;
 }
 
 /** What the checkout module exports. */

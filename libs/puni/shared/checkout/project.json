@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["scope:shared", "type:shared"],
   "metadata": {
-    "readWhen": "changing how a repository is located, its files listed, its projects scoped or its wiki map read and rendered",
+    "readWhen": "changing how a repository is located, its files listed or read as source, its projects scoped or its map rendered",
     "readFirst": "src/contract.ts"
   },
   "sourceRoot": "libs/puni/shared/checkout/src",

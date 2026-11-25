@@ -7,6 +7,7 @@ import {
   type ProjectSource,
   type RepositoryRegistry,
   type RepositoryType,
+  type SourceRegistry,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
@@ -26,8 +27,9 @@ export type ReferenceReach =
 
 /**
  * What a rule judges: the checkout, the project's registry, the composed CLI's commands, the
- * scope of the run, the references it reaches, the project sources the map is read with, and the
- * records. A project-level rule judges only what its scope owns.
+ * scope of the run, the references it reaches, the project sources the map is read with, the
+ * source readers of the run, and the records. A project-level rule judges only what its scope
+ * owns.
  */
 export interface RuleReading {
   readonly files: CheckoutFiles;
@@ -37,6 +39,7 @@ export interface RuleReading {
   readonly scope: CheckScope;
   readonly references: ReferenceReach;
   readonly projectSources: readonly ProjectSource[];
+  readonly sources: SourceRegistry;
   readonly records: RecordsCatalog;
 }
 

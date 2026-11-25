@@ -73,3 +73,16 @@ export function readPathReference(span: string): PathReference | undefined {
   if (path === undefined) return undefined;
   return { path, fragment: hash === -1 ? undefined : span.slice(hash + 1) };
 }
+
+/**
+ * Whether `word` reads as a code symbol rather than prose: a camelCase or compound PascalCase
+ * name (`renderRootMap`, `CommandExitCode`) or an upper-case name with an underscore
+ * (`PUNI_FAILURE_REPORT`). A single capitalised or lower-case word is prose.
+ */
+export function isSymbolName(word: string): boolean {
+  return (
+    /^[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*$/u.test(word) ||
+    /^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/u.test(word) ||
+    /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/u.test(word)
+  );
+}

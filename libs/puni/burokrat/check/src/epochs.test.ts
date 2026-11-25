@@ -60,10 +60,49 @@ function shows(id: string, path: string, since: number): Rule {
 /** The rules section the fixture's `AGENTS.md` must hold from epoch 2. */
 const secondRules = '## Rules\n\n1. **The second rules.** Stricter than the first.\n';
 
-const base = fixtureCheckRules({
+/** The last epoch this file walks; production rules from later epochs are left out. */
+const walked = 2;
+
+/** `rules` as epoch {@link walked} left them: none starting later, none stopping later. */
+function capRules(rules: readonly Rule[]): Rule[] {
+  return rules
+    .filter((rule) => rule.since <= walked)
+    .map((rule) => {
+      if (rule.until === undefined || rule.until <= walked) return rule;
+      const capped: { -readonly [Key in keyof Rule]: Rule[Key] } = { ...rule };
+      delete capped.until;
+      return capped;
+    });
+}
+
+/** `rules` capped (see {@link capRules}), each keeping its level. */
+function capLeveled(rules: readonly LeveledRule[]): LeveledRule[] {
+  return rules.flatMap(({ level, rule }) =>
+    capRules([rule]).map((capped) => ({ level, rule: capped })),
+  );
+}
+
+const fixture = fixtureCheckRules({
   1: digestRulesSection(fixtureAgentsRules),
   2: digestRulesSection(secondRules),
 });
+
+/**
+ * The fixture rules capped at {@link walked}, so the epochs this file walks are those of the
+ * rules it adds, however far the production rules reach.
+ */
+const base: CheckRules = {
+  ...fixture,
+  sets: {
+    'system-state': capLeveled(fixture.sets['system-state']),
+    'system-records': capLeveled(fixture.sets['system-records']),
+  },
+  crossProject: capRules(fixture.crossProject),
+  secrets: {
+    'system-state': capRules(fixture.secrets['system-state']),
+    'system-records': capRules(fixture.secrets['system-records']),
+  },
+};
 const project = (rule: Rule): LeveledRule => ({ level: 'project', rule });
 
 /**
@@ -132,10 +171,11 @@ function pin(rules: number): void {
 
 /** The production counts each mode applies at pin 1, before the later rules here. */
 /** How many system-state rules apply at the pin `epoch`, of every level or of `level`. */
-const stateAt = (epoch: number) => codeRules.filter(({ rule }) => appliesAt(rule, epoch)).length;
+const cappedCode = capLeveled(codeRules);
+const stateAt = (epoch: number) => cappedCode.filter(({ rule }) => appliesAt(rule, epoch)).length;
 const projectAt = (epoch: number) =>
-  codeRules.filter(({ level, rule }) => level === 'project' && appliesAt(rule, epoch)).length;
-const crossCount = crossProjectRules.length;
+  cappedCode.filter(({ level, rule }) => level === 'project' && appliesAt(rule, epoch)).length;
+const crossCount = capRules(crossProjectRules).length;
 const recordsCount = recordsRules.length;
 const n = String;
 
@@ -325,6 +365,21 @@ describe('the production rules', () => {
         const next = ids(at + 1);
         const lost = [...ids(at)].filter((id) => !next.has(id) && retiredRules[id] !== at + 1);
         expect([at, lost]).toEqual([at, []]);
+      }
+    }
+  });
+
+  test('no id applies twice at one pin within a list, but as an until and since pair', () => {
+    const lists: readonly (readonly Rule[])[] = [
+      ...Object.values(checkRules.sets).map((set) => set.map(({ rule }) => rule)),
+      checkRules.crossProject,
+      ...Object.values(checkRules.secrets),
+    ];
+    for (const rules of lists) {
+      for (let at = 1; at <= latestRulesEpoch; at += 1) {
+        const ids = rules.filter((rule) => appliesAt(rule, at)).map(({ id }) => id);
+        const twice = ids.filter((id, index) => ids.indexOf(id) !== index);
+        expect([at, twice]).toEqual([at, []]);
       }
     }
   });

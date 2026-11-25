@@ -41,6 +41,8 @@ const exportedKeys = [
   'recordFiling',
   'recordsCatalog',
   'reviewTemplates',
+  'sourceReaders',
+  'typescriptSourceReaders',
   'workingTreeDigest',
 ] as const;
 

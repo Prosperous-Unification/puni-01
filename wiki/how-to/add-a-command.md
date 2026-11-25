@@ -19,7 +19,7 @@ The first leaf of a group with none also adds what step 3 of
 1. `contract.ts`: the request type `{ readonly kind: '<sub-group> <leaf>'; … }`, any new
    capability, and the command key in the `…Exports` interface: `<role><Group><Leaf>Command`.
 2. `<leaf>.command.ts`: export `<leaf>Parser`, an Optique parser yielding the request, and
-   `create<Leaf>Command`, a factory destructuring what it uses and returning a `Command` whose
+   `create<Leaf>Command`, a factory destructuring what it uses and returning a [`Command`](../../libs/puni/shared/command/src/command.ts#Command) whose
    `run(request, io)` writes through `io` and returns the exit code. JSDoc says every outcome.
 3. The work goes in a `.feature.ts` with its rules and resources, failures in `failures.ts`. A leaf
    that only prints needs none; a leaf that files a record builds on `@puni/shared-records`, as
@@ -38,9 +38,9 @@ The first leaf of a group with none also adds what step 3 of
 
 In `apps/puni/cli/src`:
 
-6. `root-parser.ts`: what the JSDoc of `puniParser` asks of a new leaf, its kind being its
+6. `root-parser.ts`: what the JSDoc of [`puniParser`](../../apps/puni/cli/src/root-parser.ts#puniParser) asks of a new leaf, its kind being its
    words after the program, as `'dash ops ssh'` and `'burokrat check'` are.
-7. `main.ts`: the kind's case in the `switch` of `runPuni`.
+7. `main.ts`: the kind's case in the `switch` of [`runPuni`](../../apps/puni/cli/src/main.ts#runPuni).
 
 ## Tests
 
@@ -48,11 +48,11 @@ Each seam as [writing a test](write-a-test.md) says:
 
 8. The library test, beside the group's existing one, covering every outcome of the leaf.
 9. `apps/puni/cli/src/group-parsers.test.ts`: the leaf's lines parse; bad ones are refused.
-10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`, `listCommands`),
+10. The tests pinning the tree: `root-parser.test.ts` (`--help lists`, [`listCommands`](../../libs/puni/shared/command/src/command-catalog.ts#listCommands)),
     `composition.test.ts` (`exportedKeys`, sorted) and `main.test.ts` (the `failing` container,
     which provides every command key).
 11. A run of the leaf over real repositories, in process: its group's `*-commands.test.ts` in
-    `apps/puni/cli/src`, through `openInProcessPuni`. Spawn the entrypoint only for what a
+    `apps/puni/cli/src`, through [`openInProcessPuni`](../../apps/puni/cli/src/in-process.test-host.ts#openInProcessPuni). Spawn the entrypoint only for what a
     process alone shows, as `ops-entrypoint.test.ts` does for a child attached to the terminal.
 
 Then `bun run fix`, which formats, and `bun run gate`, which must exit 0.

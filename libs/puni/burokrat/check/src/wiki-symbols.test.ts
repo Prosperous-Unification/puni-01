@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { isSymbolName, listSymbolNames } from './rules/wiki.rule';
+import { isSymbolName } from './docs';
+import { listSymbolNames } from './rules/wiki.rule';
 
 describe('isSymbolName', () => {
   test.each(['renderIndex', 'CommandExitCode', 'PUNI_FAILURE_REPORT', 'x2Y'])(

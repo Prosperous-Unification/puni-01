@@ -10,7 +10,8 @@ says where each kind of fact lives. Before committing:
 
 1. **Find what the change made untrue.** Search the documentation and JSDoc for every name, path,
    command and behaviour the change renamed, moved or removed: `git grep -n <old name>`. The gate
-   catches a stale backticked symbol, path or command; it cannot catch prose, so the search does.
+   catches a stale backticked symbol, path or command, and a typed reference or doc-comment link
+   to a symbol the code no longer declares; it cannot catch prose, so the search does.
    Rewrite each untrue line to say what is true now, or delete it. Never mark it old.
 2. **Place each new fact in its first home.** Can a check or test hold it? Write that. A type or
    a name? Use it. Does one library own it? JSDoc on the symbol. Only what spans libraries and

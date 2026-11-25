@@ -5,8 +5,8 @@ import { runGit, type ScratchDirectoryOwner, writeRepositoryFile } from '@puni/s
 /**
  * The system-state files `puni burokrat repo init` wrote at rules epoch 1, for the name `demo`
  * and owner `acme`, but for the `## Rules` section `AGENTS.md` copies from the checkout puni runs
- * from: the generated `wiki/index/` committed, `AGENTS.md` and `README.md` naming its
- * `wiki/index/index.md`.
+ * from: the generated `wiki/index` committed, `AGENTS.md` and `README.md` naming its
+ * `index.md`.
  */
 export const epochOneStateFiles: Readonly<Record<string, string>> = {
   'puni.json':

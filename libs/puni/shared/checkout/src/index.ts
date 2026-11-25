@@ -10,11 +10,18 @@ export type {
   CheckoutFiles,
   CheckoutFilesResource,
   CommitCheckout,
+  DocComment,
+  DocLink,
   NewCheckout,
   NewCheckoutPlace,
   ProjectScopeResource,
   ProjectSource,
   RepositoryRegistryResource,
+  SourceDeclaration,
+  SourceRange,
+  SourceReader,
+  SourceReading,
+  SourceRegistry,
 } from './contract';
 export {
   CheckoutPathRefused,
@@ -26,6 +33,7 @@ export {
   ProjectUnknown,
   RevisionUnknown,
   RulesPinAhead,
+  SourceReadersOverlap,
 } from './failures';
 export { explainDefect, findCheckoutDefect } from './defect-reason';
 export { type FrontMatter, parseFrontMatter } from './front-matter';
@@ -41,6 +49,14 @@ export {
   type SourceDefect,
 } from './map-sources';
 export { describeValue, isRecord, parseJson, type ParsedJson, requireOnlyKeys } from './json';
+export {
+  isMarkdown,
+  type MarkdownLine,
+  type MarkdownLink,
+  type MarkdownReading,
+  type MarkdownSpan,
+  readMarkdown,
+} from './markdown';
 export { checkoutModule } from './module';
 export {
   type CheckScope,
@@ -58,6 +74,7 @@ export { nameProject, type ProjectFile, readProjectFiles } from './project-files
 export { type LatestRules, requirePinReached, rulesUpgradeCommand } from './latest-rules';
 export { readRulesSection, replaceRulesSection, rulesSectionTitle } from './rules-section';
 export { seedFiles } from './seed-files';
+export { openSourceRegistry } from './source-registry';
 export {
   formatRegistry,
   githubUrlPattern,

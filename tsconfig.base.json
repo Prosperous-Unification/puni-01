@@ -28,6 +28,7 @@
       "@puni/shared-adapters": ["./libs/puni/shared/adapters/src/index.ts"],
       "@puni/shared-checkout": ["./libs/puni/shared/checkout/src/index.ts"],
       "@puni/shared-nx": ["./libs/puni/shared/nx/src/index.ts"],
+      "@puni/shared-typescript": ["./libs/puni/shared/typescript/src/index.ts"],
       "@puni/shared-records": ["./libs/puni/shared/records/src/index.ts"],
       "@puni/shared-testing": ["./libs/puni/shared/testing/src/index.ts"],
       "@puni/burokrat-check": ["./libs/puni/burokrat/check/src/index.ts"],
