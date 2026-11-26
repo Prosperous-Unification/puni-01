@@ -3,8 +3,10 @@ import { compareBytes } from './byte-order';
 import type {
   CheckoutFiles,
   CheckoutFilesResource,
+  CommitCheckout,
   FileSystem,
   Git,
+  GitIndexEntry,
   GitListing,
   NewCheckout,
   NewCheckoutPlace,
@@ -13,14 +15,15 @@ import {
   CheckoutPathRefused,
   CheckoutRootRefused,
   CheckoutUnlistable,
+  CommitsUnlistable,
   HeadCommitUnreadable,
+  RevisionUnknown,
   StagedTextUnreadable,
 } from './failures';
 import { ownsPath } from './ownership';
-import { leavesRoot } from './paths';
+import { commitMessagePath, leavesRoot } from './paths';
 import { recordDirectories } from './record-directories';
 import type { RepositoryType } from './registry';
-import { indexDirectory } from './render-index';
 import { seedFiles } from './seed-files';
 import { readOrRefuse } from './unreadable';
 
@@ -37,40 +40,41 @@ function normalise(path: string): string {
   return normal;
 }
 
-/** Where a checkout writes: the files and the directories it may change, and how to say so. */
-interface WriteArea {
-  readonly description: string;
-  holdsFile(normal: string): boolean;
-  holdsDirectory(normal: string): boolean;
-}
-
 const kindDirectories: readonly string[] = Object.values(recordDirectories);
 
 /**
- * The write area of a checkout of each type: a system-state checkout writes only the generated
- * index, anywhere below `wiki/index/`, and may remove a file standing where `wiki/index` belongs;
- * a records checkout writes only record files, directly inside a kind directory, and empties no
- * directory.
+ * The files a system-state checkout writes: the registry and the entry files raising its `rules`
+ * pin rewrites, `AGENTS.md` for its rules section and both for their document type.
  */
-const writeAreas: Readonly<Record<RepositoryType, WriteArea>> = {
+const pinnedFiles: readonly string[] = ['puni.json', 'AGENTS.md', 'README.md'];
+
+/** The file a records checkout writes outside its kind directories: its `AGENTS.md`, for its type. */
+const recordsEntry = 'AGENTS.md';
+
+/** Where a checkout of each type writes, and how to say so. */
+const writeAreas: Readonly<
+  Record<RepositoryType, { readonly description: string; holdsFile(normal: string): boolean }>
+> = {
   'system-state': {
-    description: `inside ${indexDirectory}/`,
-    holdsFile: (normal) => normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
-    holdsDirectory: (normal) =>
-      normal === indexDirectory || normal.startsWith(`${indexDirectory}/`),
+    description: `${pinnedFiles.slice(0, -1).join(', ')} or ${pinnedFiles.at(-1) ?? ''}`,
+    holdsFile: (normal) => pinnedFiles.includes(normal),
   },
   'system-records': {
-    description: `directly inside a kind directory (${kindDirectories.join(', ')})`,
-    holdsFile: (normal) => kindDirectories.includes(posix.dirname(normal)),
-    holdsDirectory: () => false,
+    description: `${recordsEntry} or directly inside a kind directory (${kindDirectories.join(', ')})`,
+    holdsFile: (normal) =>
+      normal === recordsEntry || kindDirectories.includes(posix.dirname(normal)),
   },
 };
 
-/** `path` normalised, refused unless the write area of a `type` checkout holds it. */
-function normaliseWritten(path: string, type: RepositoryType, directory: boolean): string {
+/**
+ * `path` normalised, refused unless a `type` checkout writes it: a system-state checkout writes
+ * only the {@link pinnedFiles}; a records checkout writes only its {@link recordsEntry} and
+ * record files, directly inside a kind directory.
+ */
+function normaliseWritten(path: string, type: RepositoryType): string {
   const normal = normalise(path);
   const area = writeAreas[type];
-  if (!(directory ? area.holdsDirectory(normal) : area.holdsFile(normal))) {
+  if (!area.holdsFile(normal)) {
     refuse(path, `is not ${area.description}, the only place a ${type} checkout writes`);
   }
   return normal;
@@ -111,6 +115,25 @@ function requireListed(listing: GitListing): string[] {
   return [...listing.files].sort(compareBytes);
 }
 
+/**
+ * Asks git for the index entries of `root` once, on the first call, and answers every later call
+ * the same; a failure is the one defect of every listing.
+ */
+function listIndexOnce(git: Git, root: string): () => readonly GitIndexEntry[] {
+  let listed: readonly GitIndexEntry[] | undefined;
+  return () => {
+    if (listed !== undefined) return listed;
+    const entries = git.listIndexEntries(root);
+    if ('failure' in entries) {
+      throw new CheckoutUnlistable({
+        details: { rule: 'repository.git', path: '.', reason: entries.failure },
+      });
+    }
+    listed = [...entries.entries].sort((left, right) => compareBytes(left.path, right.path));
+    return listed;
+  };
+}
+
 /** Asks `list` once, on the first call, and answers every later call the same. */
 function listOnce(list: () => GitListing): () => string[] {
   let listed: string[] | undefined;
@@ -124,17 +147,10 @@ function openCheckout(
   git: Git,
 ): CheckoutFiles {
   const listGit = listOnce(() => git.listVisibleFiles(root));
+  const listIndex = listIndexOnce(git, root);
   const absolute = (path: string): string => join(root, normalise(path));
   const describe: CheckoutFiles['describe'] = (path) =>
     fileSystem.stat(absolute(path), 'no-follow');
-  const removeEmptyBelow = (directory: string): void => {
-    for (const entry of fileSystem.list(join(root, directory))) {
-      if (entry.kind !== 'directory') continue;
-      const path = posix.join(directory, entry.name);
-      removeEmptyBelow(path);
-      if (fileSystem.list(join(root, path)).length === 0) fileSystem.remove(join(root, path));
-    }
-  };
   return {
     root,
     readText(path) {
@@ -152,6 +168,7 @@ function openCheckout(
         const kind = describe(path);
         return kind === 'absent' ? [] : [{ path, kind }];
       }),
+    listIndexEntries: (scope) => listIndex().filter(({ path }) => ownsPath(scope, path)),
     readHeadCommit() {
       const head = git.readHeadCommit(root);
       if ('failure' in head) {
@@ -162,12 +179,12 @@ function openCheckout(
       return head.text;
     },
     write(path, text) {
-      const normal = normaliseWritten(path, type, false);
+      const normal = normaliseWritten(path, type);
       fileSystem.makeDirectory(join(root, posix.dirname(normal)));
       fileSystem.write(join(root, normal), text);
     },
     createFile(path, text) {
-      const normal = normaliseWritten(path, type, false);
+      const normal = normaliseWritten(path, type);
       ensureCreateParents(fileSystem, root, normal);
       try {
         fileSystem.writeNew(join(root, normal), text);
@@ -176,12 +193,6 @@ function openCheckout(
         if (cause instanceof Error && 'code' in cause && cause.code === 'EEXIST') return 'exists';
         throw cause;
       }
-    },
-    remove(path) {
-      fileSystem.remove(join(root, normaliseWritten(path, type, false)));
-    },
-    removeEmptyDirectories(directory) {
-      removeEmptyBelow(normaliseWritten(directory, type, true));
     },
   };
 }
@@ -203,11 +214,71 @@ function openStaged(root: string, fileSystem: FileSystem, git: Git): CheckoutFil
     isShown: (path) => isShownIn(listStaged(), path, () => true),
     listVisible: (scope) => listStaged().filter((path) => ownsPath(scope, path)),
     listVisibleEntries: () => listStaged().map((path) => ({ path, kind: 'file' })),
+    listIndexEntries: () => [],
     write: readOnly,
     createFile: readOnly,
-    remove: readOnly,
-    removeEmptyDirectories: readOnly,
   };
+}
+
+/**
+ * The commits of `base..head` in the checkout at `root`, each as its view, as
+ * {@link CheckoutFilesResource.openCommits} says.
+ */
+function openCommits(
+  root: string,
+  base: string,
+  head: string,
+  fileSystem: FileSystem,
+  git: Git,
+): readonly CommitCheckout[] {
+  const listed = git.listCommits(root, base, head);
+  if ('unknown' in listed) throw new RevisionUnknown({ details: { revision: listed.unknown } });
+  if ('failure' in listed) {
+    throw new CommitsUnlistable({
+      details: {
+        rule: 'repository.git',
+        path: '.',
+        range: `${base}..${head}`,
+        reason: listed.failure,
+      },
+    });
+  }
+  const workingTree = openCheckout(root, 'system-state', fileSystem, git);
+  const readOnly = (path: string): never => refuse(path, 'a commit view writes nothing');
+  /** A read-only view whose visible files are the keys of `linesByPath`, read as their lines. */
+  const view = (shortHash: string, linesByPath: ReadonlyMap<string, readonly string[]>) => {
+    const paths = [...linesByPath.keys()].sort(compareBytes);
+    const files: CheckoutFiles = {
+      ...workingTree,
+      readText(path) {
+        const lines = linesByPath.get(normalise(path));
+        if (lines === undefined) refuse(path, `is not a path commit ${shortHash} adds to`);
+        return lines.join('\n');
+      },
+      isShown: (path) => isShownIn(paths, path, () => true),
+      listVisible: (scope) => paths.filter((path) => ownsPath(scope, path)),
+      listVisibleEntries: () => paths.map((path) => ({ path, kind: 'file' })),
+      listIndexEntries: () => [],
+      write: readOnly,
+      createFile: readOnly,
+    };
+    return files;
+  };
+  return listed.commits.map(({ fullHash, shortHash, message, addedLines }) => {
+    const addedLinesByPath = new Map<string, string[]>();
+    for (const { path, line, text } of addedLines) {
+      const lines = addedLinesByPath.get(path) ?? [];
+      while (lines.length < line) lines.push('');
+      lines[line - 1] = text;
+      addedLinesByPath.set(path, lines);
+    }
+    return {
+      fullHash,
+      shortHash,
+      files: view(shortHash, addedLinesByPath),
+      message: view(shortHash, new Map([[commitMessagePath, message.split('\n')]])),
+    };
+  });
 }
 
 /**
@@ -250,8 +321,8 @@ function requirePlace(root: string, place: NewCheckoutPlace, fileSystem: FileSys
 }
 
 /**
- * The {@link NewCheckout} at `root`: it adds the {@link seedFiles} of `type` and, for a
- * system-state repository, files inside the generated index, each only where nothing exists.
+ * The {@link NewCheckout} at `root`: it adds the {@link seedFiles} of `type`, each only where
+ * nothing exists.
  */
 function createCheckout(
   root: string,
@@ -261,18 +332,11 @@ function createCheckout(
 ): NewCheckout {
   requirePlace(root, place, fileSystem);
   const seeds = seedFiles[type];
-  const holdsIndex = (normal: string): boolean =>
-    type === 'system-state' && normal.startsWith(`${indexDirectory}/`);
   const normaliseNew = (path: string, kind: 'file' | 'symlink'): string => {
     const normal = normalise(path);
-    if (seeds[normal] !== kind && !(kind === 'file' && holdsIndex(normal))) {
+    if (seeds[normal] !== kind) {
       const listed = Object.keys(seeds).filter((seed) => seeds[seed] === kind);
-      const index =
-        kind === 'file' && type === 'system-state' ? `, or inside ${indexDirectory}/` : '';
-      refuse(
-        path,
-        `is not a ${kind} a new ${type} repository starts with (${listed.join(', ')}${index})`,
-      );
+      refuse(path, `is not a ${kind} a new ${type} repository starts with (${listed.join(', ')})`);
     }
     if (fileSystem.stat(join(root, normal), 'no-follow') !== 'absent') {
       refuse(path, 'already exists; a new repository replaces nothing');
@@ -305,6 +369,7 @@ export function createCheckoutFiles({
   return {
     open: (root, type) => openCheckout(root, type, fileSystem, git),
     openStaged: (root) => openStaged(root, fileSystem, git),
+    openCommits: (root, base, head) => openCommits(root, base, head, fileSystem, git),
     create: (root, type, place) => createCheckout(root, type, place, fileSystem),
   };
 }

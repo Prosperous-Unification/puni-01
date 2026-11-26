@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cd \"$CLAUDE_PROJECT_DIR\" && bun run --silent puni burokrat wiki map; } 2>&1 || echo 'The wiki map could not be printed: if a package is missing run bun install; otherwise fix what the error above names, then run bun run puni burokrat wiki map.'"
+          }
+        ]
+      }
+    ]
+  }
+}

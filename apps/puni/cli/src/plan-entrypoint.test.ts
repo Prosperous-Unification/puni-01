@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { removeFixture, runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -19,19 +21,15 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
   let records = '';
 
   beforeEach(() => {
-    state = makeStateRepository();
+    state = makeStateRepository(scratchDirectories);
     runGit(state, ['add', '-A']);
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
     records = join(dirname(state), 'demo-records');
     mkdirSync(records);
-    writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+    writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
     symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
     runGit(records, ['init', '-q']);
     writeFileSync(join(state, 'body.md'), '# First plan\n\nStart with one node.\n');
-  });
-
-  afterEach(() => {
-    removeFixture(state);
   });
 
   const add = [
@@ -58,6 +56,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     expect(readFileSync(join(records, path), 'utf8')).toBe(
       [
         '---',
+        'puni-doc-type: record',
         'kind: plan',
         'title: First plan',
         `date: ${today}`,
@@ -74,7 +73,7 @@ describe('navigator plan add through the entrypoint, demo beside demo-records', 
     );
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 11 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
     const again = runPuni(add, state);

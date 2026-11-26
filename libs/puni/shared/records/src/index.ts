@@ -17,6 +17,7 @@ export {
   RecordTitleUnsluggable,
   RecordValueRefused,
   ReviewTemplateFailed,
+  SupersededRecordRefused,
 } from './failures';
 export { recordsModule } from './module';
 export {

@@ -9,7 +9,6 @@ DiBag.createBuilder()
   .withServices({
     checkoutRegistry: () => requirements.checkoutRegistry,
     checkoutFiles: () => requirements.checkoutFiles,
-    checkoutWikiIndex: () => requirements.checkoutWikiIndex,
-    commandCatalog: () => requirements.commandCatalog,
+    projectSources: () => requirements.projectSources,
   })
   .verifyGraphAtCompileTime() satisfies void;

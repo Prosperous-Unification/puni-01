@@ -135,13 +135,15 @@ const localExportList = {
 /**
  * Library boundaries by Nx tag, written on the importing side. A role library depends only on
  * shared libraries; a group or shared library imports no adapters and no app, and only a test
- * imports `type:testing`; the app composes everything. Those last are `onlyDependOnLibsWithTags` lists, which judge direct
+ * imports `type:testing`; a plugin (`type:plugin`, the tech-specific implementation of a shared
+ * interface) depends only on shared libraries and is imported only by the app, which composes
+ * it, and by tests; the app composes everything. Those last are `onlyDependOnLibsWithTags` lists, which judge direct
  * imports: `notDependOnLibsWithTags` walks the whole project graph, where a library's own tests
  * already reach the adapters through the testing library. The rule reads the Nx project graph
  * and passes silently without one, so it is proven through `nx run <project>:lint`.
  */
 function moduleBoundaries({ testing }) {
-  const testingTags = testing ? ['type:testing'] : [];
+  const testingTags = testing ? ['type:testing', 'type:plugin'] : [];
   return {
     '@nx/enforce-module-boundaries': [
       'error',
@@ -156,6 +158,7 @@ function moduleBoundaries({ testing }) {
             onlyDependOnLibsWithTags: ['type:group', 'type:shared', ...testingTags],
           },
           { sourceTag: 'type:shared', onlyDependOnLibsWithTags: ['type:shared', ...testingTags] },
+          { sourceTag: 'type:plugin', onlyDependOnLibsWithTags: ['type:shared', ...testingTags] },
           { sourceTag: 'scope:app', onlyDependOnLibsWithTags: ['*'] },
         ],
       },
@@ -266,6 +269,31 @@ function wiringBlock(name) {
 
 const bannedNames = ['data', 'result', 'obj', 'tmp', 'item', 'handle'];
 
+/**
+ * The libraries tagged `type:plugin`, the tech-specific side of a shared interface: only they
+ * import a language's compiler, so the core stays free of it. The lint test pins this list to
+ * the tags.
+ */
+const pluginLibraries = ['libs/puni/shared/nx', 'libs/puni/shared/typescript'];
+
+/** The plugin libraries that load their tool at run time, through a repository of their own. */
+const toolLoadingPlugins = ['libs/puni/shared/typescript'];
+const compilerMessage =
+  'only a type:plugin library imports the TypeScript compiler; reach it through its interface';
+const compilerImports = {
+  files: ['libs/**/*.ts', 'apps/**/*.ts', 'tests/**/*.ts'],
+  ignores: pluginLibraries.map((library) => `${library}/**`),
+  rules: {
+    '@typescript-eslint/no-restricted-imports': [
+      'error',
+      {
+        paths: [{ name: 'typescript', message: compilerMessage }],
+        patterns: [{ group: ['@typescript/*'], message: compilerMessage }],
+      },
+    ],
+  },
+};
+
 export default tseslint.config(
   { ignores: ['dist/', '.nx/', 'node_modules/', '.worktrees/'] },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
@@ -276,16 +304,7 @@ export default tseslint.config(
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
-  { files: ['**/*.js', '**/*.cjs'], ...tseslint.configs.disableTypeChecked },
-  {
-    // A CommonJS file, such as the Nx sync generator Nx loads with require, imports by require.
-    files: ['**/*.cjs'],
-    rules: { '@typescript-eslint/no-require-imports': 'off' },
-    languageOptions: {
-      sourceType: 'commonjs',
-      globals: { require: 'readonly', module: 'writable', process: 'readonly' },
-    },
-  },
+  { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
   {
     plugins: { '@eslint-community/eslint-comments': comments, jsdoc },
     rules: {
@@ -362,11 +381,16 @@ export default tseslint.config(
       '@typescript-eslint/no-invalid-void-type': 'off',
     },
   },
+  compilerImports,
   ...Object.keys(forbiddenKinds).map(libraryBlock),
   ...Object.keys(forbiddenByWiring).map(wiringBlock),
   {
-    // Repositories live in the adapters library, so its module.ts is the one that registers them.
-    files: ['libs/puni/shared/adapters/src/module.ts'],
+    // Repositories live in the adapters library, and in a plugin library the one that loads its
+    // tool, so their module.ts files are the ones that register them.
+    files: [
+      'libs/puni/shared/adapters/src/module.ts',
+      ...toolLoadingPlugins.map((library) => `${library}/src/module.ts`),
+    ],
     rules: {
       ...restrictImports(
         ...libraryImports(forbidKinds('module.ts', ['port']), false),

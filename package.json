@@ -10,40 +10,41 @@
     "puni": "bun apps/puni/cli/src/entrypoint.ts",
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
-    "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
     "format": "bun fmt",
     "format:check": "bun fmt --check",
     "gate": "bun run gate:checks && bun run gate:lint && bun run gate:test",
     "gate:affected": "bun run gate:checks:affected && bun run gate:lint:affected && bun run gate:test:affected",
-    "gate:checks": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t typecheck build",
-    "gate:checks:affected": "nx sync:check && { bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && nx affected -t puni-bur-check puni-bur-links && nx affected -t typecheck build",
-    "gate:lint": "nx run-many -t lint",
-    "gate:lint:affected": "nx affected -t lint",
+    "gate:checks": "{ bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check && nx run-many -t typecheck build",
+    "gate:checks:affected": "{ bun fmt --check || { echo 'fix: run bun run fix' >&2; exit 1; }; } && bun run puni burokrat check --commits \"${NX_BASE:?set NX_BASE to the base of the range, as NX_BASE=origin/main}..HEAD\" && nx affected -t puni-bur-check puni-bur-links && nx affected -t typecheck build",
+    "gate:lint": "bun run gate:lint:fast && nx run workspace:lint-all",
+    "gate:lint:affected": "bun run gate:lint",
+    "gate:lint:fast": "if bun lint --help 2>/dev/null | grep -q 'Find and fix problems'; then bun lint --type-aware --allow-unsupported; else echo 'gate:lint:fast: this Bun has no bun lint, so ESLint judges alone' >&2; fi",
     "gate:test": "nx run-many -t test",
     "gate:test:affected": "nx affected -t test",
-    "fix": "nx sync && bun fmt"
+    "fix": "bun fmt"
   },
   "dependencies": {
     "@optique/core": "1.4.0",
     "@optique/run": "1.4.0",
+    "@typescript/old": "npm:typescript@6.0.3",
     "application-exception": "0.9.0",
+    "bun-types": "1.4.5",
     "caught-object-report-json": "15.0.0",
     "configurable-tree-traversal": "0.13.0",
-    "di-bag": "0.5.2"
+    "di-bag": "0.5.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
     "@eslint/js": "10.0.1",
     "@nx/eslint-plugin": "24.0.6",
     "@typescript/native": "npm:typescript@7.0.2",
-    "bun-types": "1.4.5",
     "eslint": "10.15.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-jsdoc": "65.5.2",
     "lefthook": "2.2.2",
     "nx": "24.0.6",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "8.73.0"
   }
 }

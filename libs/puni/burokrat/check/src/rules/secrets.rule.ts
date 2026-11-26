@@ -23,28 +23,78 @@ function isConfiguration(path: string): boolean {
   );
 }
 
+/** The entry whose lines are the paths of the visible files a scope owns, one per line. */
+const pathsEntry = '(paths)';
+
+/** A byte order mark read as UTF-8: two replacement characters. */
+const byteOrderMark = /^\uFFFD\uFFFD/u;
+
 /**
- * Each visible text file the scope owns, as its path and lines; a file holding a NUL byte is
- * binary and left out.
+ * `line` as text to judge. A line without NUL is itself. A line of UTF-16 text, a NUL at every
+ * other place (after the byte order mark a first line starts with), as UTF-8 reads it, is decoded
+ * by dropping the NULs; that keeps every ASCII character, the only ones a credential shape or an
+ * address holds. Any other line holding a NUL is binary: `undefined`.
+ */
+function decodeLine(line: string): string | undefined {
+  if (!line.includes('\0')) return line;
+  const body = line.replace(byteOrderMark, '');
+  for (const nulParity of [0, 1]) {
+    let decoded = '';
+    let index = 0;
+    for (; index < body.length; index += 1) {
+      const isNul = body.charCodeAt(index) === 0;
+      if (isNul !== (index % 2 === nulParity)) break;
+      if (!isNul) decoded += body.charAt(index);
+    }
+    if (index === body.length) return decoded;
+  }
+  return undefined;
+}
+
+/**
+ * Each visible file the scope owns, as its path and lines, each line decoded by `decodeLine`
+ * and a binary one left empty; each symlink of the git index the scope owns that no visible
+ * file stands for, as its path and its target text, the one line git holds for it; then
+ * {@link pathsEntry}, whose lines are all those paths, so that a file name is judged as its text
+ * is without a finding printing it.
  */
 function listTextLines(
   files: CheckoutFiles,
   scope: CheckScope,
 ): { readonly path: string; readonly lines: readonly string[] }[] {
-  return files.listVisible(scope).flatMap((path) => {
-    const text = files.readText(path);
-    return text.includes('\0') ? [] : [{ path, lines: text.split('\n') }];
-  });
+  const visible = files.listVisible(scope);
+  const texts = visible.map((path) => ({
+    path,
+    lines: files
+      .readText(path)
+      .split('\n')
+      .map((line) => decodeLine(line) ?? ''),
+  }));
+  const shown = new Set(visible);
+  for (const entry of files.listIndexEntries(scope)) {
+    if (entry.kind === 'symlink' && !shown.has(entry.path)) {
+      texts.push({ path: entry.path, lines: [entry.target] });
+    }
+  }
+  const paths = texts.map(({ path }) => path);
+  return paths.length === 0 ? texts : [...texts, { path: pathsEntry, lines: paths }];
+}
+
+/** Whether `line` holds text shaped like a credential, by `credentialShapes`. */
+export function holdsCredential(line: string): boolean {
+  return credentialShapes.some(({ pattern }) => pattern.test(line));
 }
 
 /**
- * No visible text file the scope owns holds text shaped like a credential, by
+ * No visible file or symlink target the scope owns, read as `listTextLines` reads them, nor a
+ * path of one, holds text shaped like a credential, by
  * `credentialShapes` of `@puni/shared-failures`, nor a configuration file (`.yml`, `.yaml`,
  * `.env`, `.toml`, `.json`, `.ini`, `.env.<name>`) a credential assigned a bare value, by
  * `configuredCredential`. The finding names the line and the shape, never the text.
  */
 export const forbidPlaintextSecrets: Rule = {
   id: 'secrets.plaintext',
+  since: 1,
   remedy:
     'remove the credential from the file, rotate it, and read it from the environment or a secret store',
   judge({ files, scope }) {
@@ -82,7 +132,7 @@ function isAllowedAddress(octets: readonly number[]): boolean {
 const dottedQuad = /(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)/gu;
 
 /** Whether `line` holds an IPv4 address literal that may not be written down. */
-function holdsAddress(line: string): boolean {
+export function holdsAddress(line: string): boolean {
   return [...line.matchAll(dottedQuad)].some((match) => {
     const octets = match.slice(1, 5).map(Number);
     return octets.every((octet) => octet <= 255) && !isAllowedAddress(octets);
@@ -90,14 +140,15 @@ function holdsAddress(line: string): boolean {
 }
 
 /**
- * No visible text file the scope owns holds an IPv4 address literal, except loopback
- * (`127.0.0.0/8`), `0.0.0.0`, `255.255.255.255` and the documentation ranges `192.0.2.0/24`,
- * `198.51.100.0/24` and `203.0.113.0/24`; a file holding a NUL byte is binary and not read. The
+ * No visible file or symlink target the scope owns, read as `listTextLines` reads them, nor a
+ * path of one, holds an IPv4 address literal, except loopback (`127.0.0.0/8`), `0.0.0.0`, `255.255.255.255` and the
+ * documentation ranges `192.0.2.0/24`, `198.51.100.0/24` and `203.0.113.0/24`. The
  * finding names the line, never the address. `remedy` says where the address belongs instead.
  */
 function forbidAddresses(remedy: string): Rule {
   return {
     id: 'secrets.addresses',
+    since: 1,
     remedy,
     judge({ files, scope }) {
       return listTextLines(files, scope).flatMap(({ path, lines }) =>

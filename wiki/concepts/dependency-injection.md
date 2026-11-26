@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Dependency injection
 read-when: giving a library services, or deciding what it requires and exports
 ---

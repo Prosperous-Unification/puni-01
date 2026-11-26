@@ -22,6 +22,16 @@ export const RegistryInvalid = defineException({
   }) => `${file} ${problem}`,
 });
 
+/**
+ * A `puni.json` pinning a rules epoch later than the latest this `puni` knows: a refusal, since
+ * the rules that epoch holds are not here to judge by.
+ */
+export const RulesPinAhead = defineException({
+  tag: 'puni/shared-checkout/RulesPinAhead',
+  message: ({ pin, latest, version }: { pin: number; latest: number; version: string }) =>
+    `puni.json pins rules epoch ${String(pin)}, but puni ${version} knows rules only up to epoch ${String(latest)}; upgrade puni`,
+});
+
 /** A registered repository that is not checked out beside the one holding `puni.json`. */
 export const CheckoutMissing = defineException({
   tag: 'puni/shared-checkout/CheckoutMissing',
@@ -42,6 +52,20 @@ export const CheckoutMissing = defineException({
 export const CheckoutUnlistable = defineException({
   tag: 'puni/shared-checkout/CheckoutUnlistable',
   message: ({ reason }: { rule: 'repository.git'; path: '.'; reason: string }) => reason,
+});
+
+/** Git cannot list the commits of a range; `reason` is git's. */
+export const CommitsUnlistable = defineException({
+  tag: 'puni/shared-checkout/CommitsUnlistable',
+  message: ({
+    range,
+    reason,
+  }: {
+    rule: 'repository.git';
+    path: '.';
+    range: string;
+    reason: string;
+  }) => `the commits of ${range} cannot be listed: ${reason}`,
 });
 
 /** Git gives no `HEAD` commit for a checkout, as in a repository with no commit; `reason` is git's. */
@@ -93,13 +117,17 @@ export const checkoutDefects = [
   remedyDefect(
     RegistryInvalid,
     () =>
-      'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
+      'correct puni.json as the message says: this-repo-type, rules (the rules epoch), all-repos listing every type once, and optionally map (each partition path to its purpose) and keys starting x-',
   ),
   remedyDefect(CheckoutMissing, ({ url, root }) => `clone it: git clone ${url} ${root}`),
   remedyDefect(
     CheckoutUnlistable,
     () =>
       'make `git ls-files` succeed in the repository: resolve what git reports, such as unmerged entries, then rerun',
+  ),
+  remedyDefect(
+    CommitsUnlistable,
+    ({ range }) => `make \`git log ${range}\` succeed in the repository, then rerun`,
   ),
   remedyDefect(
     HeadCommitUnreadable,
@@ -120,7 +148,7 @@ export const ProjectUnknown = defineException({
 });
 
 /**
- * A path a checkout refuses: absolute, leaving the root, or written outside the generated index.
+ * A path a checkout refuses: absolute, leaving the root, or written where the checkout writes nothing.
  * Only a defect in the code that asked raises it.
  */
 export const CheckoutPathRefused = defineException({
@@ -137,6 +165,13 @@ export const CheckoutRootRefused = defineException({
   message: ({ root, reason }: { root: string; reason: string }) => `${root} ${reason}`,
 });
 
+/** An end of a commit range naming no commit of the repository: a refused command line. */
+export const RevisionUnknown = defineException({
+  tag: 'puni/shared-checkout/RevisionUnknown',
+  message: ({ revision }: { revision: string }) =>
+    `${revision} names no commit of the repository; fetch it, or name a commit that exists`,
+});
+
 /** A staged file whose text git does not give, though it listed the file as staged. */
 export const StagedTextUnreadable = defineException({
   tag: 'puni/shared-checkout/StagedTextUnreadable',
@@ -151,4 +186,53 @@ export const StagedTextUnreadable = defineException({
 export const FileUnreadable = defineException({
   tag: 'puni/shared-checkout/FileUnreadable',
   message: ({ path, reason }: { path: string; reason: string }) => `cannot read ${path}: ${reason}`,
+});
+
+/**
+ * A source file's text that its reader cannot read, as one nested past what its parser can
+ * follow: a fault of the file, which `reason` names.
+ */
+export const SourceUnreadable = defineException({
+  tag: 'puni/shared-checkout/SourceUnreadable',
+  message: ({ reason }: { reason: string }) => reason,
+});
+
+/**
+ * A source reader that cannot read any file, as one whose compiler or library types are not
+ * installed or not what it expects: a defect of puni's installation, never of the file read.
+ */
+export const SourceReaderBroken = defineException({
+  tag: 'puni/shared-checkout/SourceReaderBroken',
+  message: ({ reader, problem }: { reader: string; problem: string }) =>
+    `the ${reader} source reader cannot read: ${problem}; reinstall puni with its dependencies`,
+});
+
+/**
+ * A source reader that failed while reading one text, for no fault of the text: a defect of the
+ * reader. The rules name the file it was reading (see {@link SourceReadingFailed}).
+ */
+export const SourceReaderFailed = defineException({
+  tag: 'puni/shared-checkout/SourceReaderFailed',
+  message: ({ reader, problem }: { reader: string; problem: string }) =>
+    `the ${reader} source reader failed: ${problem}`,
+});
+
+/**
+ * A source reader's {@link SourceReaderFailed} while reading the file at `path`: a defect of
+ * puni, which its user reports with the file.
+ */
+export const SourceReadingFailed = defineException({
+  tag: 'puni/shared-checkout/SourceReadingFailed',
+  message: ({ path, reader, problem }: { path: string; reader: string; problem: string }) =>
+    `the ${reader} source reader failed reading ${path}: ${problem}; this is a defect of puni: report it with that file`,
+});
+
+/**
+ * Two composed source readers claiming one file extension, so no one reader reads its files: a
+ * defect of the composition.
+ */
+export const SourceReadersOverlap = defineException({
+  tag: 'puni/shared-checkout/SourceReadersOverlap',
+  message: ({ extension }: { extension: string }) =>
+    `two source readers read ${extension}; compose one reader per extension`,
 });

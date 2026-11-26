@@ -1,9 +1,15 @@
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { removeFixture, runGit, writeRepositoryFile } from '@puni/shared-testing';
+import {
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
 import { makeStateRepository } from './repository.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let puni: InProcessPuni;
 let root: string;
@@ -17,18 +23,15 @@ afterAll(async () => {
   await puni.close();
 });
 beforeEach(() => {
-  root = makeStateRepository();
+  root = makeStateRepository(scratchDirectories);
   runGit(root, ['add', '-A']);
   runGit(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
   records = join(dirname(root), 'demo-records');
   state = join(dirname(root), 'review.json');
   mkdirSync(records);
-  writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+  writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
   symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
   runGit(records, ['init', '-q']);
-});
-afterEach(() => {
-  removeFixture(root);
 });
 
 function input(name: string, value: unknown): string {

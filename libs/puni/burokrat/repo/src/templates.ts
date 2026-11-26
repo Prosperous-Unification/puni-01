@@ -1,14 +1,17 @@
-import recordsAgents from './templates/records-agents.md' with { type: 'text' };
-import stateAgents from './templates/state-agents.md' with { type: 'text' };
-import stateReadme from './templates/state-readme.md' with { type: 'text' };
+import { agentsTemplates } from '@puni/shared-checkout';
+import stateReadme from './templates/state-readme.md.tmpl' with { type: 'text' };
 import { TemplatePlaceholderUnfilled } from './failures';
 
 /**
  * The texts a new repository pair starts with, each a template of the `{{placeholder}}`s `name`
- * and `recordsUrl`. The state `AGENTS.md` is its template, a blank line, then the rules section
- * copied whole, so the section ends the file exactly as the source holds it.
+ * and `recordsUrl`: each `AGENTS.md` is `agentsTemplates` of `@puni/shared-checkout`, which says
+ * how the state one ends with the rules section.
  */
-export const templates = { recordsAgents, stateAgents, stateReadme } as const;
+export const templates = {
+  recordsAgents: agentsTemplates['system-records'],
+  stateAgents: agentsTemplates['system-state'],
+  stateReadme,
+} as const;
 
 /** The `.gitignore` both new repositories start with: the files of editors and the desktop. */
 export const newGitignore = '.DS_Store\n.idea/\n';

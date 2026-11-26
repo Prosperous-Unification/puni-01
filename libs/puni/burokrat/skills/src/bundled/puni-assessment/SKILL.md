@@ -1,6 +1,7 @@
 ---
 name: puni-assessment
 description: Use when asked to assess a PUNI-governed repository against a named rubric or template, or to choose a suitable rubric for a repository assessment.
+puni-doc-type: product
 ---
 
 # PUNI template assessment

@@ -8,6 +8,27 @@ describe('memoryHost', () => {
     expect(host.services.git().listVisibleFiles('/r')).toEqual({ files: ['a.md', 'b.md', 'l'] });
   });
 
+  test('git indexes files, symlinks with their targets, and gitlinks in place of their trees', () => {
+    const git = memoryHost(
+      {
+        '/r/b.md': 'b',
+        '/r/l': { symlink: 'b.md' },
+        '/r/vendor/sub/x.md': 'x',
+        '/r/empty': { directory: true },
+        '/other/x': 'x',
+      },
+      { gitlinks: ['/r/vendor/sub'] },
+    ).services.git();
+    expect(git.listIndexEntries('/r')).toEqual({
+      entries: [
+        { path: 'b.md', kind: 'file' },
+        { path: 'l', kind: 'symlink', target: 'b.md' },
+        { path: 'vendor/sub', kind: 'gitlink' },
+      ],
+    });
+    expect(git.listVisibleFiles('/r')).toEqual({ files: ['b.md', 'l', 'vendor/sub'] });
+  });
+
   test('git lists and reads the staged texts it was given, below the root only', () => {
     const git = memoryHost({}, { staged: { '/r/a.md': 'a', '/other/b.md': 'b' } }).services.git();
     expect(git.listStagedFiles('/r')).toEqual({ files: ['a.md'] });
@@ -18,6 +39,7 @@ describe('memoryHost', () => {
   test('git fails when told to, and an unknown process is unstarted', () => {
     const host = memoryHost({}, { gitFailure: 'no git' });
     expect(host.services.git().listVisibleFiles('/r')).toEqual({ failure: 'no git' });
+    expect(host.services.git().listIndexEntries('/r')).toEqual({ failure: 'no git' });
     expect(host.services.processRunner().run(['ssh', 'x'], { cwd: '/' })).toEqual({
       kind: 'unstarted',
       reason: 'ssh x is not in the memory host',

@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 
 /**
  * A kind of authored wiki page: the directory below `wiki/` that holds its pages, the heading its
- * pages are listed under in the index, and what a page of it is for.
+ * pages are listed under in the map, and what a page of it is for.
  */
 export interface WikiSection {
   readonly directory: string;
@@ -11,8 +11,8 @@ export interface WikiSection {
 }
 
 /**
- * The sections an authored page may live in, in the order the index lists them. A page directly
- * in `wiki/` belongs to none: it is listed first, under the index's own "Read when".
+ * The sections an authored page may live in, in the order the map lists them. A page directly
+ * in `wiki/` belongs to none: it is listed first, under the map's own "Read when".
  */
 export const wikiSections: readonly WikiSection[] = [
   {
@@ -28,7 +28,7 @@ export const wikiSections: readonly WikiSection[] = [
 ];
 
 /**
- * Where the authored page at `path` (Markdown under `wiki/` outside `wiki/index/`) sits: at the
+ * Where the authored page at `path` (Markdown under `wiki/`) sits: at the
  * wiki root, in one of the {@link wikiSections}, or in a directory that is none of them.
  */
 export function placePage(

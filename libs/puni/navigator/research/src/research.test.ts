@@ -19,7 +19,7 @@ const records = '/w/demo-records';
 const filed = 'nav/research/2031-04-05-first-note.md';
 
 const pair: MemoryTree = {
-  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${records}/AGENTS.md`]: '# records\n',
 };
 
@@ -66,7 +66,7 @@ describe('navigator research add', () => {
     const { host, run } = open();
     expect(run()).toEqual({ code: 0, stdout: `${filed}\n`, stderr: '' });
     expect(host.nodes.get(`${records}/${filed}`)).toBe(
-      '---\nkind: research\ntitle: First note\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first one.\n---\n\n# First note\n',
+      '---\npuni-doc-type: record\nkind: research\ntitle: First note\ndate: 2031-04-05\ncommit: abc1234\ntopics: ops, k3s\nsummary: The first one.\n---\n\n# First note\n',
     );
   });
 

@@ -1,17 +1,20 @@
-import { type CheckoutFiles, isRecord, nameRepository, parseJson } from '@puni/shared-checkout';
-import type { Breach, Rule } from '../finding';
+import {
+  type CheckoutFiles,
+  isRecord,
+  nameRepository,
+  parseJson,
+  readMarkdown,
+} from '@puni/shared-checkout';
+import type { Breach, Rule, RuleReading } from '../finding';
 import { listInlineCode } from '../docs';
+import { readAsBefore } from '../links';
 
-/**
- * `AGENTS.md` gives the records repository as the registry does: the `system-records` remote URL,
- * and `../<name>` for its checkout, `<name>` being that URL's last segment. A missing `AGENTS.md`
- * is `agents.exists`'s.
- */
-export const matchRecordsLocation: Rule = {
-  id: 'agents.records',
-  remedy:
-    'give the records repository in AGENTS.md as puni.json registers it: its system-records URL, and `../<name>` for its checkout',
-  judge({ files, registry }) {
+/** The breaches of `AGENTS.md` giving the records repository, its code spans listed by `listSpans`. */
+function judgeRecordsLocation(
+  { files, registry }: RuleReading,
+  listSpans: (text: string) => readonly string[],
+): Breach[] {
+  {
     const path = 'AGENTS.md';
     if (!files.exists(path)) return [];
     const text = files.readText(path);
@@ -23,7 +26,7 @@ export const matchRecordsLocation: Rule = {
     if (!text.includes(url)) {
       breaches.push({ path, message: `does not give the records repository URL ${url}`, remedy });
     }
-    const siblings = listInlineCode(text).filter((span) => /^\.\.\/[^/\s]+$/u.test(span));
+    const siblings = listSpans(text).filter((span) => /^\.\.\/[^/\s]+$/u.test(span));
     if (siblings.length === 0) {
       breaches.push({ path, message: `does not give the records checkout ${sibling}`, remedy });
     }
@@ -35,7 +38,38 @@ export const matchRecordsLocation: Rule = {
       });
     }
     return breaches;
-  },
+  }
+}
+
+const recordsRemedy =
+  'give the records repository in AGENTS.md as puni.json registers it: its system-records URL, and `../<name>` for its checkout';
+
+/**
+ * `AGENTS.md` gives the records repository as the registry does: the `system-records` remote URL,
+ * and `../<name>` for its checkout, `<name>` being that URL's last segment. A missing `AGENTS.md`
+ * is `agents.exists`'s. Epochs 1 and 2, the spans outside fenced blocks;
+ * {@link matchReadRecordsLocation} reads them as the other docs rules do.
+ */
+export const matchRecordsLocation: Rule = {
+  id: 'agents.records',
+  since: 1,
+  until: 3,
+  remedy: recordsRemedy,
+  judge: (reading) => judgeRecordsLocation(reading, listInlineCode),
+};
+
+/**
+ * {@link matchRecordsLocation} over the code spans `readMarkdown` reads, outside fenced and
+ * indented code, front matter and HTML comments read as prose.
+ */
+export const matchReadRecordsLocation: Rule = {
+  id: 'agents.records',
+  since: 3,
+  remedy: recordsRemedy,
+  judge: (reading) =>
+    judgeRecordsLocation(reading, (text) =>
+      readMarkdown(text, readAsBefore).spans.map(({ code }) => code),
+    ),
 };
 
 const workflow = '.github/workflows/ci.yml';
@@ -83,6 +117,7 @@ function isWorkspace(files: CheckoutFiles): boolean {
  */
 export const requireCiGate: Rule = {
   id: 'ci.gate',
+  since: 1,
   remedy: `run \`bun run gate\` on pushes and \`bun run gate:affected\` on pull requests in ${workflow}, each whole or every \`bun run\` part of it`,
   judge({ files }) {
     if (!isWorkspace(files)) return [];
@@ -99,29 +134,5 @@ export const requireCiGate: Rule = {
           : `does not run bun run ${script}`;
       return [{ path: workflow, message }];
     });
-  },
-};
-
-/** The Nx sync generator that keeps `wiki/index/` current. */
-const indexSyncGenerator = '@puni/nx-sync:wiki-index';
-
-/**
- * The `nx.json` of an Nx workspace ({@link isWorkspace}) registers {@link indexSyncGenerator} in
- * `sync.globalGenerators`, so `nx sync:check` judges the index. Nx suggests removing a failing
- * global generator; this rule undoes that. A repository without `nx.json` keeps its index current
- * through `index.current` alone.
- */
-export const requireIndexSync: Rule = {
-  id: 'nx.sync',
-  remedy: `restore "sync": { "globalGenerators": ["${indexSyncGenerator}"] } in nx.json; if the generator fails, fix the finding it prints instead`,
-  judge({ files }) {
-    const path = 'nx.json';
-    if (!isWorkspace(files)) return [];
-    const read = parseJson(files.readText(path));
-    if ('problem' in read) return [{ path, message: read.problem }];
-    const sync = isRecord(read.value) ? read.value['sync'] : undefined;
-    const generators = isRecord(sync) ? sync['globalGenerators'] : undefined;
-    if (Array.isArray(generators) && generators.includes(indexSyncGenerator)) return [];
-    return [{ path, message: `does not list ${indexSyncGenerator} in sync.globalGenerators` }];
   },
 };

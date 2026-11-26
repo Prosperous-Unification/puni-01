@@ -1,20 +1,20 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   existsSync,
   lstatSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   readlinkSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readRulesSection } from '@puni/shared-checkout';
-import { runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
+import cliPackage from '../package.json' with { type: 'json' };
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const checkout = new URL('../../../../', import.meta.url).pathname;
 
@@ -38,14 +38,10 @@ describe('burokrat repo init in process, in an empty temporary directory', () =>
   let records = '';
 
   beforeEach(() => {
-    parent = mkdtempSync(join(tmpdir(), 'puni-repo-init-'));
+    parent = scratchDirectories.createDirectory('puni-repo-init-');
     state = join(parent, 'shop');
     records = join(parent, 'shop-records');
     mkdirSync(state);
-  });
-
-  afterEach(() => {
-    rmSync(parent, { recursive: true, force: true });
   });
 
   test('creates a pair that both checks pass once each is a git repository', () => {
@@ -67,14 +63,40 @@ describe('burokrat repo init in process, in an empty temporary directory', () =>
     runGit(records, ['init', '-q']);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 27 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 11 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
+  });
+
+  test('a new pair is pinned at the latest rules: upgrade has nothing to do; a later pin is refused', () => {
+    expect(
+      runPuni(['burokrat', 'repo', 'init', '--name', 'shop', '--owner', 'acme'], state).code,
+    ).toBe(0);
+    runGit(state, ['init', '-q']);
+    const pinned = readFileSync(join(state, 'puni.json'), 'utf8');
+    const { rules } = JSON.parse(pinned) as { rules: number };
+    expect(runPuni(['burokrat', 'repo', 'upgrade'], state)).toEqual({
+      code: 0,
+      stdout: `ok: rules epoch ${String(rules)} is already the latest this puni knows\n`,
+      stderr: '',
+    });
+    writeFileSync(
+      join(state, 'puni.json'),
+      pinned.replace(`"rules":${String(rules)}`, '"rules":99'),
+    );
+    const refusal = `error: puni.json pins rules epoch 99, but puni ${cliPackage.version} knows rules only up to epoch ${String(rules)}; upgrade puni\n`;
+    for (const args of [['check'], ['repo', 'upgrade']]) {
+      expect(runPuni(['burokrat', ...args], state)).toEqual({
+        code: 2,
+        stdout: '',
+        stderr: refusal,
+      });
+    }
   });
 
   test('the owner defaults to the owner of the checkout puni runs from', () => {

@@ -1,9 +1,11 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { removeFixture, runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let puni: InProcessPuni;
 
@@ -23,14 +25,10 @@ describe('dash resources in process, in a committed demo repository', () => {
   let state = '';
 
   beforeEach(() => {
-    state = makeStateRepository();
+    state = makeStateRepository(scratchDirectories);
     writeFileSync(join(state, '.gitignore'), '.worktrees/\n');
     runGit(state, ['add', '-A']);
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
-  });
-
-  afterEach(() => {
-    removeFixture(state);
   });
 
   test('create, list, exec in the worktree with its exit code passed through, refused and forced remove', () => {

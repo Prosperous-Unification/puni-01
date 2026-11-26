@@ -1,9 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runGit } from '@puni/shared-testing';
+import {
+  removeScratchDirectoriesAfterEach,
+  runGit,
+  writeRepositoryFile,
+} from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 /**
  * The file the `build` target writes: the app's own code in one file, its packages left to
@@ -29,11 +34,7 @@ describe('the built puni.js', () => {
     if (!existsSync(bundle)) {
       throw new Error(`${bundle} is missing; run bunx nx run puni-cli:build`);
     }
-    parent = mkdtempSync(join(tmpdir(), 'puni-bundle-'));
-  });
-
-  afterEach(() => {
-    rmSync(parent, { recursive: true, force: true });
+    parent = scratchDirectories.createDirectory('puni-bundle-');
   });
 
   test('prints its version', () => {
@@ -58,15 +59,42 @@ describe('the built puni.js', () => {
     expect([init.code, init.stderr]).toEqual([0, '']);
     runGit(state, ['init', '-q']);
     runGit(join(parent, 'shop-records'), ['init', '-q']);
+    const seeded = ['AGENTS.md', 'README.md', '../shop-records/AGENTS.md'].map(
+      (path) => readFileSync(join(state, path), 'utf8').split('\n')[1],
+    );
+    expect(seeded).toEqual([
+      'puni-doc-type: agents',
+      'puni-doc-type: readme',
+      'puni-doc-type: agents',
+    ]);
     expect(runPuni(['burokrat', 'check'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-state, 27 rules, no findings.\n',
+      stdout: 'ok: system-state, 33 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 11 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
+  });
+
+  test('reads source files with the TypeScript compiler, a package left to node_modules', () => {
+    const state = join(parent, 'shop');
+    mkdirSync(state);
+    runPuni(['burokrat', 'repo', 'init', '--name', 'shop', '--owner', 'acme'], state);
+    runGit(state, ['init', '-q']);
+    runGit(join(parent, 'shop-records'), ['init', '-q']);
+    writeRepositoryFile(state, 'libs/x/src/box.ts', 'export const size = 1;\n');
+    writeRepositoryFile(
+      state,
+      'wiki/box.md',
+      '---\npuni-doc-type: wiki-page\ntitle: Box\nread-when: changing the box\n---\n\n[`size`](../libs/x/src/box.ts#size), [`gone`](../libs/x/src/box.ts#gone)\n',
+    );
+    const run = runPuni(['burokrat', 'check'], state);
+    expect([run.code, run.stderr]).toEqual([1, '']);
+    expect(run.stdout).toStartWith(
+      'docs.references wiki/box.md: line 7 links to ../libs/x/src/box.ts#gone, but libs/x/src/box.ts declares no gone; fix: ',
+    );
   });
 });

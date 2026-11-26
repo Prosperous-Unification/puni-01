@@ -1,3 +1,7 @@
+---
+puni-doc-type: readme
+---
+
 # PUNI
 
 **AI agents can write anything. This is what makes them finish it.**
@@ -11,7 +15,7 @@ and one judges whether it was done right, so nothing is called finished on an ag
 ## Look inside
 
 - The rules every session follows: [`AGENTS.md`](AGENTS.md)
-- A map of the code: [`wiki/index/index.md`](wiki/index/index.md)
+- A map of the code: `bun run puni burokrat wiki map`
 
 ## Run it
 

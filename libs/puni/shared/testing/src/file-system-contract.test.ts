@@ -1,19 +1,32 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { throws } from 'node:assert/strict';
 import {
   chmodSync,
+  lstatSync,
   mkdirSync,
-  mkdtempSync,
   rmSync,
   symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createNodeFileSystem } from '@puni/shared-adapters';
 import type { FileSystem } from '@puni/shared-ports';
 import { createMemoryFileSystem, type MemoryTree } from './memory-host';
+import { removeScratchDirectoriesAfterAll } from './scratch-directories';
+
+const scratchDirectories = removeScratchDirectoriesAfterAll();
+
+/** Whether anything, a dangling symlink included, is at the absolute `path` on this machine. */
+function lstatOrAbsent(path: string): 'present' | 'absent' {
+  try {
+    lstatSync(path);
+    return 'present';
+  } catch {
+    return 'absent';
+  }
+}
 
 /** The tree every implementation is judged over, by path below its root. */
 const tree: MemoryTree = {
@@ -37,15 +50,8 @@ interface Subject {
   readonly root: string;
 }
 
-const temporaries: string[] = [];
-
-afterAll(() => {
-  for (const directory of temporaries) rmSync(directory, { recursive: true, force: true });
-});
-
 function writeNodeTree(): Subject {
-  const root = mkdtempSync(join(tmpdir(), 'puni-file-system-'));
-  temporaries.push(root);
+  const root = scratchDirectories.createDirectory('puni-file-system-');
   for (const [path, node] of Object.entries(tree)) {
     const absolute = join(root, path);
     mkdirSync(dirname(absolute), { recursive: true });
@@ -74,7 +80,11 @@ const subjects: readonly (readonly [string, () => Subject])[] = [
 ];
 
 describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
-  const { fileSystem, root } = open();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = open());
+  });
   const at = (path: string) => join(root, path);
 
   test('stat describes a symlink by itself, or by its target when followed', () => {
@@ -158,13 +168,11 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
     expect(fileSystem.homeDirectory()).toStartWith('/');
   });
 
-  test('writes, makes directories and removes a whole directory', () => {
+  test('writes and makes directories', () => {
     fileSystem.makeDirectory(at('x/y'));
     fileSystem.write(at('x/y/z.md'), 'z');
     expect(fileSystem.list(at('x'))).toEqual([{ name: 'y', kind: 'directory' }]);
     expect(fileSystem.readText(at('x/y/z.md'))).toBe('z');
-    fileSystem.remove(at('x'));
-    expect(fileSystem.stat(at('x'), 'no-follow')).toBe('absent');
   });
 
   test('creates a new file without replacing anything already there', () => {
@@ -197,12 +205,39 @@ describe.each(subjects)('the FileSystem contract: %s', (_name, open) => {
       );
     }
     expect(fileSystem.readText(at('a.md'))).toBe('a');
-    fileSystem.remove(at('made'));
+  });
+
+  test('refuses a relative path to every change, changing nothing where the process runs', () => {
+    const probe = 'puni-relative-probe';
+    const changes: readonly (() => void)[] = [
+      () => {
+        fileSystem.write(probe, 'x');
+      },
+      () => {
+        fileSystem.writeNew(probe, 'x');
+      },
+      () => {
+        fileSystem.makeDirectory(probe);
+      },
+      () => {
+        fileSystem.makeLink(probe, at('a.md'));
+      },
+    ];
+    try {
+      for (const change of changes) throws(change, /is not an absolute path/u);
+      expect(lstatOrAbsent(join(process.cwd(), probe))).toBe('absent');
+    } finally {
+      rmSync(join(process.cwd(), probe), { force: true, recursive: true });
+    }
   });
 });
 
 describe('the node adapter where the memory fake cannot follow', () => {
-  const { fileSystem, root } = writeNodeTree();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = writeNodeTree());
+  });
 
   test('the home directory is the one the operating system names', () => {
     expect(fileSystem.homeDirectory()).toBe(homedir());
@@ -217,7 +252,11 @@ describe('the node adapter where the memory fake cannot follow', () => {
 });
 
 describe('the node adapter on failures the memory fake cannot hold', () => {
-  const { fileSystem, root } = writeNodeTree();
+  let fileSystem: FileSystem;
+  let root: string;
+  beforeAll(() => {
+    ({ fileSystem, root } = writeNodeTree());
+  });
 
   test('a name too long throws ENAMETOOLONG from stat and does not exist', () => {
     const long = join(root, 'n'.repeat(300));

@@ -1,29 +1,45 @@
-import type { Command, CommandCatalog } from '@puni/shared-command';
+import type { Command, CommandCatalog, ProgramSource } from '@puni/shared-command';
 import type {
   CheckoutFilesResource,
+  LatestRules,
   ProjectScopeResource,
+  ProjectSource,
   RepositoryRegistryResource,
   RepositoryType,
-  WikiIndexResource,
+  SourceReader,
 } from '@puni/shared-checkout';
 import type { Finding } from '@puni/shared-failures';
 import type { RecordsCatalog } from '@puni/shared-records';
 
 /**
  * A parsed `check` request: the repository type to judge, and at most one choice of what in it to
- * judge: one project, only the references crossing projects, or only the staged files.
+ * judge: one project, only the references crossing projects, only the staged files, or what the
+ * commits of a range `<base>..<head>` add.
  */
 export interface CheckRequest {
   readonly repo?: RepositoryType | undefined;
   readonly project?: string | undefined;
   readonly crossProjectLinks?: boolean | undefined;
   readonly staged?: boolean | undefined;
+  readonly commits?: string | undefined;
+  /** Whether the `commits` range is merged history, which is never rewritten. */
+  readonly merged?: boolean | undefined;
 }
 
-/** What one check found: a summary naming what was judged, and every finding sorted. */
+/** The rules a check left unapplied: the repository's pin, and the ids of the later rules. */
+export interface NewerRules {
+  readonly pin: number;
+  readonly ids: readonly string[];
+}
+
+/**
+ * What one check found: a summary naming what was judged, every finding sorted, and the rules of
+ * the run that the repository's pin does not reach yet, when there are any.
+ */
 export interface CheckVerdict {
   readonly summary: string;
   readonly findings: readonly Finding[];
+  readonly newer?: NewerRules | undefined;
 }
 
 /** The capability "judge a repository". */
@@ -34,11 +50,17 @@ export interface RepositoryCheck {
    * checkout is the one `repository.git` finding at `.`.
    *
    * @throws FileUnreadable when a file the check needs exists but cannot be read.
+   * @throws SourceReaderBroken when a source reader cannot read at all, as without its compiler.
+   * @throws SourceReadingFailed when a source reader fails on a file, a defect of puni.
+   * @throws RulesPinAhead when `puni.json` pins a rules epoch later than the latest of the rules.
    * @throws ProjectUnknown when `project` names no project.
    * @throws ProjectScopeRefused when `project` or `crossProjectLinks` is given for a repository
    *   other than `system-state`.
-   * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks` and
-   *   `staged` is given.
+   * @throws ScopeOptionsConflict when more than one of `project`, `crossProjectLinks`, `staged`
+   *   and `commits` is given.
+   * @throws CommitRangeRefused when `commits` is not `<base>..<head>`.
+   * @throws MergedNeedsCommits when `merged` is given without `commits`.
+   * @throws RevisionUnknown when an end of `commits` names no commit.
    */
   check(request: CheckRequest, cwd: string): CheckVerdict;
 }
@@ -48,12 +70,17 @@ export interface CheckRequirements {
   readonly checkoutRegistry: RepositoryRegistryResource;
   readonly checkoutFiles: CheckoutFilesResource;
   readonly checkoutProjectScope: ProjectScopeResource;
-  readonly checkoutWikiIndex: WikiIndexResource;
+  readonly projectSources: readonly ProjectSource[];
+  /** The source readers, one per extension, that doc references into source files are read with. */
+  readonly sourceReaders: readonly SourceReader[];
   readonly recordsCatalog: RecordsCatalog;
   readonly commandCatalog: CommandCatalog;
+  readonly programSource: ProgramSource;
 }
 
 /** What the check module exports. */
 export interface CheckExports {
   readonly burokratCheckCommand: Command<CheckRequest>;
+  /** The judgement `puni burokrat repo upgrade` raises a repository's pin by. */
+  readonly latestRules: LatestRules;
 }

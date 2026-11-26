@@ -1,11 +1,11 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { findDefect, type Finding } from '@puni/shared-failures';
 import {
   fixtureRemotes,
   nodeHostModule,
-  removeFixture,
+  removeScratchDirectoriesAfterEach,
   writeRepositoryFile,
 } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
@@ -19,6 +19,8 @@ import {
 } from './registry';
 import { makeRegistryPair, type RegistryPair } from './registry.test-host';
 
+const scratchDirectories = removeScratchDirectoriesAfterEach();
+
 let pair: RegistryPair = { state: '', records: '' };
 
 const container = DiBag.createBuilder()
@@ -30,11 +32,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  pair = makeRegistryPair();
-});
-
-afterEach(() => {
-  removeFixture(pair.state);
+  pair = makeRegistryPair(scratchDirectories);
 });
 
 function findRepository(cwd: string): Repository {
@@ -78,18 +76,61 @@ describe('readRegistry', () => {
     const registry: unknown = readRegistry(pair.state);
     expect(registry).toEqual({
       thisType: 'system-state',
+      rules: 1,
       repos: { 'system-state': state, 'system-records': records },
+      map: new Map(),
     });
+  });
+
+  test('top-level keys starting x- are tolerated and ignored', () => {
+    writeConfig({
+      'x-note': { anything: true },
+      'this-repo-type': 'system-state',
+      rules: 4,
+      'all-repos': [state, records],
+      'x-': 1,
+    });
+    const registry: unknown = readRegistry(pair.state);
+    expect(registry).toEqual({
+      thisType: 'system-state',
+      rules: 4,
+      repos: { 'system-state': state, 'system-records': records },
+      map: new Map(),
+    });
+  });
+
+  test('reads the purpose of each partition from map, as formatRegistry writes it', () => {
+    const map = new Map([
+      ['dash', 'operating nodes'],
+      ['dash/ops', 'reaching a node'],
+    ]);
+    writeFileSync(
+      join(pair.state, 'puni.json'),
+      formatRegistry('system-state', fixtureRemotes, 1, map),
+    );
+    expect(readRegistry(pair.state).map).toEqual(map);
   });
 
   const defects: readonly (readonly [string, unknown, string])[] = [
     ['not JSON', '{this-repo-type', 'is not valid JSON: '],
     ['not an object', '[]', 'is not a JSON object'],
+    ...(['repos', 'xtra'] as const).map((key): readonly [string, unknown, string] => [
+      `an unknown top-level key ${key}`,
+      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], [key]: {} },
+      `has unknown keys ${key}; it holds only this-repo-type, rules, all-repos, map and keys starting x- (or upgrade puni, if a newer puni wrote them)`,
+    ]),
     [
-      'an unknown top-level key',
-      { 'this-repo-type': 'system-state', 'all-repos': [state, records], repos: {} },
-      'has unknown keys repos; it holds only this-repo-type, all-repos',
+      'rules missing',
+      { 'this-repo-type': 'system-state', 'all-repos': [state, records] },
+      `rules is missing; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)} ("rules": 1 keeps the verdict the repository had)`,
     ],
+    ...[0, -1, 1.5, '1', null, Number.MAX_SAFE_INTEGER + 1].map(
+      (rules): readonly [string, unknown, string] => [
+        `rules ${JSON.stringify(rules)}`,
+        { 'this-repo-type': 'system-state', rules, 'all-repos': [state, records] },
+        `rules is ${JSON.stringify(rules)}; expected a positive integer of at most ${String(Number.MAX_SAFE_INTEGER)}`,
+      ],
+    ),
     [
       'all-repos missing',
       { 'this-repo-type': 'system-state' },
@@ -176,6 +217,33 @@ describe('readRegistry', () => {
       `all-repos[1].remote.url is ${JSON.stringify(url)}; expected https://github.com/<owner>/<name> with no trailing slash or .git`,
     ]),
     [
+      'a map not an object',
+      { 'this-repo-type': 'system-state', rules: 1, 'all-repos': [state, records], map: ['dash'] },
+      'map is ["dash"]; expected an object',
+    ],
+    ...['Dash', 'dash/', '/dash', 'dash//ops', '1dash', ''].map(
+      (path): readonly [string, unknown, string] => [
+        `a map key ${JSON.stringify(path)}`,
+        {
+          'this-repo-type': 'system-state',
+          rules: 1,
+          'all-repos': [state, records],
+          map: { [path]: 'x' },
+        },
+        `map key ${JSON.stringify(path)} is no partition path; expected lower-case segments joined by /`,
+      ],
+    ),
+    [
+      'an empty purpose',
+      {
+        'this-repo-type': 'system-state',
+        rules: 1,
+        'all-repos': [state, records],
+        map: { dash: '' },
+      },
+      'map.dash is ""; expected a non-empty string',
+    ],
+    [
       'this-repo-type missing',
       { 'all-repos': [state, records] },
       'this-repo-type is missing; expected a type listed in all-repos: system-state, system-records',
@@ -219,7 +287,7 @@ describe('findRepository', () => {
     writeRepositoryFile(
       pair.records,
       'puni.json',
-      formatRegistry('system-records', fixtureRemotes),
+      formatRegistry('system-records', fixtureRemotes, 1),
     );
     expect(findRepository(pair.records).type).toBe('system-records');
   });

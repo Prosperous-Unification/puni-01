@@ -7,6 +7,10 @@ import type {
   Git,
   GitBranches,
   GitChange,
+  GitCommit,
+  GitCommits,
+  GitIndexEntries,
+  GitIndexEntry,
   GitListing,
   GitMerge,
   GitMerges,
@@ -32,6 +36,11 @@ export interface MemoryHostOptions {
   readonly gitFailure?: string;
   /** The text the git index holds for each staged file, by absolute path. */
   readonly staged?: MemoryStaged;
+  /**
+   * The index entries that are gitlinks, by absolute path: listed in place of whatever the tree
+   * holds there, and below it nothing.
+   */
+  readonly gitlinks?: readonly string[];
   /** The outcome of each argument vector, keyed by its words joined with spaces. */
   readonly processes?: Readonly<Record<string, ProcessOutcome>>;
   /**
@@ -61,6 +70,11 @@ export interface MemoryHostOptions {
    * `<ancestry> <revisions>`, newest first; any other revision is unknown.
    */
   readonly merges?: Readonly<Record<string, Readonly<Record<string, readonly GitMerge[]>>>>;
+  /**
+   * The commits `git log` lists in each repository by its absolute root, then by
+   * `<base>..<head>`, oldest first; any other range names an unknown `head`.
+   */
+  readonly commits?: Readonly<Record<string, Readonly<Record<string, readonly GitCommit[]>>>>;
 }
 
 /** The instant a memory host's clock reads unless told otherwise. */
@@ -81,6 +95,18 @@ class MemoryFileError extends Error {
 }
 
 /**
+ * `path`, which a method changing the memory file system is given.
+ *
+ * @throws Error, worded as the node adapter's `PathNotAbsolute`, when it is relative.
+ */
+function requireAbsolute(path: string): string {
+  if (!posix.isAbsolute(path)) {
+    throw new Error(`${path} is not an absolute path; the file system changes only absolute paths`);
+  }
+  return path;
+}
+
+/**
  * A mutable in-memory file system over `tree`, keeping the {@link FileSystem} contract the node
  * adapter keeps. A symlink's target resolves from the link's directory; more than eight links in
  * a row are a loop (`ELOOP`); reading a missing path throws `ENOENT` and a directory `EISDIR`.
@@ -92,6 +118,11 @@ export function createMemoryFileSystem(
   options: Pick<MemoryHostOptions, 'home' | 'modified'> = {},
 ): FileSystem & {
   readonly nodes: Map<string, MemoryNode>;
+  /**
+   * Removes the node at `path` and everything below it: the fake's own step for what git does
+   * when it removes a linked worktree, since the file-system port removes nothing.
+   */
+  removeTree(path: string): void;
 } {
   const nodes = new Map<string, MemoryNode>(Object.entries(tree));
   const isDirectory = (path: string): boolean => {
@@ -157,23 +188,24 @@ export function createMemoryFileSystem(
       });
     },
     write(path, text) {
-      nodes.set(path, text);
+      nodes.set(requireAbsolute(path), text);
     },
     writeNew(path, text) {
-      if (kindAt(path) !== 'absent') throw new MemoryFileError('EEXIST', path);
+      if (kindAt(requireAbsolute(path)) !== 'absent') throw new MemoryFileError('EEXIST', path);
       if (kindAt(follow(dirname(path))) !== 'directory') throw new MemoryFileError('ENOENT', path);
       nodes.set(path, text);
     },
-    remove(path) {
+    removeTree(path) {
+      requireAbsolute(path);
       for (const key of [...nodes.keys()]) {
         if (key === path || key.startsWith(`${path}/`)) nodes.delete(key);
       }
     },
     makeDirectory(path) {
-      if (!isDirectory(path)) nodes.set(path, { directory: true });
+      if (!isDirectory(requireAbsolute(path))) nodes.set(path, { directory: true });
     },
     makeLink(path, target) {
-      if (kindAt(path) !== 'absent') throw new MemoryFileError('EEXIST', path);
+      if (kindAt(requireAbsolute(path)) !== 'absent') throw new MemoryFileError('EEXIST', path);
       nodes.set(path, { symlink: target });
     },
   };
@@ -181,17 +213,22 @@ export function createMemoryFileSystem(
 
 /**
  * A git that shows every file and symlink of `fileSystem` below the root, ignoring nothing, and
- * holds `staged` in its index, or fails every listing with `failure`. Each repository starts
+ * holds `staged` in its index, or fails every listing with `failure`. Each path of
+ * `history.gitlinks` it shows and indexes as a gitlink, and nothing below it; its other index
+ * entries are those files and symlinks. Each repository starts
  * with one worktree, its root on the branch `main`; added worktrees are directories of
- * `fileSystem`, their changes, unmerged branches and merges as `history` says.
+ * `fileSystem`, their changes, unmerged branches, merges and commits as `history` says.
  */
 export function createMemoryGit(
   fileSystem: ReturnType<typeof createMemoryFileSystem>,
   failure?: string,
   staged: MemoryStaged = {},
   heads: Readonly<Record<string, string>> = {},
-  history: Pick<MemoryHostOptions, 'changed' | 'unmerged' | 'merges'> = {},
+  history: Pick<MemoryHostOptions, 'changed' | 'unmerged' | 'merges' | 'commits' | 'gitlinks'> = {},
 ): Git {
+  const gitlinks = history.gitlinks ?? [];
+  const isBelowGitlink = (path: string): boolean =>
+    gitlinks.some((link) => path === link || path.startsWith(`${link}/`));
   const repositories = new Map<string, { worktrees: GitWorktree[]; branches: Set<string> }>();
   const open = (root: string) => {
     for (const repository of repositories.values()) {
@@ -228,7 +265,7 @@ export function createMemoryGit(
       if (index <= 0) return { failure: `${path} is not a linked worktree` };
       if (!force && changedIn(path).length > 0) return { failure: `${path} has changes` };
       repository.worktrees.splice(index, 1);
-      fileSystem.remove(path);
+      fileSystem.removeTree(path);
       return { changed: true };
     },
     deleteBranch(root, branch, force): GitChange {
@@ -247,6 +284,11 @@ export function createMemoryGit(
         ? { failure: `unknown revision ${revisions} in ${root}` }
         : { merges: [...merges] };
     },
+    listCommits(root, base, head): GitCommits {
+      if (failure !== undefined) return { failure };
+      const commits = history.commits?.[root]?.[`${base}..${head}`];
+      return commits === undefined ? { unknown: head } : { commits: [...commits] };
+    },
     readHeadCommit(root): GitText {
       const head = heads[root];
       return head === undefined ? { failure: `${root} has no commit` } : { text: head };
@@ -263,14 +305,37 @@ export function createMemoryGit(
       const text = staged[posix.join(root, path)];
       return text === undefined ? { failure: `${path} is not staged` } : { text };
     },
+    listIndexEntries(root): GitIndexEntries {
+      if (failure !== undefined) return { failure };
+      const entries: GitIndexEntry[] = [];
+      for (const [path, node] of fileSystem.nodes) {
+        if (!path.startsWith(`${root}/`)) continue;
+        if (isBelowGitlink(path)) continue;
+        const relative = path.slice(root.length + 1);
+        if (typeof node === 'string') entries.push({ path: relative, kind: 'file' });
+        else if ('symlink' in node) {
+          entries.push({ path: relative, kind: 'symlink', target: node.symlink });
+        }
+      }
+      for (const link of gitlinks) {
+        if (link.startsWith(`${root}/`)) {
+          entries.push({ path: link.slice(root.length + 1), kind: 'gitlink' });
+        }
+      }
+      return { entries: entries.sort((left, right) => (left.path < right.path ? -1 : 1)) };
+    },
     listVisibleFiles(root): GitListing {
       if (failure !== undefined) return { failure };
       const files = [...fileSystem.nodes]
         .filter(
           ([path, node]) =>
-            path.startsWith(`${root}/`) && !(typeof node === 'object' && 'directory' in node),
+            path.startsWith(`${root}/`) &&
+            !isBelowGitlink(path) &&
+            !(typeof node === 'object' && 'directory' in node),
         )
-        .map(([path]) => path.slice(root.length + 1))
+        .map(([path]) => path)
+        .concat(gitlinks.filter((link) => link.startsWith(`${root}/`)))
+        .map((path) => path.slice(root.length + 1))
         .sort();
       return { files };
     },

@@ -1,9 +1,11 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { removeFixture, runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import { makeStateRepository } from './repository.test-host';
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let puni: InProcessPuni;
 
@@ -40,18 +42,14 @@ describe.each([
   let records = '';
 
   beforeEach(() => {
-    state = makeStateRepository();
+    state = makeStateRepository(scratchDirectories);
     runGit(state, ['add', '-A']);
     runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
     records = join(dirname(state), 'demo-records');
     mkdirSync(records);
-    writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+    writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
     symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
     runGit(records, ['init', '-q']);
-  });
-
-  afterEach(() => {
-    removeFixture(state);
   });
 
   test(`files a record of kind ${kind} that check --repo system-records passes, and refuses to overwrite it`, () => {
@@ -61,11 +59,11 @@ describe.each([
     expect(runPuni(add, state)).toEqual({ code: 0, stdout: `${path}\n`, stderr: '' });
     const head = Bun.spawnSync(['git', 'rev-parse', '--short', 'HEAD'], { cwd: state });
     expect(readFileSync(join(records, path), 'utf8')).toBe(
-      `---\nkind: ${kind}\ntitle: First note\ndate: ${today}\ncommit: ${head.stdout.toString().trim()}\ntopics: ops, k3s\nsummary: Start small.\n---\n\n${body}`,
+      `---\npuni-doc-type: record\nkind: ${kind}\ntitle: First note\ndate: ${today}\ncommit: ${head.stdout.toString().trim()}\ntopics: ops, k3s\nsummary: Start small.\n---\n\n${body}`,
     );
     expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
       code: 0,
-      stdout: 'ok: system-records, 11 rules, no findings.\n',
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
       stderr: '',
     });
     expect(runPuni(add, state)).toEqual({
@@ -86,5 +84,46 @@ describe.each([
     const run = runPuni(add, state);
     expect([run.code, run.stdout]).toEqual([2, '']);
     expect(run.stderr).toStartWith('error: topics has invalid entries ["Ops"]; ');
+  });
+});
+
+describe('navigator plan add --supersedes in process, demo beside demo-records', () => {
+  test('a second plan supersedes the first, check --repo system-records passes, a third is refused', () => {
+    const state = makeStateRepository(scratchDirectories);
+    runGit(state, ['add', '-A']);
+    runGit(state, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'state']);
+    const records = join(dirname(state), 'demo-records');
+    mkdirSync(records);
+    writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
+    symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
+    runGit(records, ['init', '-q']);
+    const today = new Date().toISOString().slice(0, 10);
+    const first = `nav/plans/${today}-first-note.md`;
+    const second = `nav/plans/${today}-second-note.md`;
+    const add = (title: string, supersedes: string) => [
+      ...['navigator', 'plan', 'add', '--title', title, ...options.slice(2)],
+      ...['--supersedes', supersedes],
+    ];
+
+    expect(runPuni(['navigator', 'plan', 'add', ...options], state).code).toBe(0);
+    expect(runPuni(add('Second note', first), state)).toEqual({
+      code: 0,
+      stdout: `${second}\n`,
+      stderr: '',
+    });
+    expect(readFileSync(join(records, second), 'utf8')).toContain(`\nsupersedes: ${first}\n---\n`);
+    expect(readFileSync(join(records, first), 'utf8')).toContain(
+      `\nsuperseded-by: ${second}\n---\n`,
+    );
+    expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
+      code: 0,
+      stdout: 'ok: system-records, 14 rules, no findings.\n',
+      stderr: '',
+    });
+    expect(runPuni(add('Third note', first), state)).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: `error: supersedes ${first} is already superseded by ${second}\n`,
+    });
   });
 });

@@ -1,9 +1,14 @@
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from 'bun:test';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { removeFixture } from '@puni/shared-testing';
+import { readDocType } from '@puni/shared-checkout';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
+import { listCommands } from '@puni/shared-command';
 import { type InProcessPuni, openInProcessPuni } from './in-process.test-host';
+import { puniProgram } from './root-parser';
 import { makeStateRepository } from './repository.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 let puni: InProcessPuni;
 let root: string;
@@ -17,21 +22,18 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  root = makeStateRepository();
+  root = makeStateRepository(scratchDirectories);
 });
 
-afterEach(() => {
-  removeFixture(root);
-});
-
-test('installs the bundled review skills for both project discovery directories', () => {
+test('installs the bundled skills for both project discovery directories', () => {
   const installed = puni.run(['burokrat', 'skills', 'install'], root);
   expect([installed.code, installed.stderr]).toEqual([0, '']);
-  for (const skill of ['puni-findings', 'puni-assessment']) {
+  for (const skill of ['puni-findings', 'puni-assessment', 'puni-plan']) {
     const portablePath = `.agents/skills/${skill}/SKILL.md`;
     const claudePath = `.claude/skills/${skill}/SKILL.md`;
     const text = readFileSync(join(root, portablePath), 'utf8');
     expect(text).toStartWith(`---\nname: ${skill}\n`);
+    expect(readDocType(text)).toEqual({ kind: 'declared', type: 'product' });
     expect(readFileSync(join(root, claudePath), 'utf8')).toBe(text);
     expect(installed.stdout).toContain(portablePath);
     expect(installed.stdout).toContain(claudePath);
@@ -54,4 +56,21 @@ test('selects a harness and refuses to replace an edited skill', () => {
   expect(conflicted.stderr).toContain(path);
   expect(readFileSync(join(root, path), 'utf8')).toBe('authored locally\n');
   expect(existsSync(join(root, '.agents'))).toBe(false);
+});
+
+test('every puni command an installed skill names is a leaf of the command tree, or below one', () => {
+  expect(puni.run(['burokrat', 'skills', 'install', '--platform', 'claude'], root).code).toBe(0);
+  const paths = listCommands(puniProgram).map(({ path }) => path);
+  const leaves = paths.filter((path) => !paths.some((other) => other.startsWith(`${path} `)));
+  const named: string[] = [];
+  for (const skill of readdirSync(join(root, '.claude/skills'))) {
+    const text = readFileSync(join(root, '.claude/skills', skill, 'SKILL.md'), 'utf8');
+    for (const [, words] of text.matchAll(/(?:`|^)(puni(?: [a-z][a-z-]*)+)/gmu)) {
+      if (words !== undefined) named.push(words);
+    }
+  }
+  expect(named).toContain('puni navigator plan add');
+  expect(
+    named.filter((words) => !leaves.some((leaf) => `${words} `.startsWith(`${leaf} `))),
+  ).toEqual([]);
 });

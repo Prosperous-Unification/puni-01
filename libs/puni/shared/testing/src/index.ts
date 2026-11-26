@@ -9,10 +9,10 @@ export {
   type MemoryTree,
 } from './memory-host';
 export { nodeHostModule } from '@puni/shared-adapters';
+export { fixtureRemotes, runGit, writeProject, writeRepositoryFile } from './repository-files';
 export {
-  fixtureRemotes,
-  removeFixture,
-  runGit,
-  writeProject,
-  writeRepositoryFile,
-} from './repository-files';
+  removeScratchDirectoriesAfterAll,
+  removeScratchDirectoriesAfterEach,
+  removeScratchPath,
+  type ScratchDirectoryOwner,
+} from './scratch-directories';

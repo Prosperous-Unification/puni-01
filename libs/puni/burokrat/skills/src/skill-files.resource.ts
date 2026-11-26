@@ -2,11 +2,13 @@ import { join, posix } from 'node:path';
 import type { FileSystem } from '@puni/shared-ports';
 import assessment from './bundled/puni-assessment/SKILL.md' with { type: 'text' };
 import findings from './bundled/puni-findings/SKILL.md' with { type: 'text' };
+import plan from './bundled/puni-plan/SKILL.md' with { type: 'text' };
 import type { SkillFiles, SkillsInstallOutcome, SkillsInstallRequest } from './contract';
 
 const bundledSkills = [
   { name: 'puni-findings', text: findings },
   { name: 'puni-assessment', text: assessment },
+  { name: 'puni-plan', text: plan },
 ] as const;
 
 function skillDirectories(platform: SkillsInstallRequest['platform']): readonly string[] {

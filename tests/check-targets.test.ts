@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const root = new URL('../', import.meta.url).pathname;
 
@@ -83,6 +85,15 @@ describe('puni-bur-check targets', () => {
     ]);
   });
 
+  test('a project check is cached on what it reads outside its project, .gitattributes among them', () => {
+    expect(field(nx, 'namedInputs', 'puniBurCheck')).toEqual([
+      '{workspaceRoot}/puni.json',
+      '{workspaceRoot}/**/.gitignore',
+      '{workspaceRoot}/**/.gitattributes',
+      '{workspaceRoot}/.bun-version',
+    ]);
+  });
+
   test.each(listProjectFiles())('%s declares the target', (path) => {
     expect(field(readJson(path), 'targets', 'puni-bur-check')).toBeDefined();
   });
@@ -92,6 +103,7 @@ describe('puni-bur-check targets', () => {
     expect(Object.keys(field(readJson('project.json'), 'targets') ?? {})).toEqual([
       'test',
       'lint',
+      'lint-all',
       'typecheck',
       'puni-bur-check',
       'puni-bur-links',
@@ -104,10 +116,6 @@ describe('puni-bur-check targets', () => {
       (path) => field(readJson(path), 'implicitDependencies') !== undefined,
     );
     expect(declaring).toEqual([]);
-  });
-
-  test('the package the nx.sync rule names is the sync generator', () => {
-    expect(field(readJson('tools/nx-sync/package.json'), 'name')).toBe('@puni/nx-sync');
   });
 
   test('test helpers are not production inputs', () => {
@@ -151,7 +159,7 @@ describe('puni-bur-check targets', () => {
     const checkerSource = readStrings(field(nx, 'namedInputs', 'checkerSource'));
     const cli = readJson('apps/puni/cli/package.json');
     expect(field(cli, 'bin', 'puni')).toBe('src/entrypoint.ts');
-    for (const path of ['package.json', 'src/main.ts', 'src/rules/history.rule.ts', 'src/a.cjs']) {
+    for (const path of ['package.json', 'src/main.ts', 'src/rules/history.rule.ts']) {
       expect([path, matchesInput(checkerSource.map(project), path)]).toEqual([path, true]);
     }
     for (const path of ['src/check.test.ts', 'src/check.test-host.ts', 'NOTES.md']) {
@@ -167,15 +175,28 @@ describe('puni-bur-check targets', () => {
     }
   });
 
-  test('the root project check reads its own files, every project.json and nx.json, not the whole workspace', () => {
-    expect(
-      readStrings(field(readJson('project.json'), 'targets', 'puni-bur-check', 'inputs')),
-    ).toEqual([
+  /**
+   * The root project's check judges the map, which reads every project's `project.json` and the
+   * existence of the file each names to read first, so a change to any file of a project can
+   * change its verdict: renaming a `readFirst` file breaks `index.read-first`.
+   */
+  test('the root project check reads its own files, every project under apps/ and libs/, and nx.json', () => {
+    const inputs = readStrings(
+      field(readJson('project.json'), 'targets', 'puni-bur-check', 'inputs'),
+    );
+    expect(inputs).toEqual([
       'default',
       'puniBurCheck',
-      '{workspaceRoot}/**/project.json',
+      '{workspaceRoot}/apps/**/*',
+      '{workspaceRoot}/libs/**/*',
       '{workspaceRoot}/nx.json',
     ]);
+    for (const path of [
+      'libs/puni/dash/ops/src/node-shell.feature.ts',
+      'apps/puni/cli/project.json',
+    ]) {
+      expect([path, matchesInput(inputs, path)]).toEqual([path, true]);
+    }
     expect(field(readJson('project.json'), 'name')).toBe('workspace');
   });
 });
@@ -200,29 +221,23 @@ function readStepScript(job: string, name: string): string {
  * a stub, through `sh` as GitHub runs a step.
  */
 function runTimeBudget(elapsed: number) {
-  const bin = mkdtempSync(join(tmpdir(), 'puni-time-budget-'));
-  try {
-    writeFileSync(join(bin, 'date'), `#!/bin/sh\necho ${String(1000 + elapsed)}\n`, {
-      mode: 0o755,
-    });
-    const child = Bun.spawnSync(['sh', '-e', '-c', readStepScript('part', 'time budget')], {
-      env: {
-        PATH: `${bin}:/usr/bin:/bin`,
-        GATE_STARTED: '1000',
-        GATE_MINUTES: String(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')),
-        GATE_PART: 'lint',
-      },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    return {
-      exitCode: child.exitCode,
-      stdout: child.stdout.toString(),
-      stderr: child.stderr.toString(),
-    };
-  } finally {
-    rmSync(bin, { recursive: true, force: true });
-  }
+  const bin = scratchDirectories.createDirectory('puni-time-budget-');
+  writeFileSync(join(bin, 'date'), `#!/bin/sh\necho ${String(1000 + elapsed)}\n`, { mode: 0o755 });
+  const child = Bun.spawnSync(['sh', '-e', '-c', readStepScript('part', 'time budget')], {
+    env: {
+      PATH: `${bin}:/usr/bin:/bin`,
+      GATE_STARTED: '1000',
+      GATE_MINUTES: String(field(workflow, 'jobs', 'part', 'env', 'GATE_MINUTES')),
+      GATE_PART: 'lint',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return {
+    exitCode: child.exitCode,
+    stdout: child.stdout.toString(),
+    stderr: child.stderr.toString(),
+  };
 }
 
 describe('the CI workflow', () => {
@@ -252,7 +267,9 @@ describe('the CI workflow', () => {
 
   test('the gate job, the check main requires, waits for every part and fails unless all passed', () => {
     expect(field(workflow, 'jobs', 'gate', 'needs')).toBe('part');
-    expect(field(workflow, 'jobs', 'gate', 'if')).toBe('always()');
+    expect(field(workflow, 'jobs', 'gate', 'if')).toBe(
+      "always() && (github.event_name != 'push' || github.ref == 'refs/heads/main')",
+    );
     const steps = field(workflow, 'jobs', 'gate', 'steps');
     const script = field(Array.isArray(steps) ? steps[0] : undefined, 'run');
     if (typeof script !== 'string') throw new Error('the CI job gate runs no script');
@@ -272,9 +289,9 @@ describe('the CI workflow', () => {
 });
 
 describe('versions', () => {
-  test('bun-types is the Bun of .bun-version', () => {
+  test('bun-types, a dependency for the globals doc comments link, is the Bun of .bun-version', () => {
     const pinned = readFileSync(join(root, '.bun-version'), 'utf8').trim();
-    expect(field(readJson('package.json'), 'devDependencies', 'bun-types')).toBe(pinned);
+    expect(field(readJson('package.json'), 'dependencies', 'bun-types')).toBe(pinned);
   });
 });
 
@@ -295,27 +312,163 @@ function readFormatStep(name: string): string {
  * for a package script.
  */
 function runFormatStep(step: string, exitCode: number) {
-  const bin = mkdtempSync(join(tmpdir(), 'puni-format-step-'));
-  try {
-    writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
-    const child = Bun.spawnSync(['sh', '-c', step], {
-      env: { PATH: `${bin}:/usr/bin:/bin` },
-      stderr: 'pipe',
-    });
-    return { exitCode: child.exitCode, stderr: child.stderr.toString() };
-  } finally {
-    rmSync(bin, { recursive: true, force: true });
-  }
+  const bin = scratchDirectories.createDirectory('puni-format-step-');
+  writeFileSync(join(bin, 'bun'), `#!/bin/sh\nexit ${String(exitCode)}\n`, { mode: 0o755 });
+  const child = Bun.spawnSync(['sh', '-c', step], {
+    env: { PATH: `${bin}:/usr/bin:/bin` },
+    stderr: 'pipe',
+  });
+  return { exitCode: child.exitCode, stderr: child.stderr.toString() };
 }
 
 /** Formatting is Bun's own `bun fmt`; Prettier is not a dependency. */
-test('prettier is not a dependency, and the pre-commit hook formats with bun fmt', () => {
+test('prettier is not a dependency', () => {
   const manifest = readJson('package.json');
   expect(field(manifest, 'devDependencies', 'prettier')).toBeUndefined();
   expect(field(manifest, 'dependencies', 'prettier')).toBeUndefined();
-  expect(readFileSync(join(root, 'lefthook.yml'), 'utf8')).toContain(
-    'bun fmt --check {staged_files}',
+});
+
+/**
+ * The pre-commit hook runs only the one check whose breach cannot be undone once pushed: the
+ * staged secrets check. CI judges everything else, the commits of a pull request included.
+ */
+test('the pre-commit hook runs only the staged secrets check', () => {
+  const hooks = Bun.YAML.parse(readFileSync(join(root, 'lefthook.yml'), 'utf8'));
+  expect(hooks).toEqual({
+    'pre-commit': {
+      commands: {
+        secrets: { run: 'bun apps/puni/cli/src/entrypoint.ts burokrat check --staged' },
+      },
+    },
+  });
+});
+
+/** The `&&`-joined step of the `gate:checks:affected` script that judges the pull request's commits. */
+function readCommitsStep(): string {
+  const script = field(readJson('package.json'), 'scripts', 'gate:checks:affected');
+  if (typeof script !== 'string')
+    throw new Error('package.json has no script gate:checks:affected');
+  const step = script.split(' && ').find((part) => part.includes('--commits'));
+  if (step === undefined) throw new Error('gate:checks:affected judges no commits');
+  return step;
+}
+
+describe('gate:affected judges every commit of the pull request for secrets', () => {
+  test('over NX_BASE..HEAD', () => {
+    expect(readCommitsStep()).toBe(
+      'bun run puni burokrat check --commits "${NX_BASE:?set NX_BASE to the base of the range, as NX_BASE=origin/main}..HEAD"',
+    );
+  });
+
+  test('without NX_BASE it stops, naming NX_BASE, before running anything', () => {
+    const bin = scratchDirectories.createDirectory('puni-commits-step-');
+    writeFileSync(join(bin, 'bun'), '#!/bin/sh\necho ran\n', { mode: 0o755 });
+    const child = Bun.spawnSync(['sh', '-c', readCommitsStep()], {
+      env: { PATH: `${bin}:/usr/bin:/bin` },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(child.exitCode).not.toBe(0);
+    expect(child.stdout.toString()).toBe('');
+    expect(child.stderr.toString()).toContain('NX_BASE: set NX_BASE to the base of the range');
+  });
+});
+
+describe('the CI workflow judges every push for secrets', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+
+  test('on pushes to every branch and tag', () => {
+    expect(workflow).toContain("  push:\n    branches: ['**']\n    tags: ['**']\n");
+  });
+
+  test('in a job of its own, before and apart from the gate, skipping only a deleted ref', () => {
+    expect(workflow).toContain(
+      "  pushed-commits:\n    if: github.event_name == 'push' && !github.event.deleted\n",
+    );
+    expect(workflow.indexOf('  pushed-commits:')).toBeLessThan(workflow.indexOf('  gate:'));
+  });
+
+  test('over the pushed range, from main for a new ref, as merged history on main and tags', () => {
+    for (const line of [
+      'if [ "$base" = 0000000000000000000000000000000000000000 ]; then base=origin/main; fi',
+      'git cat-file -e "$base^{commit}"',
+      'case "$GITHUB_REF" in refs/heads/main | refs/tags/*) merged=--merged ;; esac',
+      'bun run puni burokrat check --commits "$base..$PUSHED_RANGE_HEAD" $merged',
+      'bun run puni burokrat check --commits "$MERGE_GROUP_BASE..HEAD"',
+    ]) {
+      expect([line, workflow.includes(line)]).toEqual([line, true]);
+    }
+  });
+});
+
+/**
+ * Runs the `gate:lint:fast` script through `sh` with `bun` a stub: one whose `bun lint --help`
+ * describes the linter when `hasLint`, and whose `bun lint` run records its arguments and exits
+ * `exitCode`.
+ */
+function runFastLint(hasLint: boolean, exitCode: number) {
+  const bin = scratchDirectories.createDirectory('puni-fast-lint-');
+  const calls = join(bin, 'calls');
+  const help = hasLint
+    ? "echo '  Find and fix problems in JavaScript and TypeScript.'; exit 0"
+    : 'exit 1';
+  writeFileSync(
+    join(bin, 'bun'),
+    `#!/bin/sh\nif [ "$2" = --help ]; then ${help}; fi\necho "$@" >> ${calls}\nexit ${String(exitCode)}\n`,
+    { mode: 0o755 },
   );
+  const script = field(readJson('package.json'), 'scripts', 'gate:lint:fast');
+  if (typeof script !== 'string') throw new Error('package.json has no script gate:lint:fast');
+  const child = Bun.spawnSync(['sh', '-c', script], {
+    env: { PATH: `${bin}:/usr/bin:/bin` },
+    stderr: 'pipe',
+  });
+  const ran = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+  return { exitCode: child.exitCode, stderr: child.stderr.toString(), ran };
+}
+
+/**
+ * Before ESLint, the lint part runs Bun's own `bun lint` over the same `eslint.config.js`: it
+ * finds most breaches in about a second. ESLint still judges every rule, so a Bun without
+ * `bun lint`, or a rule `bun lint` cannot run, leaves the verdict to ESLint alone. ESLint runs
+ * once over the whole repository, under Nx so that its module-boundary rule has the project
+ * graph: one process builds the shared type information once, where a run per project builds it
+ * per project. Each project's own `lint` target stays, to re-run one project alone.
+ */
+describe('the fast lint step', () => {
+  test('the lint part runs it, then one ESLint over the whole repository, on any change', () => {
+    const scripts = field(readJson('package.json'), 'scripts');
+    expect(field(scripts, 'gate:lint')).toBe('bun run gate:lint:fast && nx run workspace:lint-all');
+    expect(field(scripts, 'gate:lint:affected')).toBe('bun run gate:lint');
+    expect(field(readJson('project.json'), 'targets', 'lint-all')).toEqual({
+      cache: true,
+      executor: 'nx:run-commands',
+      inputs: ['{workspaceRoot}/**/*'],
+      options: { command: 'bunx eslint .' },
+    });
+  });
+
+  test('the root package.json has no lint script, which bun lint would run in its place', () => {
+    expect(field(readJson('package.json'), 'scripts', 'lint')).toBeUndefined();
+  });
+
+  test("a Bun with bun lint runs it type-aware, its exit code the step's", () => {
+    for (const exitCode of [0, 1]) {
+      expect(runFastLint(true, exitCode)).toEqual({
+        exitCode,
+        stderr: '',
+        ran: 'lint --type-aware --allow-unsupported\n',
+      });
+    }
+  });
+
+  test('a Bun without bun lint says so and passes, leaving ESLint to judge', () => {
+    expect(runFastLint(false, 1)).toEqual({
+      exitCode: 0,
+      stderr: 'gate:lint:fast: this Bun has no bun lint, so ESLint judges alone\n',
+      ran: '',
+    });
+  });
 });
 
 describe('the gate format step', () => {

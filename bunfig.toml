@@ -1,0 +1,4 @@
+# Bun installs only through `bun install`, from bun.lock: a script run without node_modules fails
+# naming the missing package instead of fetching it from the network.
+[install]
+auto = "disable"

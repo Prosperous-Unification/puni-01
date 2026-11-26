@@ -1,61 +1,215 @@
 import type {
   Git,
+  GitAddedLine,
   GitBranches,
   GitChange,
+  GitCommit,
+  GitCommits,
+  GitIndexEntries,
+  GitIndexEntry,
   GitListing,
   GitMerge,
   GitMerges,
   GitText,
   GitWorktree,
   GitWorktrees,
+  ProcessOutcome,
   ProcessRunner,
 } from '@puni/shared-ports';
 
 type GitRun = { readonly stdout: string } | { readonly failure: string };
+
+/** What a git run of `args` that ended as `outcome` printed, or why it failed. */
+function readRun(args: readonly string[], outcome: ProcessOutcome): GitRun {
+  if (outcome.kind === 'unstarted') return { failure: `git could not run: ${outcome.reason}` };
+  if (outcome.exitCode !== 0) {
+    const reason = outcome.stderr.trim().split('\n')[0] ?? '';
+    return { failure: `git ${args[0] ?? ''} exited ${String(outcome.exitCode)}: ${reason}` };
+  }
+  return { stdout: outcome.stdout };
+}
+
+/** The escapes git writes inside a quoted path, by the letter after the backslash. */
+const pathEscapes: Readonly<Record<string, number>> = {
+  a: 7,
+  b: 8,
+  t: 9,
+  n: 10,
+  v: 11,
+  f: 12,
+  r: 13,
+  '"': 34,
+  '\\': 92,
+};
+
+/**
+ * A path as a diff header prints it: bare, or quoted with C escapes and octal bytes when it holds
+ * a character git quotes; `undefined` for a quoted path git would not write.
+ */
+function unquotePath(printed: string): string | undefined {
+  if (!printed.startsWith('"')) return printed;
+  if (printed.length < 2 || !printed.endsWith('"')) return undefined;
+  const bytes: number[] = [];
+  const body = printed.slice(1, -1);
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index] ?? '';
+    if (char !== '\\') {
+      bytes.push(...new TextEncoder().encode(char));
+      continue;
+    }
+    const octal = /^[0-7]{3}/u.exec(body.slice(index + 1))?.[0];
+    const escaped = pathEscapes[body[index + 1] ?? ''];
+    if (octal !== undefined) {
+      bytes.push(parseInt(octal, 8));
+      index += 3;
+    } else if (escaped !== undefined) {
+      bytes.push(escaped);
+      index += 1;
+    } else {
+      return undefined;
+    }
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/**
+ * The lines a zero-context patch adds, each with its path and its line number in the new file;
+ * a patch git would not print is the line it cannot read.
+ */
+function readAddedLines(patch: string): readonly GitAddedLine[] | { readonly unreadable: string } {
+  const addedLines: GitAddedLine[] = [];
+  let path: string | undefined;
+  let removedLinesLeft = 0;
+  let addedLinesLeft = 0;
+  let nextLineNumber = 0;
+  for (const line of patch.split('\n')) {
+    if (removedLinesLeft > 0 || addedLinesLeft > 0) {
+      const mark = line[0];
+      if (mark === '\\') continue;
+      if (mark === '-' && removedLinesLeft > 0) {
+        removedLinesLeft -= 1;
+        continue;
+      }
+      if (mark !== '+' || addedLinesLeft === 0 || path === undefined) return { unreadable: line };
+      addedLines.push({ path, line: nextLineNumber, text: line.slice(1) });
+      addedLinesLeft -= 1;
+      nextLineNumber += 1;
+      continue;
+    }
+    if (line.startsWith('+++ ')) {
+      // Git ends a header path holding a space with a tab; a tab in a path is quoted.
+      const printed = line.slice('+++ '.length).replace(/\t$/u, '');
+      const target = printed === '/dev/null' ? '' : unquotePath(printed);
+      if (target === undefined) return { unreadable: line };
+      path = target.startsWith('b/') ? target.slice(2) : undefined;
+      continue;
+    }
+    if (line.startsWith('@@ ')) {
+      const counts = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/u.exec(line);
+      if (counts === null) return { unreadable: line };
+      removedLinesLeft = Number(counts[1] ?? '1');
+      nextLineNumber = Number(counts[2]);
+      addedLinesLeft = Number(counts[3] ?? '1');
+    }
+  }
+  if (removedLinesLeft > 0 || addedLinesLeft > 0) {
+    return { unreadable: 'the patch ends inside a hunk' };
+  }
+  return addedLines;
+}
+
+/** The kind of index entry each mode git writes names. */
+const indexModes: Readonly<Record<string, GitIndexEntry['kind']>> = {
+  '100644': 'file',
+  '100755': 'file',
+  '120000': 'symlink',
+  '160000': 'gitlink',
+};
 
 /**
  * The {@link Git} of this machine, run in the root through `processRunner`. A git that cannot
  * start is `git could not run: <reason>`; a non-zero exit is
  * `git <command> exited <code>: <first stderr line>`. Visible files are
  * `git ls-files -z --cached --others --exclude-standard`, refused while
- * `git ls-files --unmerged` lists anything; staged files are
- * `git diff --cached --name-only -z --diff-filter=ACMR`, read with `git cat-file blob :<path>`; the
+ * `git ls-files --unmerged` lists anything; index entries are `git ls-files -z --stage`, refused
+ * the same way, a symlink's target read with `git cat-file blob <object>`; staged files are
+ * `git diff --cached --raw -z --diff-filter=ACMR` but for gitlinks, read with
+ * `git cat-file blob :<path>`; the
  * `HEAD` commit is `git rev-parse --short --verify HEAD`. Worktrees are
  * `git worktree list --porcelain -z`; branches `git for-each-ref` over `refs/heads/<prefix>`,
  * `--no-merged=HEAD` for unmerged ones; changed files `git status --porcelain -z
  * --untracked-files=all`; merges `git log --merges [--first-parent] --format=%H%x1f%ct%x1f%s`
  * with the revisions after `--end-of-options`, the time the committer time; the changes are `git worktree add -b`, `git worktree remove [--force]`
- * and `git branch -d` or `-D`.
+ * and `git branch -d` or `-D`. A commit range is checked end by end with
+ * `git rev-parse --verify --quiet <rev>^{commit}`, whose exit 1 is an unknown revision, then listed
+ * by full and short hash with `git rev-list --reverse --format='%H %h'`; git is asked only by full
+ * hash after that, so no ref named like a short hash can stand in for a commit. A commit's message
+ * is what `git cat-file commit` holds after its header; its added lines are
+ * `git diff-tree -p -U0 --root --text --diff-merges=first-parent --no-renames`, with fixed `a/` and
+ * `b/` prefixes, no external diff or text conversion, no global attributes file and the empty tree
+ * as the attribute source, so no `.gitattributes`, in any commit, can mark a path binary or
+ * otherwise change what is printed. Every revision follows `--end-of-options`, so none is read as
+ * an option.
  */
 export function createBunGit({ processRunner }: { processRunner: ProcessRunner }): Git {
-  const run = (root: string, args: readonly string[]): GitRun => {
-    const outcome = processRunner.run(['git', ...args], { cwd: root });
-    if (outcome.kind === 'unstarted') return { failure: `git could not run: ${outcome.reason}` };
-    if (outcome.exitCode !== 0) {
-      const reason = outcome.stderr.trim().split('\n')[0] ?? '';
-      return { failure: `git ${args[0] ?? ''} exited ${String(outcome.exitCode)}: ${reason}` };
-    }
-    return { stdout: outcome.stdout };
-  };
+  const runWith = (root: string, globals: readonly string[], args: readonly string[]): GitRun =>
+    readRun(args, processRunner.run(['git', ...globals, ...args], { cwd: root }));
+  const run = (root: string, args: readonly string[]): GitRun => runWith(root, [], args);
   const split = (stdout: string): string[] => stdout.split('\0').filter((path) => path !== '');
   const change = (root: string, args: readonly string[]): GitChange => {
     const outcome = run(root, args);
     return 'failure' in outcome ? outcome : { changed: true };
   };
+  /** Why the index at `root` cannot be listed: it holds unmerged entries, or git failed. */
+  const refuseUnmerged = (root: string): { readonly failure: string } | undefined => {
+    const unmerged = run(root, ['ls-files', '-z', '--unmerged']);
+    if ('failure' in unmerged) return unmerged;
+    const conflicted = [...new Set(split(unmerged.stdout).map((line) => line.split('\t')[1]))];
+    return conflicted.length > 0
+      ? { failure: `the git index has unmerged entries: ${conflicted.join(', ')}` }
+      : undefined;
+  };
   return {
     listVisibleFiles(root): GitListing {
-      const unmerged = run(root, ['ls-files', '-z', '--unmerged']);
-      if ('failure' in unmerged) return unmerged;
-      const conflicted = [...new Set(split(unmerged.stdout).map((line) => line.split('\t')[1]))];
-      if (conflicted.length > 0) {
-        return { failure: `the git index has unmerged entries: ${conflicted.join(', ')}` };
-      }
+      const refused = refuseUnmerged(root);
+      if (refused !== undefined) return refused;
       const visible = run(root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
       return 'failure' in visible ? visible : { files: split(visible.stdout) };
     },
+    listIndexEntries(root): GitIndexEntries {
+      const refused = refuseUnmerged(root);
+      if (refused !== undefined) return refused;
+      const listed = run(root, ['ls-files', '-z', '--stage']);
+      if ('failure' in listed) return listed;
+      const entries: GitIndexEntry[] = [];
+      for (const line of split(listed.stdout)) {
+        const [header = '', path = ''] = line.split('\t');
+        const [mode = '', object = ''] = header.split(' ');
+        const kind = indexModes[mode];
+        if (kind === undefined) return { failure: `the git index holds ${path} in mode ${mode}` };
+        if (kind !== 'symlink') {
+          entries.push({ path, kind });
+          continue;
+        }
+        const target = run(root, ['cat-file', 'blob', object]);
+        if ('failure' in target) return target;
+        entries.push({ path, kind, target: target.stdout });
+      }
+      return { entries };
+    },
     listStagedFiles(root): GitListing {
-      const staged = run(root, ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR']);
-      return 'failure' in staged ? staged : { files: split(staged.stdout) };
+      const staged = run(root, ['diff', '--cached', '--raw', '-z', '--diff-filter=ACMR']);
+      if ('failure' in staged) return staged;
+      const fields = split(staged.stdout);
+      const files: string[] = [];
+      for (let index = 0; index < fields.length; index += 1) {
+        const newMode = (fields[index] ?? '').split(' ')[1];
+        const copiedOrRenamed = /^[CR]/u.test((fields[index] ?? '').split(' ')[4] ?? '');
+        if (copiedOrRenamed) index += 1;
+        index += 1;
+        if (newMode !== '160000') files.push(fields[index] ?? '');
+      }
+      return { files };
     },
     readStagedText(root, path): GitText {
       const blob = run(root, ['cat-file', 'blob', `:${path}`]);
@@ -137,6 +291,76 @@ export function createBunGit({ processRunner }: { processRunner: ProcessRunner }
         merges.push({ hash, committedAt: new Date(Number(seconds) * 1000), subject });
       }
       return { merges };
+    },
+    listCommits(root, base, head): GitCommits {
+      for (const revision of [base, head]) {
+        const verify = [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          '--end-of-options',
+          `${revision}^{commit}`,
+        ];
+        const outcome = processRunner.run(['git', ...verify], { cwd: root });
+        if (outcome.kind === 'exited' && outcome.exitCode === 1) return { unknown: revision };
+        const verified = readRun(verify, outcome);
+        if ('failure' in verified) return verified;
+      }
+      const emptyTree = run(root, ['hash-object', '-t', 'tree', '/dev/null']);
+      if ('failure' in emptyTree) return emptyTree;
+      const listed = run(root, [
+        'rev-list',
+        '--reverse',
+        '--no-commit-header',
+        '--format=%H %h',
+        '--end-of-options',
+        `${base}..${head}`,
+        '--',
+      ]);
+      if ('failure' in listed) return listed;
+      const commits: GitCommit[] = [];
+      for (const line of listed.stdout.split('\n').filter((listedLine) => listedLine !== '')) {
+        const [fullHash, shortHash, ...rest] = line.split(' ');
+        if (fullHash === undefined || shortHash === undefined || rest.length > 0) {
+          return { failure: `git rev-list printed an unexpected line: ${JSON.stringify(line)}` };
+        }
+        const raw = run(root, ['cat-file', 'commit', fullHash]);
+        if ('failure' in raw) return raw;
+        const bodyStart = raw.stdout.indexOf('\n\n');
+        const message = bodyStart === -1 ? '' : raw.stdout.slice(bodyStart + 2);
+        const patch = runWith(
+          root,
+          ['-c', 'core.attributesFile=/dev/null', `--attr-source=${emptyTree.stdout.trim()}`],
+          [
+            'diff-tree',
+            '-p',
+            '-U0',
+            '-r',
+            '--root',
+            '--text',
+            '--no-commit-id',
+            '--diff-merges=first-parent',
+            '--no-renames',
+            '--no-ext-diff',
+            '--no-textconv',
+            '--no-color',
+            '--src-prefix=a/',
+            '--dst-prefix=b/',
+            '--end-of-options',
+            fullHash,
+            '--',
+          ],
+        );
+        if ('failure' in patch) return patch;
+        const addedLines = readAddedLines(patch.stdout);
+        if ('unreadable' in addedLines) {
+          return {
+            failure: `git diff-tree printed an unexpected line for ${fullHash}: ${JSON.stringify(addedLines.unreadable)}`,
+          };
+        }
+        commits.push({ fullHash, shortHash, message, addedLines });
+      }
+      return { commits };
     },
     addWorktree: (root, path, branch, from) =>
       change(root, ['worktree', 'add', '-q', '-b', branch, path, from]),

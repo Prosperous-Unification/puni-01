@@ -11,10 +11,12 @@ const findings = '.agents/skills/puni-findings/SKILL.md';
 const assessment = '.agents/skills/puni-assessment/SKILL.md';
 const claudeFindings = '.claude/skills/puni-findings/SKILL.md';
 const claudeAssessment = '.claude/skills/puni-assessment/SKILL.md';
+const plan = '.agents/skills/puni-plan/SKILL.md';
+const claudePlan = '.claude/skills/puni-plan/SKILL.md';
 
 function open(tree: MemoryTree = {}) {
   const host = memoryHost({
-    [`${root}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+    [`${root}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
     ...tree,
   });
   const container = track(
@@ -49,7 +51,7 @@ function open(tree: MemoryTree = {}) {
 }
 
 describe('skills install', () => {
-  test('installs both skills at the repository root in both discovery directories by default', () => {
+  test('installs every skill at the repository root in both discovery directories by default', () => {
     const repo = open();
     const run = repo.run();
     expect(run.code).toBe(0);
@@ -60,6 +62,8 @@ describe('skills install', () => {
     expect(repo.get(assessment)).toMatch(/^---\nname: puni-assessment\n/u);
     expect(repo.get(claudeFindings)).toBe(repo.get(findings));
     expect(repo.get(claudeAssessment)).toBe(repo.get(assessment));
+    expect(repo.get(plan)).toMatch(/^---\nname: puni-plan\n/u);
+    expect(repo.get(claudePlan)).toBe(repo.get(plan));
     expect(repo.get(`sub/${findings}`)).toBeUndefined();
   });
 
@@ -124,7 +128,7 @@ describe('skills install', () => {
 
   test('requires a governed system-state repository', () => {
     const records = open({
-      [`${root}/puni.json`]: formatRegistry('system-records', fixtureRemotes),
+      [`${root}/puni.json`]: formatRegistry('system-records', fixtureRemotes, 1),
     });
     expect(records.run().stderr).toContain('system-state');
     expect(records.get(findings)).toBeUndefined();

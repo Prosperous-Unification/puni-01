@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FixtureGitFailed } from './failures';
 
@@ -21,6 +21,7 @@ export function writeRepositoryFile(root: string, path: string, content: string)
 export interface FixtureMetadata {
   readonly readWhen?: string | undefined;
   readonly readFirst?: string | undefined;
+  readonly index?: readonly string[] | undefined;
 }
 
 /**
@@ -60,9 +61,4 @@ export function runGit(root: string, args: readonly string[]): void {
   if (child.exitCode !== 0) {
     throw new FixtureGitFailed({ details: { args, stderr: child.stderr.toString() } });
   }
-}
-
-/** Deletes the temporary directory holding the fixture repository at `root`, and its peers. */
-export function removeFixture(root: string): void {
-  rmSync(dirname(root), { recursive: true, force: true });
 }

@@ -1,18 +1,23 @@
 ---
+puni-doc-type: wiki-page
 title: Libraries
 read-when: deciding which library new code belongs in, or what one library may import of another
 ---
 
 # Libraries
 
-Every project is an Nx project whose `scope:<name>` tag places it in one partition of the
-[index](../index/index.md). Three shapes:
+Every project is an Nx project whose `scope:<name>` tag is its lint boundary and, unless
+`metadata.index` says otherwise, its partition of the map `bun run puni burokrat wiki map`
+prints. Four shapes:
 
 - **app**: `apps/puni/cli` (`scope:app`). It only wires: it parses the command line, composes the
   graph and dispatches to commands, so it holds only the files
   [layout.test.ts](../../tests/layout.test.ts) lists and nothing that does work.
 - **shared**: `libs/puni/shared/*` (`scope:shared`): what more than one group needs, and the
   host services every group reaches the machine through.
+- **plugin**: `libs/puni/shared/nx` and `libs/puni/shared/typescript` (`type:plugin`): the
+  tech-specific side of a shared interface, the map's project source and the check's source
+  readers; only the app, which composes them, and tests import them.
 - **group**: one library per command group at `libs/puni/<role>/<group>` (`scope:<role>`,
   `type:group`); the roles are navigator, dash and burokrat. Every planned group has its library;
   one with no leaves yet holds only `group.ts`, whose parser accepts the bare group as a help

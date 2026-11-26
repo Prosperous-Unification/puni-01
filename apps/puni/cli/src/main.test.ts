@@ -1,15 +1,18 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { rejects } from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sourceDefectRemedies } from '@puni/shared-checkout';
+import { readWhenRemedy } from '@puni/shared-checkout';
+import { readFirstRemedy, scopeRemedy } from '@puni/shared-nx';
 import { readInvocation as readProgramInvocation } from '@puni/shared-command';
-import { removeFixture } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import { createPuniContainer, type PuniContainer } from './composition';
 import { type CommandSelection, runProcess, runPuni } from './main';
 import { makeStateRepository } from './repository.test-host';
 import { puniProgram } from './root-parser';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 function readInvocation(args: readonly string[], stdout: (text: string) => void) {
   return readProgramInvocation(puniProgram, args, stdout);
@@ -55,18 +58,6 @@ function runIn(
   return { code, printed, errors };
 }
 
-const repositories: string[] = [];
-
-function makeRepository(): string {
-  const root = makeStateRepository();
-  repositories.push(root);
-  return root;
-}
-
-afterEach(() => {
-  for (const root of repositories.splice(0)) removeFixture(root);
-});
-
 describe('runPuni', () => {
   test.each(['navigator', 'dash'] as const)(
     'a bare %s prints its group help and exits 0',
@@ -109,44 +100,36 @@ describe('runPuni', () => {
     });
   });
 
-  test('wiki index partitions the live command tree by role, projects by scope', () => {
-    const root = makeRepository();
-    const written = ['app', 'burokrat', 'dash', 'index', 'navigator'];
-    expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
-      code: 0,
-      printed: written.map((name) => `wrote: wiki/index/${name}.md\n`).join(''),
-      errors: '',
-    });
-    const read = (name: string) => readFileSync(join(root, `wiki/index/${name}.md`), 'utf8');
-    expect(read('index')).toContain('- `puni burokrat`: ');
-    expect(read('index')).not.toContain('- `puni burokrat check`: ');
-    expect(read('index')).toContain('- [dash](dash.md): ');
-    expect(read('app')).toContain('- changing one: [one](../../apps/one/src/index.ts)\n');
-    expect(read('burokrat')).toContain('- `puni burokrat check`: ');
-    expect(read('dash')).toContain('- `puni dash release`: ');
-    expect(read('navigator')).toContain('- `puni navigator research`: ');
+  test('wiki map reads the projects through the composed Nx project source, and no command', () => {
+    const root = makeStateRepository(scratchDirectories);
+    const map = runIn(root, ['burokrat', 'wiki', 'map']);
+    expect(map).toMatchObject({ code: 0, errors: '' });
+    expect(map.printed).toContain('- changing the app: `puni burokrat wiki map app`\n');
+    expect(map.printed).not.toContain('puni burokrat check');
+    expect(runIn(root, ['burokrat', 'wiki', 'map', 'app']).printed).toContain(
+      '- changing one: [one](apps/one/src/index.ts)\n',
+    );
   });
 
-  test('wiki index refuses defective inputs with one error line and exit 1', () => {
-    const root = makeRepository();
+  test('wiki map refuses defective inputs with one error line and exit 1', () => {
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'apps/one/project.json'), JSON.stringify({ name: 'one' }));
-    expect(runIn(root, ['burokrat', 'wiki', 'index'])).toEqual({
+    expect(runIn(root, ['burokrat', 'wiki', 'map'])).toEqual({
       code: 1,
       printed: '',
-      errors: `error: apps/one/project.json: project one has no metadata.readWhen; fix: ${sourceDefectRemedies['read-when']}; apps/one/project.json: project one metadata.readFirst is missing; fix: ${sourceDefectRemedies['read-first']}; apps/one/project.json: project one has no scope:<name> tag; fix: ${sourceDefectRemedies.scope}\n`,
+      errors: `error: apps/one/project.json: project one has no metadata.readWhen; fix: ${readWhenRemedy}; apps/one/project.json: project one metadata.readFirst is missing; fix: ${readFirstRemedy}; apps/one/project.json: project one has no scope:<name> tag; fix: ${scopeRemedy}\n`,
     });
   });
 
   test('check judges with the live command tree and exits 1 on findings', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     const run = runIn(root, ['burokrat', 'check']);
     expect(run.code).toBe(1);
     expect(run.printed).toContain('agents.exists AGENTS.md: is missing; fix: ');
-    expect(run.printed).toContain('index.current wiki/index/index.md: is missing');
   });
 
   test('check --project naming no project exits 2 with one error line', () => {
-    const root = makeRepository();
+    const root = makeStateRepository(scratchDirectories);
     writeFileSync(join(root, 'project.json'), JSON.stringify({ name: 'workspace' }));
     expect(runIn(root, ['burokrat', 'check', '--project', 'nope'])).toEqual({
       code: 2,
@@ -190,10 +173,16 @@ describe('runProcess', () => {
           }),
           disposeService: () => Promise.reject(closeFailure),
         }),
-        burokratWikiIndexCommand: () => ({ run: () => 0 }),
+        burokratWikiMapCommand: () => ({ run: () => 0 }),
         navigatorPlanAddCommand: () => ({ run: () => 0 }),
         navigatorResearchAddCommand: () => ({ run: () => 0 }),
         burokratRepoInitCommand: () => ({ run: () => 0 }),
+        burokratRepoUpgradeCommand: () => ({ run: () => 0 }),
+        latestRules: () => ({
+          epoch: 1,
+          judge: () => ({ 'system-state': [], 'system-records': [] }),
+          holdsRulesOf: () => true,
+        }),
         burokratAdrAddCommand: () => ({ run: () => 0 }),
         burokratAssessOutcomesCommand: () => ({ run: () => 0 }),
         burokratAssessTemplatesCommand: () => ({ run: () => 0 }),

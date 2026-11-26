@@ -12,9 +12,11 @@ import {
 } from 'node:fs';
 import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { removeFixture, runGit } from '@puni/shared-testing';
+import { removeScratchDirectoriesAfterEach, runGit } from '@puni/shared-testing';
 import cliPackage from '../package.json' with { type: 'json' };
 import { makeStateRepository } from './repository.test-host';
+
+const scratchDirectories = removeScratchDirectoriesAfterEach();
 
 const entrypoint = new URL('./entrypoint.ts', import.meta.url).pathname;
 
@@ -44,7 +46,7 @@ describe('entrypoint', () => {
     });
   });
 
-  test.each(['nav stray', '--bogus', 'b --bogus', 'b wiki nope', 'b wiki index --check'])(
+  test.each(['nav stray', '--bogus', 'b --bogus', 'b wiki nope', 'b wiki map --check'])(
     '%s refuses with exit 2 and one error line',
     (line) => {
       const run = runPuni(line.split(' '));
@@ -92,25 +94,21 @@ describe('entrypoint', () => {
     }
 
     beforeEach(() => {
-      state = makeStateRepository();
+      state = makeStateRepository(scratchDirectories);
       parent = dirname(state);
       records = join(parent, 'demo-records');
       mkdirSync(join(records, 'nav/plans'), { recursive: true });
-      writeFileSync(join(records, 'AGENTS.md'), '# records\n');
+      writeFileSync(join(records, 'AGENTS.md'), '---\npuni-doc-type: agents\n---\n\n# records\n');
       symlinkSync('AGENTS.md', join(records, 'CLAUDE.md'));
       writeRecord(first, '2031-04-05', `superseded-by: ${second}`);
       writeRecord(second, '2031-04-06', `supersedes: ${first}`);
       runGit(records, ['init', '-q']);
     });
 
-    afterEach(() => {
-      removeFixture(state);
-    });
-
     test('check --repo system-records passes two records, one superseding the other', () => {
       expect(runPuni(['burokrat', 'check', '--repo', 'system-records'], state)).toEqual({
         code: 0,
-        stdout: 'ok: system-records, 11 rules, no findings.\n',
+        stdout: 'ok: system-records, 14 rules, no findings.\n',
         stderr: '',
       });
     });
@@ -120,7 +118,7 @@ describe('entrypoint', () => {
       const run = runPuni(['burokrat', 'check', '--repo', 'system-records'], state);
       expect(run.code).toBe(1);
       expect(run.stdout).toMatch(
-        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 11 rules, 1 finding\.\n$/u,
+        /^records\.front-matter nav\/plans\/2031-04-07-bare\.md: does not open with front matter[^\n]*\nfail: system-records, 14 rules, 1 finding\.\n$/u,
       );
     });
 
@@ -162,7 +160,7 @@ describe('entrypoint', () => {
       });
 
       afterEach(() => {
-        chmodSync(join(state, 'locked'), 0o700);
+        if (existsSync(join(state, 'locked'))) chmodSync(join(state, 'locked'), 0o700);
       });
 
       test('exits 3 with one error line naming the reference and a private report file', () => {
@@ -332,25 +330,30 @@ describe('entrypoint', () => {
         );
       });
 
-      test.each(breaks)('%s: wiki index is one error line, exit 1', (_name, breakGit) => {
-        const run = runPuni(['burokrat', 'wiki', 'index'], state, breakGit());
+      test.each(breaks)('%s: wiki map is one error line, exit 1', (_name, breakGit) => {
+        const run = runPuni(['burokrat', 'wiki', 'map'], state, breakGit());
         expect([run.code, run.stdout]).toEqual([1, '']);
         expect(run.stderr).toMatch(/^error: git [^\n]+\n$/u);
       });
     });
 
-    test('wiki index writes the system-state index through the registry', () => {
-      expect(runPuni(['burokrat', 'wiki', 'index'], join(state, 'apps'))).toEqual({
+    test('wiki map prints the map of the system-state repository through the registry', () => {
+      expect(runPuni(['burokrat', 'wiki', 'map'], join(state, 'apps'))).toEqual({
         code: 0,
-        stdout: [
-          'wrote: wiki/index/app.md',
-          'wrote: wiki/index/burokrat.md',
-          'wrote: wiki/index/dash.md',
-          'wrote: wiki/index/index.md',
-          'wrote: wiki/index/navigator.md',
-          '',
-        ].join('\n'),
+        stdout: '# Wiki map\n\n## Partitions\n\n- changing the app: `puni burokrat wiki map app`\n',
         stderr: '',
+      });
+      expect(runPuni(['b', 'wiki', 'map', 'app'], state)).toEqual({
+        code: 0,
+        stdout:
+          '# Wiki map: app\n\nRead this when changing the app.\n\n## Read when\n\n- changing one: [one](apps/one/src/index.ts)\n',
+        stderr: '',
+      });
+      expect(runPuni(['b', 'wiki', 'map', 'dash'], state)).toEqual({
+        code: 2,
+        stdout: '',
+        stderr:
+          'error: the map has no section or partition "dash"; its sections: none; its partitions: app\n',
       });
     });
   });

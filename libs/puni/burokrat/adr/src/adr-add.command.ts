@@ -9,7 +9,7 @@ const adrAdd: RecordAddLeaf<'adr add'> = {
   summarises: 'What was decided',
 };
 
-/** `add --title TEXT --topics LIST --summary TEXT [--body-file PATH]`: one decision to file. */
+/** One decision to file, with the options of `recordAddParser`. */
 export const adrAddParser = recordAddParser(adrAdd);
 
 /**

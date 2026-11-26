@@ -1,7 +1,15 @@
-import { countWords, indexFile, readRulesSection } from '@puni/shared-checkout';
+import {
+  agentsSections,
+  countWords,
+  formatMapCommand,
+  readHeadings,
+  readRulesSection,
+  type RepositoryType,
+  rulesUpgradeCommand,
+} from '@puni/shared-checkout';
 import { agentsWordBudget, readmeWordBudget } from '../budgets';
-import { agentsRulesDigest, digestRulesSection } from '../agents-rules';
-import type { Rule, RuleReading } from '../finding';
+import { agentsRulesDigests, digestRulesSection } from '../agents-rules';
+import type { Breach, Rule, RuleReading } from '../finding';
 
 function readOptional({ files }: RuleReading, path: string): string | undefined {
   return files.exists(path) ? files.readText(path) : undefined;
@@ -10,6 +18,7 @@ function readOptional({ files }: RuleReading, path: string): string | undefined 
 function requireFile(id: string, path: string, remedy: string): Rule {
   return {
     id,
+    since: 1,
     remedy,
     judge: ({ files }) => (files.exists(path) ? [] : [{ path, message: 'is missing' }]),
   };
@@ -18,6 +27,7 @@ function requireFile(id: string, path: string, remedy: string): Rule {
 function limitWords(id: string, path: string, budget: number): Rule {
   return {
     id,
+    since: 1,
     remedy: `shorten ${path} to at most ${String(budget)} words`,
     judge(reading) {
       const text = readOptional(reading, path);
@@ -40,10 +50,18 @@ export const agentsExists = requireFile(
 /** `AGENTS.md` stays within {@link agentsWordBudget}; a missing file is `agents.exists`'s. */
 export const agentsWords = limitWords('agents.words', 'AGENTS.md', agentsWordBudget);
 
-/** `AGENTS.md` names the generated entry point, `wiki/index/index.md`. */
+/** The generated index file AGENTS.md named before the map was printed. */
+const indexFile = 'wiki/index/index.md';
+
+/**
+ * `AGENTS.md` names the generated entry point, `index.md` of `wiki/index`: the judgement up to
+ * epoch 2, which {@link agentsNamesMap} replaces.
+ */
 export const agentsNamesIndex: Rule = {
   id: 'agents.index',
-  remedy: `name ${indexFile} in AGENTS.md as the map to read first`,
+  since: 1,
+  until: 2,
+  remedy: `name ${indexFile} in AGENTS.md as the map to read first, or run \`${rulesUpgradeCommand}\` to take the rules of epoch 2`,
   judge(reading) {
     const text = readOptional(reading, 'AGENTS.md');
     if (text === undefined || text.includes(indexFile)) return [];
@@ -51,39 +69,123 @@ export const agentsNamesIndex: Rule = {
   },
 };
 
+/** The command printing the map, as `AGENTS.md` names it, run through `bun run` or not. */
+const mapCommand = formatMapCommand('puni');
+
+/** `AGENTS.md` names the command that prints the map, `puni burokrat wiki map`. */
+export const agentsNamesMap: Rule = {
+  id: 'agents.index',
+  since: 2,
+  remedy: `replace \`${indexFile}\` in AGENTS.md with \`${mapCommand}\`; where it names neither, add the line: - Unsure where something lives? \`${mapCommand}\` prints the map from a task to the file to read first.`,
+  judge(reading) {
+    const text = readOptional(reading, 'AGENTS.md');
+    if (text === undefined || text.includes(mapCommand)) return [];
+    return [{ path: 'AGENTS.md', message: `does not name ${mapCommand}` }];
+  },
+};
+
 /**
- * `AGENTS.md` holds a `## Rules` section whose {@link digestRulesSection} is `digest`: any edit to
- * the rules but rewrapping is a finding. A missing file is `agents.exists`'s.
+ * The `agents.rules` rules of `digests`, one per epoch it keys: `AGENTS.md` holds a `## Rules`
+ * section whose {@link digestRulesSection} is that epoch's digest, from that epoch until the next
+ * one keyed, so a changed rules text is a later rule like any other. Any edit to the rules but
+ * rewrapping is a finding; a missing file is `agents.exists`'s.
  */
-export function pinAgentsRules(digest: string): Rule {
+export function pinAgentsRules(digests: Readonly<Record<number, string>>): Rule[] {
+  const epochs = Object.keys(digests)
+    .map(Number)
+    .sort((left, right) => left - right);
+  return epochs.map((since, index): Rule => {
+    const until = epochs[index + 1];
+    const digest = digests[since] ?? '';
+    const restore = 'restore the rules section (git show origin/main:AGENTS.md)';
+    return {
+      id: 'agents.rules',
+      since,
+      ...(until === undefined ? {} : { until }),
+      remedy:
+        until === undefined
+          ? `${restore}; if the owner changed the rules, add the digest printed here to agentsRulesDigests in the Burokrat check library under the next epoch`
+          : `${restore}, then run ${rulesUpgradeCommand} to take the rules of epoch ${String(until)}`,
+      judge(reading) {
+        const text = readOptional(reading, 'AGENTS.md');
+        if (text === undefined) return [];
+        const section = readRulesSection(text);
+        if (section === undefined) {
+          return [{ path: 'AGENTS.md', message: 'has no ## Rules heading' }];
+        }
+        const actual = digestRulesSection(section);
+        return actual === digest
+          ? []
+          : [
+              {
+                path: 'AGENTS.md',
+                message: `rules section digests to ${actual}, not ${digest}, the rules in force at epoch ${String(reading.registry.rules)}`,
+              },
+            ];
+      },
+    };
+  });
+}
+
+/** {@link pinAgentsRules} of {@link agentsRulesDigests}, the owner's rules. */
+export const agentsKeepRules: readonly Rule[] = pinAgentsRules(agentsRulesDigests);
+
+/**
+ * `AGENTS.md` of a `type` repository holds only the headings puni seeds it with: one `# ` title,
+ * and `## ` sections only of `agentsSections` of `@puni/shared-checkout`, each once. Any other
+ * heading of level 1 or 2, setext included, is a breach naming it; a missing file is
+ * `agents.exists`'s. Text inside an allowed section is not judged.
+ */
+export function limitAgentsHeadings(type: RepositoryType): Rule {
+  const allowed = agentsSections[type];
+  const listed = allowed.map((title) => `## ${title}`).join(', ');
   return {
-    id: 'agents.rules',
-    remedy:
-      'restore the rules section (git show origin/main:AGENTS.md); if the owner changed the rules, set agentsRulesDigest in the Burokrat check library to the digest printed here',
+    id: 'agents.headings',
+    since: 1,
+    remedy: `remove the heading and its section, or move its text into an existing section; AGENTS.md holds one # title and only ${listed}, as puni burokrat repo init seeds it`,
     judge(reading) {
       const text = readOptional(reading, 'AGENTS.md');
       if (text === undefined) return [];
-      const section = readRulesSection(text);
-      if (section === undefined) return [{ path: 'AGENTS.md', message: 'has no ## Rules heading' }];
-      const actual = digestRulesSection(section);
-      return actual === digest
-        ? []
-        : [
+      const seen = new Set<string>();
+      let titled = false;
+      return readHeadings(text).flatMap(({ level, text: title, line }): Breach[] => {
+        const at = `line ${String(line)}`;
+        const shown = `${'#'.repeat(level)} ${title}`;
+        if (level === 1) {
+          if (!titled) {
+            titled = true;
+            return [];
+          }
+          return [{ path: 'AGENTS.md', message: `${at} is a second title, "${shown}"` }];
+        }
+        if (!allowed.includes(title)) {
+          return [
             {
               path: 'AGENTS.md',
-              message: `rules section digests to ${actual}, not the pinned ${digest}`,
+              message: `${at} is the heading "${shown}", which puni does not declare for AGENTS.md`,
             },
           ];
+        }
+        if (seen.has(title)) {
+          return [{ path: 'AGENTS.md', message: `${at} repeats the heading "${shown}"` }];
+        }
+        seen.add(title);
+        return [];
+      });
     },
   };
 }
 
-/** {@link pinAgentsRules} to {@link agentsRulesDigest}, the owner's rules. */
-export const agentsKeepRules = pinAgentsRules(agentsRulesDigest);
+/** {@link limitAgentsHeadings} of a system-state repository. */
+export const stateAgentsHeadings = limitAgentsHeadings('system-state');
+
+/** {@link limitAgentsHeadings} of a system-records repository. */
+export const recordsAgentsHeadings = limitAgentsHeadings('system-records');
 
 /** `CLAUDE.md` is a symlink whose target is exactly `AGENTS.md`. */
 export const claudeLinksAgents: Rule = {
   id: 'claude.symlink',
+  since: 1,
   remedy: 'recreate the link: ln -sf AGENTS.md CLAUDE.md',
   judge({ files }) {
     const path = 'CLAUDE.md';

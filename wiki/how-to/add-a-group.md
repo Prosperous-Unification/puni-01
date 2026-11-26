@@ -1,4 +1,5 @@
 ---
+puni-doc-type: wiki-page
 title: Adding a group
 read-when: adding a command group that has no library yet
 ---
@@ -31,7 +32,7 @@ a planned group with none, such as `libs/puni/dash/mcp`, for one without.
 5. `composition.ts`, once it has a module: the module in the last `withInstalledModules`.
 6. `main.ts`, once it has leaves: the `…Exports` type in `CommandExports`, then step 7 of
    [adding a command](add-a-command.md#in-the-app) per leaf. A bare group needs no case:
-   `runPuni` prints the help of every help request.
+   [`runPuni`](../../apps/puni/cli/src/main.ts#runPuni) prints the help of every help request.
 7. The [tests](add-a-command.md#tests) of each leaf, and the bare group in `main.test.ts`'s
    `a bare %s prints its help`.
 8. `bun run fix`, then `bun run gate`.

@@ -102,9 +102,11 @@ export function runPuni(
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat check':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
-    case 'burokrat wiki index':
+    case 'burokrat wiki map':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat repo init':
+      return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
+    case 'burokrat repo upgrade':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);
     case 'burokrat adr add':
       return container.resolve(handlerKeys[leaf.kind]).run(leaf.request, io);

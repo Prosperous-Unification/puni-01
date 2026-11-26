@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  checkoutModule,
-  formatRegistry,
-  readRulesSection,
-  renderIndex,
-} from '@puni/shared-checkout';
-import type { CommandBrief } from '@puni/shared-command';
+import { checkoutModule, formatRegistry, readRulesSection } from '@puni/shared-checkout';
 import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
 import { DiBag } from 'di-bag';
 import type { RepoInitRequest } from './contract';
@@ -16,15 +10,11 @@ const track = closeAfterEach();
 const source = '/opt/demo';
 const rules = '## Rules\n\n1. **Keep it.** Exactly as it is.\n';
 const sourceTree: MemoryTree = {
-  [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${source}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${source}/AGENTS.md`]: `# demo\n\n## Working here\n\n- Anything.\n\n${rules}`,
 };
 const here = '/w/shop';
 const records = '/w/shop-records';
-const commands: readonly CommandBrief[] = [
-  { path: 'puni burokrat', brief: 'Judge.' },
-  { path: 'puni burokrat check', brief: 'Judge the repository.' },
-];
 
 function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } }) {
   const host = memoryHost(tree);
@@ -33,8 +23,12 @@ function open(tree: MemoryTree = { ...sourceTree, [here]: { directory: true } })
       .withInstalledModules([checkoutModule, burokratRepoModule])
       .withServices(host.services)
       .withServices({
-        commandCatalog: () => ({ list: () => commands }),
-        programSource: () => ({ directory: `${source}/apps/puni/cli/src` }),
+        programSource: () => ({ directory: `${source}/apps/puni/cli/src`, version: '9.8.7' }),
+        latestRules: () => ({
+          epoch: 3,
+          judge: () => ({ 'system-state': [], 'system-records': [] }),
+          holdsRulesOf: (section: string, epoch: number) => section === rules && epoch === 3,
+        }),
       })
       .buildContainer(),
   );
@@ -85,7 +79,6 @@ describe('burokrat repo init', () => {
       ].join('\n'),
       stderr: '',
     });
-    const index = renderIndex([], commands);
     expect(created()).toEqual(
       [
         `${here}/.gitignore`,
@@ -93,7 +86,6 @@ describe('burokrat repo init', () => {
         `${here}/CLAUDE.md`,
         `${here}/README.md`,
         `${here}/puni.json`,
-        ...[...index.keys()].map((path) => `${here}/${path}`),
         `${records}/.gitignore`,
         `${records}/AGENTS.md`,
         `${records}/CLAUDE.md`,
@@ -105,19 +97,27 @@ describe('burokrat repo init', () => {
       return node;
     };
     expect(text(`${here}/puni.json`)).toBe(
-      `${formatRegistry('system-state', {
-        'system-state': 'https://github.com/acme/shop',
-        'system-records': 'https://github.com/acme/shop-records',
-      })}\n`,
+      `${formatRegistry(
+        'system-state',
+        {
+          'system-state': 'https://github.com/acme/shop',
+          'system-records': 'https://github.com/acme/shop-records',
+        },
+        3,
+      )}\n`,
     );
     const agents = text(`${here}/AGENTS.md`);
     expect(readRulesSection(agents)).toBe(rules);
-    expect(agents).toStartWith('# shop\n');
+    expect(agents).toStartWith('---\npuni-doc-type: agents\n---\n\n# shop\n');
     expect(agents).toContain('<https://github.com/acme/shop-records>');
     expect(agents).toContain('`../shop-records`');
     expect(agents).not.toContain('{{');
-    for (const [path, generated] of index) expect(text(`${here}/${path}`)).toBe(generated);
-    expect(text(`${records}/AGENTS.md`)).toStartWith('# shop-records\n\nRecords for `shop`');
+    expect(agents).toContain('`puni burokrat wiki map`');
+    expect(text(`${here}/README.md`)).toContain('`puni burokrat wiki map`');
+    expect(text(`${here}/README.md`)).toStartWith('---\npuni-doc-type: readme\n---\n\n# shop\n');
+    expect(text(`${records}/AGENTS.md`)).toStartWith(
+      '---\npuni-doc-type: agents\n---\n\n# shop-records\n\nRecords for `shop`',
+    );
     expect(text(`${records}/AGENTS.md`)).not.toContain('{{');
     for (const root of [here, records]) {
       expect(host.nodes.get(`${root}/CLAUDE.md`)).toEqual({ symlink: 'AGENTS.md' });
@@ -185,6 +185,20 @@ describe('burokrat repo init', () => {
       code: 1,
       stdout: '',
       stderr: `error: ${source}/AGENTS.md has no ## Rules section to copy; fix: run puni from a checkout whose AGENTS.md holds its rules\n`,
+    });
+    expect(created()).toEqual([]);
+  });
+
+  test('a source holding the rules of an older epoch is refused: exit 2, nothing written', () => {
+    const { created, run } = open({
+      ...sourceTree,
+      [`${source}/AGENTS.md`]: '# demo\n\n## Rules\n\n1. Older.\n',
+      [here]: { directory: true },
+    });
+    expect(run()).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: `error: the checkout puni runs from holds the rules of an older epoch than 3 in ${source}/AGENTS.md; run puni from a checkout that holds the rules of epoch 3\n`,
     });
     expect(created()).toEqual([]);
   });

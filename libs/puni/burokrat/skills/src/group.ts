@@ -8,7 +8,7 @@ const helpRequest: HelpRequest = { kind: 'help', path: ['skills'] };
 export const skillsParser = map(
   optional(
     command('install', skillsInstallParser, {
-      brief: message`Install the PUNI review skills in this checkout.`,
+      brief: message`Install the PUNI skills in this checkout.`,
     }),
   ),
   (leaf) => leaf ?? helpRequest,

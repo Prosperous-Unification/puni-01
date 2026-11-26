@@ -1,26 +1,48 @@
 import { nameRepository } from '@puni/shared-checkout';
-import type { Rule } from '../finding';
+import { isTypedDocumentation } from '../docs';
+import type { Breach, Rule, RuleReading } from '../finding';
 
-/** No ISO date (`YYYY-MM-DD`) in any visible Markdown file the scope owns. */
+/** The ISO dates (`YYYY-MM-DD`) of the visible files the scope owns that `isJudged` chooses. */
+function findDates({ files, scope }: RuleReading, isJudged: (path: string) => boolean): Breach[] {
+  return files
+    .listVisible(scope)
+    .filter(isJudged)
+    .flatMap((path) =>
+      files
+        .readText(path)
+        .split('\n')
+        .flatMap((line, index) =>
+          [...line.matchAll(/\b\d{4}-\d{2}-\d{2}\b/gu)].map((date) => ({
+            path,
+            message: `line ${String(index + 1)} holds the date ${date[0]}`,
+          })),
+        ),
+    );
+}
+
+const datesRemedy = 'say what is true now without the date; history belongs in a record';
+
+/**
+ * No ISO date (`YYYY-MM-DD`) in any visible `.md` file the scope owns. Epochs 1 to 3;
+ * {@link forbidTypedDates} judges the documentation by its declared type.
+ */
 export const forbidDates: Rule = {
   id: 'history.date',
-  remedy: 'say what is true now without the date; history belongs in a record',
-  judge({ files, scope }) {
-    return files
-      .listVisible(scope)
-      .filter((path) => path.endsWith('.md'))
-      .flatMap((path) =>
-        files
-          .readText(path)
-          .split('\n')
-          .flatMap((line, index) =>
-            [...line.matchAll(/\b\d{4}-\d{2}-\d{2}\b/gu)].map((date) => ({
-              path,
-              message: `line ${String(index + 1)} holds the date ${date[0]}`,
-            })),
-          ),
-      );
-  },
+  since: 1,
+  until: 4,
+  remedy: datesRemedy,
+  judge: (reading) => findDates(reading, (path) => path.endsWith('.md')),
+};
+
+/**
+ * No ISO date in any visible Markdown file the scope owns whose declared type the documentation
+ * rules judge: product documentation may date a release.
+ */
+export const forbidTypedDates: Rule = {
+  id: 'history.date',
+  since: 4,
+  remedy: datesRemedy,
+  judge: (reading) => findDates(reading, (path) => isTypedDocumentation(reading.files, path)),
 };
 
 /**
@@ -31,6 +53,7 @@ export const forbidDates: Rule = {
  */
 export const confineRecordsName: Rule = {
   id: 'history.records',
+  since: 1,
   remedy: 'remove the name; AGENTS.md alone says where the records live',
   judge({ files, registry, scope }) {
     const records = nameRepository(registry.repos['system-records']);

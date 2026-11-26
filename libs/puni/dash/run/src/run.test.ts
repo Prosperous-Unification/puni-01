@@ -21,7 +21,7 @@ const records = '/w/demo-records';
 const filed = 'bur/assessments/2031-04-05-nightly-build.md';
 
 const pair: MemoryTree = {
-  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes),
+  [`${state}/puni.json`]: formatRegistry('system-state', fixtureRemotes, 1),
   [`${records}/AGENTS.md`]: '# records\n',
 };
 
@@ -81,7 +81,7 @@ describe('dash run log', () => {
     const { host, run } = open();
     expect(run()).toEqual({ code: 0, stdout: `${filed}\n`, stderr: '' });
     expect(host.nodes.get(`${records}/${filed}`)).toBe(
-      '---\nkind: assessment\ntitle: Nightly build\ndate: 2031-04-05\ncommit: abc1234\ntopics: build, ci\nsummary: The build passed in four minutes.\n---\n\n# Nightly build\n\n## Command\n\n## Outcome\n\n## Evidence\n',
+      '---\npuni-doc-type: record\nkind: assessment\ntitle: Nightly build\ndate: 2031-04-05\ncommit: abc1234\ntopics: build, ci\nsummary: The build passed in four minutes.\n---\n\n# Nightly build\n\n## Command\n\n## Outcome\n\n## Evidence\n',
     );
   });
 

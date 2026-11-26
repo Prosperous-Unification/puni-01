@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRegistry } from '@puni/shared-checkout';
 import { closeAfterEach, fixtureRemotes, type MemoryTree, memoryHost } from '@puni/shared-testing';
-import { type CheckHost, fixtureRuleSets, openCheckHost } from './check.test-host';
+import {
+  type CheckHost,
+  fixtureCheckRules,
+  fixtureVersion,
+  openCheckHost,
+} from './check.test-host';
 import { createRepositoryCheck } from './repository-check.feature';
 import { claudeLinksAgents, readmeWords } from './rules/entry.rule';
 
@@ -11,7 +16,7 @@ function openMemoryHost(tree: MemoryTree, options: Parameters<typeof memoryHost>
   return track(openCheckHost(memoryHost(tree, options).services));
 }
 
-const registry = formatRegistry('system-state', fixtureRemotes);
+const registry = formatRegistry('system-state', fixtureRemotes, 1);
 
 describe('a rule over a memory file system', () => {
   test('CLAUDE.md linking elsewhere is a claude.symlink finding', () => {
@@ -50,10 +55,12 @@ describe('the repository check turns defect kinds into findings', () => {
       checkoutRegistry: container.resolve('checkoutRegistry'),
       checkoutFiles: container.resolve('checkoutFiles'),
       checkoutProjectScope: container.resolve('checkoutProjectScope'),
-      checkoutWikiIndex: container.resolve('checkoutWikiIndex'),
+      projectSources: container.resolve('projectSources'),
+      sourceReaders: container.resolve('sourceReaders'),
       recordsCatalog: container.resolve('recordsCatalog'),
       commandCatalog: { list: () => [] },
-      checkRuleSets: fixtureRuleSets,
+      programSource: { directory: '/nowhere', version: fixtureVersion },
+      checkRules: fixtureCheckRules(),
     });
   }
 
@@ -67,7 +74,7 @@ describe('the repository check turns defect kinds into findings', () => {
           path: 'puni.json',
           message: '/r/puni.json is not a JSON object',
           remedy:
-            'correct puni.json as the message says: this-repo-type, and all-repos listing every type once',
+            'correct puni.json as the message says: this-repo-type, rules (the rules epoch), all-repos listing every type once, and optionally map (each partition path to its purpose) and keys starting x-',
         },
       ],
     });

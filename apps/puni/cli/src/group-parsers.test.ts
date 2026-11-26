@@ -14,6 +14,13 @@ describe('burokratParser', () => {
     });
   });
 
+  test('wiki map takes an empty argument, for the command to refuse by name', () => {
+    expect(parse(burokratParser, ['wiki', 'map', ''])).toEqual({
+      success: true,
+      value: { kind: 'wiki map', partition: '' },
+    });
+  });
+
   test.each(['repo', 'adr', 'change', 'assess', 'review', 'skills'])(
     'a bare %s asks for its help',
     (group) => {
@@ -25,7 +32,8 @@ describe('burokratParser', () => {
   );
 
   test.each([
-    ['wiki index', { kind: 'wiki index', print: false }],
+    ['wiki map', { kind: 'wiki map', partition: undefined }],
+    ['wiki map dash/ops', { kind: 'wiki map', partition: 'dash/ops' }],
     ['skills install --platform claude', { kind: 'skills install', platform: 'claude' }],
     [
       'review start --request r.json --state s.json',
@@ -50,6 +58,8 @@ describe('burokratParser', () => {
         project: undefined,
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -60,6 +70,8 @@ describe('burokratParser', () => {
         project: 'puni-dash',
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
       },
     ],
     [
@@ -70,17 +82,46 @@ describe('burokratParser', () => {
         project: undefined,
         crossProjectLinks: false,
         staged: false,
+        commits: undefined,
+        merged: false,
+      },
+    ],
+    [
+      'check --commits main..HEAD',
+      {
+        kind: 'check',
+        repo: undefined,
+        project: undefined,
+        crossProjectLinks: false,
+        staged: false,
+        commits: 'main..HEAD',
+        merged: false,
       },
     ],
     ['repo init --name shop', { kind: 'repo init', name: 'shop', owner: undefined }],
     ['repo init --owner acme --name shop', { kind: 'repo init', name: 'shop', owner: 'acme' }],
+    ['repo upgrade', { kind: 'repo upgrade' }],
     [
       'adr add --title T --topics a,b --summary S',
-      { kind: 'adr add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'adr add',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     [
       'adr add --summary S --body-file b.md --topics a --title T',
-      { kind: 'adr add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'adr add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
     ],
     [
       'assess outcomes --since 2026-11-22T00:00:00Z --until 2026-11-24T00:00:00Z --json',
@@ -105,7 +146,9 @@ describe('burokratParser', () => {
     'review submit --state s.json',
     'skills install --platform unknown',
     'wiki --bogus',
-    'wiki index --check',
+    'wiki map --check',
+    'wiki map dash ops',
+    'wiki index',
     'check --bogus',
     'check stray',
     'check --project',
@@ -114,6 +157,8 @@ describe('burokratParser', () => {
     'repo init --owner acme',
     'repo init --name',
     'repo init --name x --bogus',
+    'repo upgrade --bogus',
+    'repo upgrade stray',
     'adr add',
     'adr add --title T --topics a',
     'adr stray',
@@ -135,15 +180,47 @@ describe('navigatorParser', () => {
     ['progress', { kind: 'help', path: ['progress'] }],
     [
       'plan add --title T --topics a,b --summary S',
-      { kind: 'plan add', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     [
       'plan add --summary S --body-file b.md --topics a --title T',
-      { kind: 'plan add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
+    ],
+    [
+      'plan add --title T --topics a --summary S --supersedes nav/plans/x.md',
+      {
+        kind: 'plan add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: 'nav/plans/x.md',
+      },
     ],
     [
       'research add --title T --topics a --summary S --body-file b.md',
-      { kind: 'research add', title: 'T', topics: 'a', summary: 'S', bodyFile: 'b.md' },
+      {
+        kind: 'research add',
+        title: 'T',
+        topics: 'a',
+        summary: 'S',
+        bodyFile: 'b.md',
+        supersedes: undefined,
+      },
     ],
   ] as const)('%j parses to %j', (line, value) => {
     expect(parse(navigatorParser, line.split(' ').filter(Boolean))).toEqual({
@@ -189,7 +266,14 @@ describe('dashParser', () => {
     ['ops k3s -- -n x get', { kind: 'ops k3s', args: ['-n', 'x', 'get'] }],
     [
       'run log --title T --topics a,b --summary S',
-      { kind: 'run log', title: 'T', topics: 'a,b', summary: 'S', bodyFile: undefined },
+      {
+        kind: 'run log',
+        title: 'T',
+        topics: 'a,b',
+        summary: 'S',
+        bodyFile: undefined,
+        supersedes: undefined,
+      },
     ],
     ['resources create --name p', { kind: 'resources create', name: 'p', from: 'HEAD' }],
     ['resources create --from v1 --name p', { kind: 'resources create', name: 'p', from: 'v1' }],
