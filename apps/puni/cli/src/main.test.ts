@@ -98,6 +98,8 @@ describe('runPuni', () => {
     'burokrat adr',
     'burokrat change',
     'burokrat assess',
+    'burokrat review',
+    'burokrat skills',
   ])('a bare %s prints its help and exits 0', (line) => {
     const path = line.split(' ');
     expect(runIn('.', path)).toEqual({
@@ -194,6 +196,12 @@ describe('runProcess', () => {
         burokratRepoInitCommand: () => ({ run: () => 0 }),
         burokratAdrAddCommand: () => ({ run: () => 0 }),
         burokratAssessOutcomesCommand: () => ({ run: () => 0 }),
+        burokratAssessTemplatesCommand: () => ({ run: () => 0 }),
+        burokratReviewFileCommand: () => ({ run: () => 0 }),
+        burokratReviewNextCommand: () => ({ run: () => 0 }),
+        burokratReviewStartCommand: () => ({ run: () => 0 }),
+        burokratReviewSubmitCommand: () => ({ run: () => 0 }),
+        burokratSkillsInstallCommand: () => ({ run: () => 0 }),
         dashOpsSshCommand: () => ({ run: () => 0 }),
         dashOpsK3sCommand: () => ({ run: () => 0 }),
         dashRunLogCommand: () => ({ run: () => 0 }),
